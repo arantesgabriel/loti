@@ -1,0 +1,13 @@
+import "dotenv/config";
+import { rmSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
+process.env.DATABASE_PATH = "./data/e2e.sqlite";
+process.env.BETTER_AUTH_URL = "http://localhost:3100";
+process.env.BETTER_AUTH_SECRET = randomBytes(48).toString("base64url");
+process.env.LOTI_NEXT_DIR = ".next-e2e";
+for (const suffix of ["", "-wal", "-shm"]) rmSync(`./data/e2e.sqlite${suffix}`, { force: true });
+await import("./seed");
+const child = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "--webpack", "-p", "3100"], { stdio: "inherit", env: process.env });
+for (const signal of ["SIGINT", "SIGTERM"] as const) process.on(signal, () => child.kill(signal));
+child.on("exit", code => process.exit(code ?? 0));

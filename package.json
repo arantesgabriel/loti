@@ -20,7 +20,8 @@
     "db:migrate": "node --import tsx scripts/migrate.ts",
     "db:seed": "node --import tsx scripts/seed.ts",
     "user:create": "node --import tsx scripts/create-user.ts",
-    "import:legacy": "node --import tsx scripts/import-legacy-spreadsheet.ts"
+    "import:legacy": "node --import tsx scripts/import-legacy-spreadsheet.ts",
+    "test:serve": "node --import tsx scripts/e2e-server.ts"
   },
   "dependencies": {
     "@better-auth/drizzle-adapter": "1.7.7",

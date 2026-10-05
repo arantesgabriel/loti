@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 const config: NextConfig = {
   serverExternalPackages: ["better-sqlite3"],
   poweredByHeader: false,
+  agentRules: false,
+  distDir: process.env.LOTI_NEXT_DIR ?? ".next",
   async headers() {
     return [{ source: "/:path*", headers: [
       { key: "X-Content-Type-Options", value: "nosniff" },
