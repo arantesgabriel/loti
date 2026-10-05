@@ -1,0 +1,13 @@
+import { z } from "zod";
+const name = z.string().trim().min(1, "Informe um nome.").max(200, "Use até 200 caracteres.");
+export const productUrl = z.string().min(1, "Informe o link.").max(4000).refine(s => { try { const u = new URL(s); return ["https:", "http:"].includes(u.protocol) && !u.username && !u.password; } catch { return false; } }, "Use um link http ou https válido.");
+const optionalText = (max: number) => z.string().trim().max(max).nullable().optional().transform(v => v || null);
+export const cents = z.number().int().min(0).max(100_000_000).nullable();
+export const favoriteInput = z.object({ name, url: productUrl, priceCents: cents, variant: optionalText(500), notes: optionalText(4000), collectionId: z.string().nullable().optional().transform(v => v || null), qcStatus: z.enum(["not_reviewed", "approved", "rejected"]).default("not_reviewed") });
+export const collectionInput = z.object({ name: name.max(80) });
+export const purchaseInput = z.object({ name, hubbuyAccount: optionalText(300) });
+export const itemInput = z.object({ name, url: productUrl, personId: z.string().min(1), variant: optionalText(500), notes: optionalText(4000), quantity: z.number().int().min(1, "Quantidade mínima: 1.").max(10000), unitPriceCents: cents });
+export const favoriteToItemInput = itemInput.omit({ name: true, url: true }).extend({ favoriteId: z.string().min(1) });
+export type FavoriteInput = z.input<typeof favoriteInput>;
+export type ItemInput = z.input<typeof itemInput>;
+export type FavoriteToItemInput = z.input<typeof favoriteToItemInput>;

@@ -1,0 +1,23 @@
+import "dotenv/config";
+import { db, sqlite } from "../src/lib/db";
+import { createMember } from "./operator";
+import { migrateDatabase } from "./migrate";
+import { createServices } from "../src/lib/domain/services";
+if (process.env.NODE_ENV === "production" || process.env.DATABASE_PATH?.startsWith("/data/")) throw new Error("Seed bloqueado em produção.");
+try {
+  migrateDatabase();
+  const names = ["Gabriel", "Brunna", "Amanda", "Bola", "Vinicius"];
+  const users: Awaited<ReturnType<typeof createMember>>[] = [];
+  for (const name of names) users.push(await createMember(db, { name, email: `${name.toLowerCase()}@loti.test`, password: "Loti-Dev-Only-2026!" }));
+  const samples = [
+    ["Nike Vomero 18", "Branco · HM6803-101 · 46", 12500, 0, "hubbuy"], ["Adidas Campus", "Preto · W2 Batch · 42", 7000, 1, "weidian"], ["Crocs Bottom", "Marrom · 41/42", 4500, 2, "hubbuy"], ["Ultraboost 5", "Preto · 42", 11000, 3, "weidian"], ["WD Blue SN5000", "1TB · M.2 NVMe", 39900, 4, "hubbuy"], ["Camiseta Uniqlo", "Branco · Tamanho L", null, 0, "weidian"],
+  ] as const;
+  for (const [index, sample] of samples.entries()) {
+    const [name, variant, priceCents, owner, platform] = sample;
+    const service = createServices(db, users[owner].id);
+    const collectionName = name.includes("SN5000") ? "Build PC" : name.includes("Camiseta") ? "Presentes" : "Tênis";
+    const collection = service.getData().collections.find(c => c.name === collectionName && c.ownerId === users[owner].id) ?? service.saveCollection({ name: collectionName });
+    if (!service.getData().favorites.some(f => f.name === name && f.ownerId === users[owner].id)) service.saveFavorite({ name, variant, priceCents, url: platform === "hubbuy" ? `https://www.hubbuycn.com/product?id=${1000 + index}&source=weidian` : `https://weidian.com/item.html?itemID=${1000 + index}`, collectionId: collection.id, qcStatus: index % 2 === 0 ? "approved" : "not_reviewed" });
+  }
+  console.log("Seed de desenvolvimento pronto: cinco membros, seis favoritos. Email: <nome>@loti.test; senha: Loti-Dev-Only-2026!");
+} finally { sqlite.close(); }
