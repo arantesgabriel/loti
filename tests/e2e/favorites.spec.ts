@@ -1,7 +1,9 @@
 import { test, expect } from "@playwright/test";
 import { login } from "./helpers";
 test("private routes redirect and public signup is disabled", async ({ page, request }) => {
-  await page.goto("/favorites"); await expect(page).toHaveURL(/\/login/); await expect(page.getByText(/cadast/i)).toHaveCount(0);
+  for (const path of ["/favorites", "/purchase", "/history", "/history/private-id", "/profile"]) { await page.goto(path); await expect(page).toHaveURL(/\/login/); } await expect(page.getByText(/cadast/i)).toHaveCount(0);
+  const health = await request.get("/api/health"); expect(health.status()).toBe(200); expect(await health.json()).toEqual({ status: "ok" });
+  const app = await request.get("/api/app"); expect(app.status()).toBe(401);
   const r = await request.post("/api/auth/sign-up/email", { data: { name: "Public", email: "public@loti.test", password: "Loti-Dev-Only-2026!" }, headers: { Origin: "http://localhost:3100" } }); expect(r.ok()).toBe(false);
 });
 test("favorite lifecycle: create, search, edit with local archetype", async ({ page }) => {
@@ -22,5 +24,7 @@ test("view preference survives reload and a new login", async ({ page }) => {
 });
 test("collections preserve favorites on deletion", async ({ page }) => {
   await login(page); await page.getByRole("button", { name: "Nova coleção", exact: true }).click(); await page.getByLabel("Nome da coleção").fill("Coleção E2E"); await page.getByRole("button", { name: "Salvar coleção" }).click(); await expect(page.getByRole("dialog")).toHaveCount(0);
-  await page.getByRole("button", { name: "Coleção E2E", exact: false }).click(); await page.getByRole("button", { name: "Editar coleção", exact: true }).click(); await page.getByRole("button", { name: "Excluir coleção", exact: true }).click(); await page.getByRole("dialog").last().getByRole("button", { name: "Excluir coleção", exact: true }).click(); await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByLabel("Buscar favoritos").fill("E2E Gabriel"); await page.getByRole("button", { name: "Tênis E2E Gabriel editado", exact: true }).click(); await page.getByRole("button", { name: "Editar favorito", exact: true }).click(); await page.getByLabel("Coleção", { exact: true }).selectOption({ label: "Coleção E2E" }); await page.getByRole("button", { name: "Salvar favorito", exact: true }).click(); await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByRole("button", { name: "Coleção E2E", exact: false }).click(); await page.getByRole("button", { name: "Editar coleção", exact: true }).click(); await page.getByRole("button", { name: "Excluir coleção", exact: true }).click(); await page.getByRole("dialog").last().getByRole("button", { name: "Cancelar", exact: true }).click(); await expect(page.getByRole("button", { name: "Excluir coleção", exact: true })).toBeFocused(); await page.getByRole("button", { name: "Excluir coleção", exact: true }).click(); await page.getByRole("dialog").last().getByRole("button", { name: "Excluir coleção", exact: true }).click(); await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.goto("/favorites"); await page.getByLabel("Buscar favoritos").fill("E2E Gabriel"); await expect(page.getByTestId("favorite")).toHaveCount(1); const data = await (await page.request.get("/api/app")).json(); expect(data.favorites.find((f: { name: string }) => f.name === "Tênis E2E Gabriel editado").collectionId).toBeNull();
 });

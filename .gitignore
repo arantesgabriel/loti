@@ -12,3 +12,4 @@ legacy/*.report.json
 legacy/mapping.local.json
 
 .next-e2e/
+artifacts/

@@ -27,8 +27,8 @@ export function FavoriteEditor({ favorite, onClose, onExisting }: { favorite?: C
     {duplicate && <div className="duplicate-warning" role="status"><AlertTriangle size={18}/><div><strong>Este link já está nos favoritos</strong><p>{duplicate.name} · {data.members.find(m => m.id === duplicate.ownerId)?.name}</p><Button type="button" variant="ghost" size="sm" onClick={() => onExisting(duplicate)}>Ver existente</Button></div></div>}
     <details open={!!favorite}><summary>Mais detalhes</summary><div className="details-fields">
       <label>Variação / modelo<input placeholder="Cor, tamanho, modelo…" maxLength={500} {...register("variant")}/></label>
-      <label>Coleção<select {...register("collectionId")}><option value="">Sem coleção</option>{data.collections.filter(c => c.ownerId === data.currentUser.id).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
-      <label>Avaliação QC<select {...register("qcStatus")}><option value="not_reviewed">Não avaliado</option><option value="approved">Aprovado</option><option value="rejected">Reprovado</option></select></label>
+      <label>Coleção<select aria-label="Coleção" {...register("collectionId")}><option value="">Sem coleção</option>{data.collections.filter(c => c.ownerId === data.currentUser.id).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+      <label>Avaliação QC<select aria-label="Avaliação QC" {...register("qcStatus")}><option value="not_reviewed">Não avaliado</option><option value="approved">Aprovado</option><option value="rejected">Reprovado</option></select></label>
       <label>Notas<textarea placeholder="O que você quer lembrar deste produto?" maxLength={4000} {...register("notes")}/></label>
     </div></details>{error && <p className="error" role="alert">{error}</p>}
     <div className="form-actions"><Button type="button" variant="outline" disabled={busy} onClick={onClose}>Cancelar</Button><Button type="submit" disabled={busy}>{busy ? "Salvando…" : duplicate ? "Salvar mesmo assim" : "Salvar favorito"}</Button></div>

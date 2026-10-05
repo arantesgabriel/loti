@@ -1,9 +1,12 @@
 "use client";
+import { useRef, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { Button } from "./button";
 export function Surface({ title, description, children, open, onOpenChange, sheet = false }: { title: string; description?: string; children: React.ReactNode; open: boolean; onOpenChange: (open: boolean) => void; sheet?: boolean }) {
-  return <Dialog.Root open={open} onOpenChange={onOpenChange}><Dialog.Portal><Dialog.Overlay className="modal-overlay" /><Dialog.Content className={sheet ? "sheet" : "dialog"} aria-describedby={description ? undefined : undefined}>
+  const [initialFocus] = useState<HTMLElement | null>(() => typeof document === "undefined" ? null : document.activeElement as HTMLElement);
+  const returnFocus = useRef<HTMLElement | null>(initialFocus);
+  return <Dialog.Root open={open} onOpenChange={onOpenChange}><Dialog.Portal><Dialog.Overlay className="modal-overlay" /><Dialog.Content className={sheet ? "sheet" : "dialog"} onOpenAutoFocus={e => { const active = document.activeElement as HTMLElement; if (!(e.target as HTMLElement).contains(active)) returnFocus.current = active; }} onCloseAutoFocus={e => { e.preventDefault(); if (returnFocus.current?.isConnected) returnFocus.current.focus(); }}>
     <div className="surface-head"><div><Dialog.Title>{title}</Dialog.Title><Dialog.Description className={description ? "muted" : "sr-only"}>{description ?? title}</Dialog.Description></div><Dialog.Close asChild><Button variant="ghost" size="icon" aria-label="Fechar"><X size={20}/></Button></Dialog.Close></div><div className="surface-body">{children}</div>
   </Dialog.Content></Dialog.Portal></Dialog.Root>;
 }
