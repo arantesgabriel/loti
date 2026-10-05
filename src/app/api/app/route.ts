@@ -6,7 +6,7 @@ import { createServices } from "@/lib/domain/services";
 import { DomainError } from "@/lib/domain/errors";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-const requestSchema = z.object({ operation: z.enum(["favorite.save", "favorite.delete", "collection.save", "collection.delete", "preference.view"]), id: z.string().min(1).optional(), input: z.unknown().optional() });
+const requestSchema = z.object({ operation: z.enum(["favorite.save", "favorite.delete", "collection.save", "collection.delete", "preference.view", "purchase.save", "purchase.finalize", "item.favorite", "item.save", "item.delete", "item.status"]), id: z.string().min(1).optional(), input: z.unknown().optional() });
 function failure(error: unknown) {
   if (error instanceof DomainError) return NextResponse.json({ error: error.message }, { status: error.status });
   if (error instanceof z.ZodError) return NextResponse.json({ error: "Confira os campos informados.", fields: error.issues.map(i => ({ path: i.path.join("."), message: i.message })) }, { status: 400 });
@@ -28,6 +28,12 @@ export async function POST(request: Request) {
       case "favorite.delete": service.deleteFavorite(id()); break;
       case "collection.save": result = service.saveCollection(body.input, body.id); break;
       case "collection.delete": service.deleteCollection(id()); break;
+      case "purchase.save": result = service.savePurchase(body.input, body.id); break;
+      case "purchase.finalize": result = service.finalizePurchase(id(), body.input); break;
+      case "item.favorite": result = service.addFavoriteToPurchase(body.input); break;
+      case "item.save": result = service.saveManualItem(body.input, body.id); break;
+      case "item.delete": service.removePurchaseItem(id()); break;
+      case "item.status": service.setCartStatus(id(), body.input); break;
       case "preference.view": service.setView(z.enum(["list", "cards"]).parse(body.input)); break;
     }
     return NextResponse.json({ result, data: service.getData() }, { headers: { "Cache-Control": "private, no-store" } });

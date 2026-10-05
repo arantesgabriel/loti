@@ -6,6 +6,7 @@ import { favoriteInput, collectionInput } from "./validation";
 import { buildCanonicalProductKey, detectPlatform } from "./urls";
 import { resolveProductVisual } from "./visuals";
 import { DomainError } from "./errors";
+import { purchaseServices } from "./purchase-services";
 export function createServices(db: AppDatabase, userId: string) {
   const guard = authorization(db, userId);
   function collectionForFavorite(collectionId: string | null, workspaceId: string) {
@@ -52,7 +53,7 @@ export function createServices(db: AppDatabase, userId: string) {
     const now = new Date();
     db.insert(userPreferences).values({ userId, favoritesView: view, createdAt: now, updatedAt: now }).onConflictDoUpdate({ target: userPreferences.userId, set: { favoritesView: view, updatedAt: now } }).run();
   }
-  return { ...guard, getData, saveFavorite, deleteFavorite, saveCollection, deleteCollection, setView };
+  return { ...guard, ...purchaseServices(db, userId), getData, saveFavorite, deleteFavorite, saveCollection, deleteCollection, setView };
 }
 export type WorkspaceData = ReturnType<ReturnType<typeof createServices>["getData"]>;
 // API serialization dates are represented as ISO strings; components never need database access.
