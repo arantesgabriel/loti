@@ -28,3 +28,7 @@ Fast common paths; progressive disclosure; explicit ownership; independent histo
 Visible focus, keyboard accessible dialogs, text alongside state colors, comfortable touch targets and reduced motion.
 
 Canonical details remain in docs/00_CONTEXT.md through docs/16_HUMAN_INPUTS.md. This file captures the approved brief for design tooling.
+
+## Login editorial surface
+
+The approved login direction uses a central Loti box, generic community portraits and shopping/favorite objects in multiple subtle orbital layers. Desktop splits scene and form; mobile uses a compact simplified scene above the form. Preserve accessibility, private email/password auth and a static reduced-motion fallback. Purpose: save → organize → buy together. See docs/17_LOGIN_ORBITAL_MOTION.md.

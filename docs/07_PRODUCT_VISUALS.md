@@ -98,3 +98,7 @@ A coding agent without image-generation capability may initially create clean mo
 ## Fallback
 
 Unknown items use `generic`, a neutral 3D package/object form. Never show a broken image.
+
+## Editorial login assets
+
+The grayscale resolver/archetype contract above applies to operational product rows and cards. Login is a distinct editorial surface, permitted to use pastel object backplates, soft dimensional SVGs and generic illustrated community portraits. Its twelve local assets live under `/public/login-visuals/`; they are independent from resolver keys and never replace historical purchase visuals. No real listing photos, brand marks, external image dependency or runtime generation. See [login direction](17_LOGIN_ORBITAL_MOTION.md).

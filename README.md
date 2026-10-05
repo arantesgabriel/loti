@@ -83,7 +83,7 @@ npx playwright install chromium
 npm run test:e2e    # servidor/banco isolados na porta 3100
 ```
 
-Os sete cenários cobrem login, permissões, favorito → compra para outra pessoa, colaboração, quantidades/preços, checklist, finalização, histórico, preferência e ilha mobile. O teste responsivo verifica 320, 390, 768, 1024 e 1440 px, teclado e erros JavaScript; salva quatro capturas em `artifacts/qa/`. HTML/trace de falhas ficam em `playwright-report/` e `test-results/`. O servidor E2E reinicia **apenas** `data/e2e.sqlite`, nunca o banco de desenvolvimento. Os sete testes de legado usam a planilha privada fornecida localmente em `legacy/source/`; sem esse arquivo, são reportados como skipped e os demais 83 testes continuam executando. A planilha não é versionada nem incluída na imagem Docker.
+Os doze cenários cobrem login, permissões, favorito → compra para outra pessoa, colaboração, quantidades/preços, checklist, finalização, histórico, preferência e ilha mobile. O teste responsivo verifica 320, 390, 768, 1024 e 1440 px, teclado e erros JavaScript; salva capturas das áreas operacionais e do login em `artifacts/qa/`. O login tem quatro testes próprios de composição responsiva, órbitas/orientação, reduced motion e ciclo completo de autenticação. HTML/trace de falhas ficam em `playwright-report/` e `test-results/`. O servidor E2E reinicia **apenas** `data/e2e.sqlite`, nunca o banco de desenvolvimento. Os sete testes de legado usam a planilha privada fornecida localmente em `legacy/source/`; sem esse arquivo, são reportados como skipped e os demais 83 testes continuam executando. A planilha não é versionada nem incluída na imagem Docker.
 
 ## Publicar no Railway
 
@@ -119,3 +119,9 @@ DATABASE_PATH=./data/restored.sqlite npm run db:verify
 ```
 
 Para substituir um banco em uso por uma cópia, pare todas as conexões. Guarde a versão atual e seus `-wal`/`-shm`, coloque a cópia no caminho configurado, remova apenas os sidecars antigos desse destino e reinicie. Nunca copie somente o arquivo principal de um SQLite ativo: use a API de backup ou o restore do volume. Após restaurar, confira integridade, foreign keys, healthcheck, login e uma compra histórica. A restauração também retrocede dados e sessões salvos após aquele backup.
+
+## Login editorial
+
+A tela de login usa uma cena de comunidade em órbita: caixa Loti central, produtos/favoritos e avatares genéricos. Desktop divide ilustração e formulário; tablet/mobile simplificam a cena acima do formulário. SVGs locais em `public/login-visuals/` e CSS implementam três órbitas (44/72/108 s), contrarrotação, flutuação e reações discretas a foco/loading. Reduced motion deixa a composição estática. A lógica de autenticação permanece inalterada.
+
+Contrato visual, assets, testes e lista completa dos documentos atualizados: [docs/17_LOGIN_ORBITAL_MOTION.md](docs/17_LOGIN_ORBITAL_MOTION.md). Referência aprovada: `docs/design/mockups/login-orbital.png`.

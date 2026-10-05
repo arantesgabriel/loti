@@ -25,7 +25,10 @@ flowchart LR
 
 - no onboarding;
 - no workspace setup wizard;
-- authenticated users land on Favorites.
+- authenticated users land on Favorites;
+- desktop presents the editorial community-orbit scene beside the form; tablet/mobile use a compact scene above it;
+- email/password focus and submitting get subtle scene feedback; Enter, inline errors and loading retain their behavior;
+- reduced motion shows a static equivalent; no illustration delays authentication or redirect. See `17_LOGIN_ORBITAL_MOTION.md`.
 
 ## 2. Create favorite
 

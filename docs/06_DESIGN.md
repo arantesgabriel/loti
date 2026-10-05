@@ -186,3 +186,9 @@ Prefer contextual toasts rather than success pages:
 - adequate contrast;
 - keyboard-accessible dialogs/sheets;
 - comfortable touch targets on mobile.
+
+## Login editorial direction and motion
+
+Login is an editorial surface with an approved community-orbit composition: central orange Loti box, generic portraits and local pastel shopping/favorite objects. Richer illustration and ambient motion apply here while operational surfaces retain their restrained grayscale system. Desktop is split; tablet/mobile use a compact simplified scene above the clean form.
+
+Use three independent radii/durations, alternating direction and counterrotation to keep subjects upright. The implementation uses 44/72/108 s revolutions, short focus/submitting convergence and gentle float/breathing cycles. Avoid changing animation duration mid-loop. All animation stops for reduced motion, leaving balanced static positions. The scene is decorative and never blocks or delays authentication. Exact assets, layout, states and QA: [login specification](17_LOGIN_ORBITAL_MOTION.md).

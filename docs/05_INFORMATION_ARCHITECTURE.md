@@ -72,6 +72,10 @@ Creation/editing should generally stay in context via Sheet/Drawer/Dialog instea
 - Remove purchase item
 - Finalize purchase
 
+## Page: Login
+
+Editorial community-orbit scene + private login form. At desktop width, scene is left and form is right; tablet/mobile place a simplified compact scene above the form. Brand, heading, email/password, submit and private-access note remain the interaction hierarchy. There are no extra routes or keyboard stops in the illustration. See `17_LOGIN_ORBITAL_MOTION.md`.
+
 ## Page: Favorites
 
 Hierarchy:

@@ -83,3 +83,11 @@ O [README](../README.md) contém os comandos e o procedimento de restore. [Docum
 - A auditoria completa ainda reporta cinco avisos de severidade alta na cadeia de ferramentas ESLint/Next (braces/fast-glob), sem atualização estável compatível disponível. Essas ferramentas são removidas da imagem final; a auditoria de produção reporta zero. Overrides compatíveis corrigiram uuid/esbuild sem downgrade da stack.
 
 Após o MVP: acompanhar as atualizações dessas ferramentas e validar regularmente a restauração de backups. Trocar os SVGs por renders locais mais refinados é opcional e preserva os mesmos nomes de arquivo. Nenhum desses itens amplia o escopo implementado.
+
+## Refatoração do login — 5 de outubro de 2026
+
+Cena editorial implementada em `OrbitalScene`, CSS próprio de login e doze SVGs locais (14 KB). Desktop split, mini cena elíptica em tablet/mobile, três órbitas de 44/72/108 s com sentidos alternados e contrarrotação, reações de foco/loading e composição estática para reduced motion. O handler de login foi comparado com a versão anterior e permanece idêntico; nenhuma regra, configuração, sessão, cookie ou redirect de autenticação mudou.
+
+Validação desta refatoração: lint, typecheck, 90 testes Vitest (52 unidade + 38 integração), **12 E2E Chromium** e build de produção passaram. Migrações passaram em banco temporário vazio e em repetição. QA visual inspecionou 390/768/1024/1440 px e reduced motion; o teste também cobriu 320 px. Capturas locais `artifacts/qa/login-*.png`. Não foram repetidos Docker, deploy Railway ou testes HTTPS de produção nesta refatoração; os resultados anteriores acima pertencem ao baseline do MVP.
+
+Componentes, sistema de motion, assets, comportamento responsivo, limites da validação e TODOS os documentos alterados estão registrados em [17_LOGIN_ORBITAL_MOTION.md](17_LOGIN_ORBITAL_MOTION.md).

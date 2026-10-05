@@ -38,7 +38,7 @@ Gate: empty DB migrates successfully; constraints tested.
 ## Phase 03 — Authentication and authorization
 
 - Better Auth email/password;
-- `/login`;
+- `/login` with the editorial community-orbit composition specified in `17_LOGIN_ORBITAL_MOTION.md`: desktop split, compact mobile, three motion layers, upright subjects and static reduced motion;
 - protected app layout;
 - logout;
 - no public signup;
@@ -46,7 +46,7 @@ Gate: empty DB migrates successfully; constraints tested.
 - singleton/default workspace bootstrap/member assignment;
 - centralized authorization helpers.
 
-Gate: session works; favorite ownership/workspace access integration tests pass.
+Gate: session works; favorite ownership/workspace access integration tests pass; login focus/loading/error, Enter, redirect/logout and responsive/reduced-motion E2E pass.
 
 ## Phase 04 — Application shell
 

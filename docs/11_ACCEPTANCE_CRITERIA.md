@@ -108,3 +108,18 @@
 A group can do the entire workflow without the legacy spreadsheet:
 
 `login → save favorite → another member sees it → add to purchase → collaborate → mark HubBuy items added → finalize → inspect immutable history → create next purchase`.
+
+## Login editorial community orbit
+
+- desktop has a clear illustrated-scene/form split and central Loti box;
+- shopping/favorite objects and generic community portraits orbit continuously in at least three distinct layers with varied speed/direction;
+- subjects remain upright throughout a revolution; ambient motion stays subtle;
+- focus/submitting feedback is restrained and never delays authentication;
+- tablet/mobile use a smaller scene with fewer objects and primary form hierarchy;
+- no horizontal overflow at 390/768/1024/1440 px; 320 px remains usable;
+- reduced motion stops loops/transitions and preserves a balanced static composition;
+- scene is decorative (`aria-hidden`) with no keyboard stops;
+- wrong-password feedback, Enter, loading, redirect, persistent session and logout retain behavior;
+- no real product imagery, public signup, mascot, heavy 3D or runtime asset generation.
+
+Exact implementation contract: [17_LOGIN_ORBITAL_MOTION.md](17_LOGIN_ORBITAL_MOTION.md).

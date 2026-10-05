@@ -30,6 +30,7 @@ Before changing code, read all canonical files in this order:
 18. `docs/14_LEGACY_MIGRATION.md`
 19. `docs/15_DECISIONS.md`
 20. `docs/16_HUMAN_INPUTS.md`
+21. `docs/17_LOGIN_ORBITAL_MOTION.md`
 
 Then inspect the existing repository before making assumptions.
 
@@ -395,6 +396,23 @@ Centralize as design tokens/CSS variables.
 - Lucide only;
 - ~150–250ms restrained transitions with reduced-motion support.
 
+### Login — editorial community orbit
+
+Follow `docs/17_LOGIN_ORBITAL_MOTION.md` and `docs/design/mockups/login-orbital.png`.
+
+- desktop split: illustrated scene left, simple private login form right;
+- central orange Loti box; generic people and shopping/favorite objects in at least three orbital layers;
+- different radii, durations and directions; counterrotation keeps objects upright;
+- soft local pastel illustration assets separate from operational grayscale product markers;
+- subtle float/breathing motion and focus/submitting convergence, without timing jumps or delayed redirects;
+- tablet/mobile: simplified compact scene above the form, fewer objects, no horizontal overflow;
+- `prefers-reduced-motion`: fully static, balanced equivalent;
+- decorative scene is `aria-hidden`, has no keyboard stops and cannot interfere with login;
+- preserve Better Auth, React Hook Form, validation, errors, Enter, loading, sessions and logout;
+- no public signup, mascot, video, Three.js/WebGL, runtime generation or new animation dependency when CSS suffices.
+
+The editorial scene may use orange for the central symbol and pastel object backplates. The operational palette and grayscale product system retain their existing rules.
+
 ### Favorites
 
 - title + add action;
@@ -619,6 +637,7 @@ Mandatory Playwright flows:
 6. Finalize → History → read-only.
 7. List/Cards preference persists.
 8. Mobile rounded navigation island works.
+9. Login split/compact layouts, orbital orientation, focus/loading/error, Enter, session/logout and static reduced motion work at 390/768/1024/1440 px.
 
 Use test users, not production credentials.
 

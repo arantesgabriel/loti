@@ -67,3 +67,9 @@ The source was a user-provided screenshot showing a rounded floating navigation 
 `references/mobile-nav-island-reference.png`
 
 The screenshot is used only to convey the shape/interaction concept.
+
+## Login editorial reference — approved community orbit
+
+The user-approved image is stored locally at `mockups/login-orbital.png`. Follow its split composition, central Loti symbol, people + shopping/favorite objects, soft pastels and clean form. Implement local original illustrations; do not extract its branded sneaker/product artwork into the app.
+
+The login brief describes a richer editorial illustration treatment inspired by Visor Finance. This is a style cue for login only; no external assets are copied or hotlinked. Operational grayscale markers and Bookmark/Clozy structure remain unchanged. Motion and responsive contract: [17_LOGIN_ORBITAL_MOTION.md](../17_LOGIN_ORBITAL_MOTION.md).

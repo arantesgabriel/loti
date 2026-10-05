@@ -26,3 +26,7 @@ These four images define the majority of the product's visual behavior.
 4. Mobile mockups include the final rounded floating navigation island and supersede earlier full-width bottom-bar concepts.
 5. Favorites must support both the approved list-like presentation and simple card view via a persisted user preference.
 6. Use these PNGs as visual QA references at approximately 1440px desktop and ~390px mobile widths.
+
+## Login — editorial community orbit
+
+`mockups/login-orbital.png` is the user-approved login reference. Preserve the desktop split, central Loti box, surrounding people/products and negative space. Its illustration style guides the composition; runtime uses original/local SVGs without branded product details. Objects must actually orbit, with counterrotation, while tablet/mobile simplify the scene and reduced motion keeps a static equivalent. See [login specification](../17_LOGIN_ORBITAL_MOTION.md).

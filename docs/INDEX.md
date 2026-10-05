@@ -21,6 +21,7 @@ This folder is the canonical product and engineering handoff for the Loti MVP.
 | `14_LEGACY_MIGRATION.md` | One-time migration from the attached workbook |
 | `15_DECISIONS.md` | Final product/technical decisions and rejected alternatives |
 | `16_HUMAN_INPUTS.md` | Credentials and deployment inputs that an agent cannot invent |
+| `17_LOGIN_ORBITAL_MOTION.md` | Editorial login, orbital motion, responsive behavior and validation |
 | `design/REFERENCES.md` | Figma and palette inspiration URLs |
 | `design/MOCKUPS.md` | Approved visual references and interpretation notes |
 

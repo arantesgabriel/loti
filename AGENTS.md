@@ -23,6 +23,7 @@ Before writing code, read the files in this order:
 15. `docs/14_LEGACY_MIGRATION.md`
 16. `docs/15_DECISIONS.md`
 17. `docs/16_HUMAN_INPUTS.md`
+18. `docs/17_LOGIN_ORBITAL_MOTION.md`
 
 The execution prompt is `PROMPT_ONE_SHOT.md`.
 
@@ -54,7 +55,8 @@ Do **not** revive discarded architecture decisions such as Supabase, Neon, Postg
 - Finalized purchases are immutable/read-only.
 - Purchase items are snapshots; editing/deleting a favorite must never mutate historical purchase data.
 - Favorites support **List** and **Cards** views; preference persists per user.
-- Never use real listing/product photos. Use local grayscale/clay product archetype visuals.
+- Never use real listing/product photos. Operational surfaces use local grayscale/clay product archetype visuals; login uses separate local pastel editorial assets.
+- The login page is an editorial surface: a central Loti box/symbol with community avatars and shopping/favorite objects orbiting in multiple subtle motion layers. Preserve form simplicity, accessibility and the static reduced-motion fallback. Do not replace this direction with a static centered login card, ecommerce hero, mascot, video background or heavy 3D/WebGL scene. See `docs/17_LOGIN_ORBITAL_MOTION.md`.
 - Mobile navigation uses the approved rounded floating island.
 - Collections live inside Favorites, not as a primary app section.
 - No dashboard.

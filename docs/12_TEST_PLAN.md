@@ -132,3 +132,14 @@ npm run build
 ```
 
 Fix failures before declaring completion.
+
+## E2E 09 — Login editorial scene and auth regression
+
+`tests/e2e/login.spec.ts` covers four scenarios:
+
+1. Split vs compact layouts at 320/390/768/1024/1440 px, form accessibility, local asset loading and no horizontal overflow.
+2. Actual orbital displacement and upright orientation at each quadrant of every full revolution, including reverse motion.
+3. Reduced motion: no login animations, balanced static scene and no focus-driven radius transition.
+4. Keyboard focus, email/password visual states, invalid password, Enter, held-request loading, success redirect, session after reload, logout and protected-route denial.
+
+Visual QA captures `artifacts/qa/login-{320,390,768,1024,1440}.png` and `login-reduced-motion.png`. Inspect desktop, tablet, mobile and reduced-motion screenshots against `design/mockups/login-orbital.png`. The complete suite currently has twelve Chromium scenarios. See `17_LOGIN_ORBITAL_MOTION.md`.

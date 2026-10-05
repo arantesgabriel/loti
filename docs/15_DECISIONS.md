@@ -79,3 +79,9 @@ Chosen: purchase-item snapshots. Historical records never read mutable favorite 
 ## Active purchase rule
 
 Exactly one active purchase per workspace, enforced at the database level with a partial unique index and at the application level for user-friendly errors.
+
+## Login visual direction
+
+Chosen: editorial community-orbit composition to communicate **save → organize → buy together**. Desktop uses a split layout with a central Loti box, multiple subtle continuous orbital layers, products and people. Mobile uses fewer objects and a compact composition above the primary form. Motion includes gentle ambient loops, focus/submitting reactions and a fully static reduced-motion fallback.
+
+Use separate local pastel editorial assets. Preserve Better Auth and the existing form behavior. Reject a lone centered card, ecommerce storefront, mascot, video background, heavy 3D/WebGL and animation-delayed login. Detailed contract: [17_LOGIN_ORBITAL_MOTION.md](17_LOGIN_ORBITAL_MOTION.md).
