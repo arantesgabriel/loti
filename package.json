@@ -21,7 +21,9 @@
     "db:seed": "node --import tsx scripts/seed.ts",
     "user:create": "node --import tsx scripts/create-user.ts",
     "import:legacy": "node --import tsx scripts/import-legacy-spreadsheet.ts",
-    "test:serve": "node --import tsx scripts/e2e-server.ts"
+    "test:serve": "node --import tsx scripts/e2e-server.ts",
+    "db:backup": "node --import tsx scripts/backup.ts",
+    "db:verify": "node --import tsx scripts/verify-database.ts"
   },
   "dependencies": {
     "@better-auth/drizzle-adapter": "1.7.7",
@@ -46,7 +48,9 @@
     "server-only": "0.0.1",
     "sonner": "2.0.8",
     "tailwind-merge": "3.7.0",
-    "zod": "4.6.5"
+    "zod": "4.6.5",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3"
   },
   "devDependencies": {
     "@playwright/test": "1.63.0",
@@ -59,9 +63,15 @@
     "eslint": "9.39.5",
     "eslint-config-next": "16.3.8",
     "tailwindcss": "4.3.3",
-    "tsx": "4.23.15",
-    "typescript": "6.0.3",
     "vitest": "5.0.3"
   },
-  "type": "module"
+  "type": "module",
+  "overrides": {
+    "exceljs": {
+      "uuid": "11.1.1"
+    },
+    "@esbuild-kit/core-utils": {
+      "esbuild": "0.28.2"
+    }
+  }
 }
