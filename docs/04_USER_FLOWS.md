@@ -1,0 +1,176 @@
+# User Flows
+
+These are the canonical human journeys. Optimize implementation for the common path and keep secondary fields behind progressive disclosure where useful.
+
+## Macro journey
+
+```mermaid
+flowchart LR
+    A[Find product] --> B[Save favorite]
+    B --> C[Organize in collection if useful]
+    C --> D[Add to active purchase]
+    D --> E[Group prepares purchase]
+    E --> F[Filter pending items]
+    F --> G[Open product and add to HubBuy]
+    G --> H[Mark Added]
+    H --> I{Any pending?}
+    I -->|Yes| F
+    I -->|No| J[Finalize]
+    J --> K[History]
+```
+
+## 1. Login
+
+`Open app → Email/password → Authenticate → Favorites`
+
+- no onboarding;
+- no workspace setup wizard;
+- authenticated users land on Favorites.
+
+## 2. Create favorite
+
+`Copy external link → Open Loti → + New favorite → Paste URL → Type name → optional price/details → Save`
+
+Minimum useful form: URL + name.
+
+## 3. Duplicate warning
+
+`Paste URL → normalize/canonicalize → possible match found → show existing item → choose “Ver existente” or “Salvar mesmo assim”`
+
+Never hard-block.
+
+## 4. View favorites
+
+`Favorites → Todos or Meus → list/cards`
+
+Default sort: newest first.
+
+## 5. Find a favorite
+
+`Favorites → Search → optional filters → result`
+
+Filters can combine: person + platform + collection + QC + price presence.
+
+## 6. Open favorite
+
+`Select favorite → detail surface → Abrir produto OR + Compra`
+
+Owner also sees Edit/Delete.
+
+## 7. Edit favorite
+
+`Open own favorite → Edit → change allowed fields → Save`
+
+Historical purchase items remain unchanged.
+
+## 8. Delete favorite
+
+`Open own favorite → Delete → confirm → favorite removed`
+
+Existing purchase items remain.
+
+## 9. Create collection
+
+`Favorites → + Nova coleção → Name → Create`
+
+No color/icon/description setup in MVP.
+
+## 10. Put favorite in collection
+
+`Create/Edit favorite → choose collection → Save`
+
+Zero or one collection.
+
+## 11. Navigate collection
+
+`Favorites → select collection → list is filtered`
+
+Collections behave like personal organizational folders integrated into Favorites.
+
+## 12. Delete collection
+
+`Collection menu → Delete → confirm → favorites become uncollected`
+
+## 13. Create first/next purchase
+
+`Compra atual → empty state → Criar compra → suggested month/year name → optional HubBuy email → Save`
+
+Block if another purchase is already active.
+
+## 14. Favorite → purchase
+
+`Favorite → + Compra → person defaults to favorite owner → variation/quantity/price prefilled → adjust if needed → Add`
+
+Creates a snapshot.
+
+## 15. Add manual purchase item
+
+`Compra atual → + Adicionar item → Manual → name + URL + person → optional details → Add`
+
+Does not create a favorite.
+
+## 16. Add from favorites inside purchase
+
+`Compra atual → + Adicionar item → Dos favoritos → search → select one → adjust purchase-specific fields → Add`
+
+One at a time in MVP.
+
+## 17. View active purchase
+
+`Compra atual → overall summary → progress → person summaries → items grouped by person`
+
+Immediately answer: what, for whom, how much, and what is still pending.
+
+## 18. Edit purchase item
+
+`Open active item → Edit → change person/variation/quantity/price/notes → Save → derived totals refresh`
+
+Does not mutate favorite.
+
+## 19. Change quantity
+
+`Edit item → quantity 1 → N → save → subtotal/person/overall/progress recompute`
+
+## 20. Item without price
+
+`Add/edit item with empty price → Save → display Preço pendente → totals show priced amount + count of no-price items`
+
+## 21. Actual buying day
+
+`Compra atual → Pendentes → Open product → add it to the current HubBuy account → return → mark Added → next pending`
+
+This is a first-class operational workflow.
+
+## 22. Mark Added
+
+`Pending checkbox/status → tap once → Added`
+
+No confirmation modal.
+
+## 23. Finalize purchase
+
+`Finalize → check pending/no-price warnings → confirm → status finalized → move to history`
+
+Warnings do not block.
+
+## 24. View history
+
+`Histórico → finalized purchases newest first → select one`
+
+Show name/date/people/units/total.
+
+## 25. Open historical purchase
+
+`History item → purchase detail read-only`
+
+Reuse current-purchase visual language but remove all mutation affordances.
+
+## 26. Start next cycle
+
+`Purchase finalized → Compra atual empty state → Criar próxima compra → cycle restarts`
+
+## Mobile quick-save mental model
+
+`WhatsApp/Reddit/marketplace → copy URL → Loti → + → paste URL → name → save`
+
+The UI must not force users through nested navigation for this action.
