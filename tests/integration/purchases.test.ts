@@ -78,6 +78,19 @@ describe("purchase rules", () => {
     expect(saved?.unitPriceCents).toBeNull(); await f.bob.setCartStatus(saved!.id, "added");
     expect((await f.alice.getData()).items[0]?.cartStatus).toBe("added");
   });
+  it("marks only one person's active purchase items at once", async () => {
+    const purchase = await f.alice.savePurchase({ name: "Bulk status" });
+    const first = await f.alice.saveManualItem(item);
+    const second = await f.bob.saveManualItem({ ...item, name: "Second", personId: "alice", quantity: 3 });
+    await f.bob.setPersonItemsStatus(purchase!.id, { personId: "bob", status: "added" });
+    expect((await f.alice.getData()).items.map(row => row.cartStatus)).toEqual(["added", "pending"]);
+    await f.alice.setPersonItemsStatus(purchase!.id, { personId: "bob", status: "added" });
+    expect((await f.bob.getData()).items.map(row => row.cartStatus)).toEqual(["added", "pending"]);
+    await f.alice.setPersonItemsStatus(purchase!.id, { personId: "bob", status: "pending" });
+    expect((await f.bob.getData()).items.map(row => row.cartStatus)).toEqual(["pending", "pending"]);
+    await expect(f.outsider.setPersonItemsStatus(purchase!.id, { personId: "outsider", status: "added" })).rejects.toThrow();
+    expect(first!.purchaseId).toBe(second!.purchaseId);
+  });
   it("requires explicit confirmation but allows pending/no-price finalization", async () => {
     const { p } = await snapshot(); await f.alice.saveManualItem({ ...item, unitPriceCents: null });
     await expect(f.bob.finalizePurchase(p.id, false)).rejects.toThrow("Confirme");
@@ -89,6 +102,7 @@ describe("purchase rules", () => {
     await expect(f.bob.saveManualItem(item, saved.id)).rejects.toThrow("finalizada");
     await expect(f.bob.removePurchaseItem(saved.id)).rejects.toThrow("finalizada");
     await expect(f.bob.setCartStatus(saved.id, "added")).rejects.toThrow("finalizada");
+    await expect(f.bob.setPersonItemsStatus(p.id, { personId: "bob", status: "added" })).rejects.toThrow("finalizada");
     await expect(f.bob.finalizePurchase(p.id, true)).rejects.toThrow("finalizada");
     await expect(f.bob.saveManualItem(item)).rejects.toThrow();
     expect((await f.bob.savePurchase({ name: "Next" }))?.status).toBe("active");

@@ -3,7 +3,7 @@ import { useRouter } from "next/navigation";
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
 import { toast, Toaster } from "sonner";
 import type { ClientData } from "@/lib/domain/services";
-export type Operation = "favorite.save" | "favorite.delete" | "collection.save" | "collection.delete" | "preference.view" | "purchase.save" | "purchase.finalize" | "item.favorite" | "item.save" | "item.delete" | "item.status";
+export type Operation = "favorite.save" | "favorite.delete" | "collection.save" | "collection.delete" | "preference.view" | "purchase.save" | "purchase.finalize" | "item.favorite" | "item.save" | "item.delete" | "item.status" | "item.status.person";
 type RefreshResult = "success" | "unauthenticated" | "unavailable";
 type Workspace = { data: ClientData; busy: boolean; mutate: (operation: Operation, input?: unknown, id?: string, message?: string) => Promise<boolean>; refresh: () => Promise<RefreshResult>; updateProfileName: (name: string) => Promise<RefreshResult> };
 const Context = createContext<Workspace | null>(null);

@@ -7,7 +7,7 @@ import { createServices } from "@/lib/domain/services";
 import { DomainError } from "@/lib/domain/errors";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-const requestSchema = z.object({ operation: z.enum(["favorite.save", "favorite.delete", "collection.save", "collection.delete", "preference.view", "purchase.save", "purchase.finalize", "item.favorite", "item.save", "item.delete", "item.status"]), id: z.string().min(1).optional(), input: z.unknown().optional() });
+const requestSchema = z.object({ operation: z.enum(["favorite.save", "favorite.delete", "collection.save", "collection.delete", "preference.view", "purchase.save", "purchase.finalize", "item.favorite", "item.save", "item.delete", "item.status", "item.status.person"]), id: z.string().min(1).optional(), input: z.unknown().optional() });
 function failure(error: unknown) {
   if (error instanceof SyntaxError) return NextResponse.json({ error: "Solicitação inválida." }, { status: 400 });
   if (error instanceof DomainError) return NextResponse.json({ error: error.message }, { status: error.status });
@@ -36,6 +36,7 @@ export async function POST(request: Request) {
       case "item.save": result = await service.saveManualItem(body.input, body.id); break;
       case "item.delete": await service.removePurchaseItem(id()); break;
       case "item.status": await service.setCartStatus(id(), body.input); break;
+      case "item.status.person": await service.setPersonItemsStatus(id(), body.input); break;
       case "preference.view": await service.setView(z.enum(["list", "cards"]).parse(body.input)); break;
     }
     return NextResponse.json({ result, data: await service.getData() }, { headers: { "Cache-Control": "private, no-store" } });

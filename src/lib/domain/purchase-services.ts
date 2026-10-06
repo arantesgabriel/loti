@@ -80,6 +80,17 @@ export function purchaseServices(db: AppDatabase, userId: string) {
     await db.update(purchaseItems).set({ cartStatus: status, updatedAt: new Date() }).where(eq(purchaseItems.id, id)).run();
   }
 
+  async function setPersonItemsStatus(id: string, input: unknown) {
+    const value = z.object({ personId: z.string().min(1), status: z.enum(["pending", "added"]) }).parse(input);
+    const purchase = await guard.requireEditablePurchase(id);
+    await authorization(db, value.personId).requireWorkspaceMember(purchase.workspaceId);
+    await db.update(purchaseItems).set({ cartStatus: value.status, updatedAt: new Date() }).where(and(
+      eq(purchaseItems.purchaseId, id),
+      eq(purchaseItems.personId, value.personId),
+      eq(purchaseItems.cartStatus, value.status === "added" ? "pending" : "added"),
+    )).run();
+  }
+
   async function finalizePurchase(id: string, confirmed: unknown) {
     if (confirmed !== true) throw new DomainError("Confirme a finalização da compra.");
     await guard.requireEditablePurchase(id);
@@ -88,5 +99,5 @@ export function purchaseServices(db: AppDatabase, userId: string) {
     return finalized;
   }
 
-  return { savePurchase, addFavoriteToPurchase, saveManualItem, removePurchaseItem, setCartStatus, finalizePurchase };
+  return { savePurchase, addFavoriteToPurchase, saveManualItem, removePurchaseItem, setCartStatus, setPersonItemsStatus, finalizePurchase };
 }
