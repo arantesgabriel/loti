@@ -29,10 +29,12 @@ export function InviteScreen({ token }: { token: string }) {
   }
   async function accept() {
     if (!data) return;
+    const fullName = name.trim();
+    if (!data.existingAccount && !fullName) { setError("Informe seu primeiro nome e sobrenome."); return; }
     if (!data.existingAccount && password !== confirmation) { setError("As senhas precisam ser iguais."); return; }
     setBusy(true); setError("");
     try {
-      const response = await fetch(api, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, password }) });
+      const response = await fetch(api, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: fullName, password }) });
       const result = await response.json();
       if (!response.ok) { setError(result.error); return; }
       setAccepted(true);
@@ -54,7 +56,8 @@ export function InviteScreen({ token }: { token: string }) {
         <p className="muted">Organize seus favoritos e participe das compras com o grupo. Você terá acesso aos favoritos e compras compartilhados.</p>
         <div className="invite-address"><span className="muted">Convite para</span><strong>{data.email}</strong></div>
         {accepted ? <Button asChild><Link href="/login">Entrar na minha conta</Link></Button> : wrongEmail ? <><p>Você está conectado como {data.sessionEmail}. Entre com o email convidado para continuar.</p><Button disabled={busy} onClick={switchAccount}>{busy ? "Aguarde…" : "Trocar de conta"}</Button></> : data.alreadyMember ? <><p>Você já faz parte deste grupo.</p><Button disabled={busy} onClick={accept}>{busy ? "Aguarde…" : "Ir para Favoritos"}</Button></> : data.existingAccount && !data.sessionEmail ? <><p>Você já tem uma conta no Loti. Entre com sua senha atual para aceitar o convite.</p><Button asChild><Link href={loginLink}>Entrar para aceitar</Link></Button></> : data.sessionEmail ? <Button disabled={busy} onClick={accept}>{busy ? "Entrando no grupo…" : "Aceitar convite"}</Button> : <form onSubmit={e => { e.preventDefault(); void accept(); }}>
-          <label>Seu nome<input autoComplete="name" required maxLength={200} value={name} onChange={e => setName(e.target.value)} /></label>
+          <label>Nome e sobrenome<input autoComplete="name" placeholder="Ex.: Ana Souza" required maxLength={200} aria-describedby="invite-name-help" value={name} onChange={e => setName(e.target.value)} /></label>
+          <p className="muted" id="invite-name-help">Informe somente seu primeiro nome e último sobrenome, sem nomes do meio.</p>
           <label>Senha<input type={show ? "text" : "password"} autoComplete="new-password" required minLength={12} maxLength={128} aria-describedby="invite-password-help" value={password} onChange={e => setPassword(e.target.value)} /></label>
           <p className="muted" id="invite-password-help">Use de 12 a 128 caracteres.</p>
           <label>Confirmar senha<input type={show ? "text" : "password"} autoComplete="new-password" required minLength={12} maxLength={128} value={confirmation} onChange={e => setConfirmation(e.target.value)} /></label>

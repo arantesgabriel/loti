@@ -27,7 +27,9 @@ test("member generates a link and a new mobile user joins the group", async ({ p
   await invited.goto(link);
   await expect(invited.getByRole("heading", { name: "Entre no grupo Loti" })).toBeVisible();
   await expect(invited.locator('meta[name="referrer"]')).toHaveAttribute("content", "no-referrer");
-  await invited.getByLabel("Seu nome", { exact: true }).fill("Nova pessoa E2E");
+  await expect(invited.locator('link[rel="icon"]')).toHaveAttribute("href", /icon\.svg/);
+  await expect(invited.getByText("Informe somente seu primeiro nome e último sobrenome, sem nomes do meio.", { exact: true })).toBeVisible();
+  await invited.getByLabel("Nome e sobrenome", { exact: true }).fill("Nova Pessoa");
   await invited.getByLabel("Senha", { exact: true }).fill("Invitation-E2E-2026!");
   await invited.getByLabel("Confirmar senha", { exact: true }).fill("Invitation-E2E-other!");
   await invited.getByRole("button", { name: "Criar conta e entrar no grupo" }).click();
@@ -39,6 +41,8 @@ test("member generates a link and a new mobile user joins the group", async ({ p
   await invited.reload();
   const data = await (await invited.request.get("/api/app")).json();
   expect(data.currentUser.email).toBe("new-invite@loti.test");
+  expect(data.currentUser.name).toBe("Nova Pessoa");
+  await expect(invited.locator(".sidebar > .brand svg")).toHaveAttribute("fill", "currentColor");
   expect(data.favorites.length).toBeGreaterThan(0);
   await invited.goto("/group");
   await expect(invited.locator(".group-list li").filter({ hasText: "new-invite@loti.test" })).toBeVisible();
@@ -112,7 +116,7 @@ test("session failure after acceptance recovers through normal login", async ({ 
   const context = await browser.newContext(), invited = await context.newPage();
   await invited.setExtraHTTPHeaders({ "X-Forwarded-For": "203.0.113.211" });
   await invited.goto(link);
-  await invited.getByLabel("Seu nome", { exact: true }).fill("Session recovery");
+  await invited.getByLabel("Nome e sobrenome", { exact: true }).fill("Session Recovery");
   await invited.getByLabel("Senha", { exact: true }).fill("Session-Recovery-2026!");
   await invited.getByLabel("Confirmar senha", { exact: true }).fill("Session-Recovery-2026!");
   await invited.route("**/api/auth/sign-in/email", route => route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ message: "Simulated session failure", code: "SERVICE_UNAVAILABLE" }) }));
