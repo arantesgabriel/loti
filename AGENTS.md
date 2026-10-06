@@ -50,7 +50,7 @@ Do **not** revive discarded architecture decisions such as Supabase, Neon, Postg
 - Migrations are applied explicitly to the target database; never run them inside a request lifecycle or automatically per request.
 - Browser code must never access SQLite directly.
 - Authorization is enforced server-side with centralized helpers.
-- No public signup UI.
+- No public signup UI. Token-gated private invitations are approved: Profile → Meu grupo → email → generated link → acceptance → Favorites. See `docs/18_WORKSPACE_INVITATIONS_PLAN.md`.
 - Only one active purchase per workspace.
 - Favorites are personal but visible to the workspace.
 - Active purchases are collaborative.

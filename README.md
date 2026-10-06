@@ -94,3 +94,11 @@ Use a restauração/backup do Turso para a base remota. O runtime não depende d
 ## Login e visuais
 
 A tela de login mantém a cena editorial Loti com objetos e avatares locais, órbitas CSS e fallback estático para reduced motion. Favoritos, Compra e Histórico usam marcadores funcionais SVG pequenos e neutros via `resolveProductCategory()`; sem fotos, thumbnails ou renders 3D operacionais. Veja [17_LOGIN_ORBITAL_MOTION.md](docs/17_LOGIN_ORBITAL_MOTION.md) e [07_PRODUCT_VISUALS.md](docs/07_PRODUCT_VISUALS.md).
+
+## Convidar pessoas
+
+Abra o perfil pelo avatar e selecione **Meu grupo → Convidar pessoa**. Informe o email, gere o link e use **Copiar link** ou **Compartilhar**. O convite dura sete dias e permite que a pessoa defina nome e senha; contas existentes entram com sua senha atual antes do aceite. Todos os membros podem convidar e revogar convites pendentes.
+
+O link aparece somente ao gerar. **Gerar novo link** invalida o anterior; **Revogar** encerra o convite. Compartilhe somente com a pessoa convidada. O cadastro público continua desabilitado.
+
+Antes de publicar esta versão, execute `npm run db:migrate` no banco de destino: as migrações `0001` e `0002` são obrigatórias. A implementação e seus critérios estão em [docs/18_WORKSPACE_INVITATIONS_PLAN.md](docs/18_WORKSPACE_INVITATIONS_PLAN.md).

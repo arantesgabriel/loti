@@ -162,3 +162,7 @@ No new features.
 ## Autonomous execution rule
 
 Do not stop for approval between phases. Stop only for a genuine human-only blocker (credentials, external account login, domain ownership, etc.). Bugs and documented design decisions are not blockers; solve them and continue.
+
+## Private invitation extension
+
+Implementation order: additive schema → atomic invitation services and integration/race tests → Meu grupo API/UI → public acceptance and login return → browser journeys and existing regression checks → migrations and build. Detailed decisions and acceptance criteria: `18_WORKSPACE_INVITATIONS_PLAN.md`.

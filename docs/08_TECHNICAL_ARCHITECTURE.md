@@ -155,3 +155,9 @@ Centralize `detectPlatform(url)`, `normalizeProductUrl(url)` and/or `buildCanoni
 ## Realtime and scaling
 
 Realtime is not part of the MVP. After mutations, revalidate/refetch appropriate data. Vercel can run multiple stateless application instances because persistent state lives in Turso; do not add local-file coordination or application volumes.
+
+## Invitation boundary
+
+`src/lib/domain/invitations.ts` centralizes issuance, inspection, acceptance, regeneration and revocation. `/api/group` requires session/membership; `/api/invitations/[token]` permits token-validated public inspection/acceptance. Mutations check configured auth origin. Public signup stays disabled. Account creation uses a server-only operator-configured Better Auth instance bound to the Drizzle transaction with auto sign-in disabled. The transaction includes account/credential, membership, active workspace selection and invitation consumption. After commit, the browser establishes its session through the normal Better Auth login endpoint.
+
+Tokens contain 32 random bytes; only SHA-256 hashes persist. No token/body logging is added by application code. Responses use no-store; the invitation page uses no-referrer and noindex. Infrastructure access-log retention/redaction must account for token-bearing paths. Persistent fixed-window minute limits are shared across instances: 15 management mutations per user, 240 public inspections globally, 60 accepts globally, 10 attempts per valid token. Limiter entries older than one hour are removed during requests.

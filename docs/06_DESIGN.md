@@ -193,3 +193,7 @@ Prefer contextual toasts rather than success pages:
 Login is an editorial surface with an approved community-orbit composition: central orange Loti box, generic portraits and local pastel shopping/favorite objects. Richer illustration and ambient motion apply here while operational surfaces use small neutral functional category markers. Desktop is split; tablet/mobile use a compact simplified scene above the clean form.
 
 Use three independent radii/durations, alternating direction and counterrotation to keep subjects upright. The implementation uses 44/72/108 s revolutions, short focus/submitting convergence and gentle float/breathing cycles. Avoid changing animation duration mid-loop. All animation stops for reduced motion, leaving balanced static positions. The scene is decorative and never blocks or delays authentication. Exact assets, layout, states and QA: [login specification](17_LOGIN_ORBITAL_MOTION.md).
+
+## Meu grupo and invitation acceptance
+
+Use operational Loti typography, colors, buttons and compact rows. Group lists are separated by thin borders. Invite generation uses the existing accessible Surface/Confirm components, with a readonly selectable link and copy/share feedback. The acceptance page uses a narrow responsive form with fixed invited email, explicit password help, confirmation, visibility toggle and inline announced errors. It has no editorial assets or third-party requests.

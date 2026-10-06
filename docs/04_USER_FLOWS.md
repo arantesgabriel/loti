@@ -177,3 +177,13 @@ Reuse current-purchase visual language and small category markers but remove all
 `WhatsApp/Reddit/marketplace → copy URL → Loti → + → paste URL → name → save`
 
 The UI must not force users through nested navigation for this action.
+
+## Invite someone to the group
+
+`Avatar → Perfil → Meu grupo → Convidar pessoa → Email → Gerar link → Copiar/Compartilhar`.
+
+`Shared link → invited email and group → name/password/confirmation → account and membership → Favorites`.
+
+Existing account: `Shared link → Entrar para aceitar → login → return to invite → Aceitar convite → Favorites`. Wrong-email session: `Trocar de conta → login with invited email → accept`.
+
+Pending invitations offer explicit regeneration (invalidates old link) or confirmed revocation. Links expire in seven days. Invalid/expired/revoked/used links explain the problem and direct the person to request a new link. Session failure after signup directs the person to normal login with their newly defined password.

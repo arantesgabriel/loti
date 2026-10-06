@@ -8,6 +8,20 @@
       "when": 1791224711876,
       "tag": "0000_lean_sir_ram",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1791251475906,
+      "tag": "0001_bouncy_inertia",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1791251899610,
+      "tag": "0002_loose_shocker",
+      "breakpoints": true
     }
   ]
 }

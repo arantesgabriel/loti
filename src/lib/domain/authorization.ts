@@ -1,9 +1,10 @@
 import { and, eq } from "drizzle-orm";
 import type { AppDatabase } from "../db/connection";
-import { workspaceMembers, favorites, collections, purchases } from "../db/schema";
+import { workspaceMembers, userPreferences, favorites, collections, purchases } from "../db/schema";
 import { DomainError } from "./errors";
 export function authorization(db: AppDatabase, userId: string) {
   async function requireWorkspaceMember(workspaceId?: string) {
+    if (!workspaceId) workspaceId = (await db.select({ id: userPreferences.activeWorkspaceId }).from(userPreferences).where(eq(userPreferences.userId, userId)).get())?.id ?? undefined;
     const membership = await db.select().from(workspaceMembers).where(workspaceId ? and(eq(workspaceMembers.userId, userId), eq(workspaceMembers.workspaceId, workspaceId)) : eq(workspaceMembers.userId, userId)).get();
     if (!membership) throw new DomainError("Você não faz parte deste espaço.", 403);
     return membership;

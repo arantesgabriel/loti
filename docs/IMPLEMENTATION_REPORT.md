@@ -84,3 +84,13 @@ O build de Production do commit `c5a272b` ficou Ready em 1m14s. Depois da public
 - [Better Auth — adaptador Drizzle](https://better-auth.com/docs/adapters/drizzle)
 - [Turso — integração com Vercel](https://vercel.com/marketplace/tursocloud/database)
 - [Vercel — variáveis de ambiente](https://vercel.com/docs/environment-variables)
+
+## Convites privados — 5 de outubro de 2026
+
+Entregue o fluxo Perfil → Meu grupo → email → gerar link → compartilhar → definir nome/senha ou autenticar conta existente → vínculo → Favoritos. Membros consultam o grupo e gerenciam convites pendentes. Links duram sete dias, são de uso único e armazenados somente por hash; regeneração invalida o anterior. Cadastro público permanece bloqueado.
+
+Aceite executa criação de conta/credencial, vínculo, seleção do workspace e consumo na mesma transação. Falha na sessão após commit tem recuperação pelo login normal. Limites persistentes, validação de origem, isolamento por workspace e estados de expiração/revogação protegem os endpoints.
+
+Validação local: lint, typecheck, 106 testes Vitest, 19 cenários da suíte Chromium completa e um cenário adicional de recuperação de sessão (20 no total), build e migrações repetidas em bases vazias/existentes passaram. Capturas de Meu grupo desktop/mobile e formulário mobile foram inspecionadas.
+
+Migrações novas: `0001_bouncy_inertia.sql` e `0002_loose_shocker.sql`; aplicar antes de publicar o código. Não houve migração de produção nem deploy. Detalhes: [plano e decisões](18_WORKSPACE_INVITATIONS_PLAN.md).

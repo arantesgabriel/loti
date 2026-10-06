@@ -118,3 +118,11 @@ Do not implement any of the following in the MVP:
 ## Definition of MVP success
 
 The MVP succeeds when the five users can complete the full favorite → shared purchase → HubBuy transfer checklist → history cycle without opening the spreadsheet.
+
+## Approved extension: private invitations
+
+- Profile → Meu grupo: current members, pending invitations, email input and manual sharing.
+- Any member may invite, revoke or regenerate links valid for seven days.
+- New invited users choose their name/password; existing users authenticate before accepting.
+- Public signup stays disabled. Operator tooling remains for bootstrap.
+- No automatic invitation email, member removal, roles or multiple-workspace navigation.

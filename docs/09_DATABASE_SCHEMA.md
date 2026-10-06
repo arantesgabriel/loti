@@ -174,3 +174,13 @@ The existing `visual_key` column is retained as the functional category key (`vi
 ## Finalized purchase immutability
 
 The application service/action layer must reject mutations targeting a finalized purchase. This is a server rule and must have integration coverage.
+
+## Invitation extension
+
+`workspace_invitations`: id, workspace_id FK, normalized email, unique token_hash, created_by FK, created_at, expires_at, nullable accepted_at/accepted_by FK, nullable revoked_at/revoked_by FK. State derives from terminal dates and expiration. Partial unique index on workspace/email for unconsumed/unrevoked rows; constraint prevents accepted and revoked dates both being set.
+
+`invitation_limits`: key primary key, integer window and count; persistent shared request limits.
+
+`user_preferences.active_workspace_id`: nullable workspace FK selected by successful invitation acceptance. Central authorization still verifies membership before using it; existing rows use their prior membership context until selection occurs. Favorites view mode remains unchanged.
+
+Migrations: `0001_bouncy_inertia.sql` adds invitation/limiter tables; `0002_loose_shocker.sql` adds active workspace preference. Apply both before deploying invitation code.

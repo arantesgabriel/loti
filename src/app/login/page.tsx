@@ -3,6 +3,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Bookmark, Eye, EyeOff, LockKeyhole } from "lucide-react";
+import { loginDestination } from "@/lib/auth/redirect";
 import { authClient } from "@/lib/auth/client";
 import { Button } from "@/components/ui/button";
 import { LoginStoriesCarousel } from "@/components/login/login-stories-carousel";
@@ -15,7 +16,7 @@ export default function Login() {
   const [recoveryHelp, setRecoveryHelp] = useState(false);
   async function login(values: { email: string; password: string }) {
     setError("");
-    try { const result = await authClient.signIn.email(values); if (result.error) { setError(result.error.status === 429 ? "Muitas tentativas. Aguarde um pouco e tente novamente." : "Email ou senha incorretos."); return; } router.replace("/favorites"); router.refresh(); }
+    try { const result = await authClient.signIn.email(values); if (result.error) { setError(result.error.status === 429 ? "Muitas tentativas. Aguarde um pouco e tente novamente." : "Email ou senha incorretos."); return; } router.replace(loginDestination(new URLSearchParams(window.location.search).get("returnTo"))); router.refresh(); }
     catch { setError("Não foi possível conectar. Tente novamente."); }
   }
   return <main className="login-page">

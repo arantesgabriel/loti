@@ -91,3 +91,14 @@
 60. Preserve the user's original URL for opening the product.
 61. Separately compute an optional canonical product key for duplicate detection.
 62. Removing tracking/referral data for comparison must never corrupt the original stored URL.
+
+## Private group invitations
+
+1. Every member may invite people to their active workspace and revoke/regenerate its pending invitations.
+2. Invites bind normalized email and workspace, expire after seven days, and are consumed once. Regeneration revokes the previous link.
+3. Only one open invitation per workspace/email; expired invitations are closed when replaced. Already-member emails cannot be invited again.
+4. Existing accounts require an authenticated session of the invited email; acceptance never changes their credentials.
+5. Account/credential creation, membership, active workspace preference and invitation consumption commit atomically. Failure rolls everything back.
+6. Session creation occurs after commit. Failure to establish a session leaves membership intact and is recovered through normal login.
+7. The token authorizes invited account creation; manual sharing does not independently verify mailbox ownership.
+8. Existing memberships and Favorites view preferences are preserved. The accepted workspace becomes the active context and is checked by centralized authorization.

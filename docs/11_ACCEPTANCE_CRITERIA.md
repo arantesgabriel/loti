@@ -128,3 +128,14 @@ A group can do the entire workflow without the legacy spreadsheet:
 - no real product imagery, public signup, mascot, heavy 3D or runtime asset generation.
 
 Exact implementation contract: [17_LOGIN_ORBITAL_MOTION.md](17_LOGIN_ORBITAL_MOTION.md).
+
+## Private invitations
+
+- Members generate/share invitation links without a terminal and see pending invitations.
+- New users create credentials, join the invited group and land on Favorites.
+- Existing users authenticate with the invited email; credentials and prior data are preserved.
+- Wrong-email sessions cannot accept; account switching preserves the invitation destination.
+- Expired/revoked/replaced/used links cannot grant access.
+- Concurrent acceptance/revocation/issuance cannot produce duplicate accounts, links or memberships.
+- Failed membership creation rolls back account, credential and invitation consumption.
+- Public signup, authorization of existing data and the three primary navigation destinations remain intact.

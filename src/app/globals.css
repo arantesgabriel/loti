@@ -143,3 +143,33 @@ form .form-actions { margin-top:4px; } .field-error { color:var(--danger); font-
  .favorites-tabs { width:100%; } .favorites-tabs button { flex:1; padding:10px 6px; font-size:12px; white-space:nowrap; } .favorites-tabs button:last-child { flex:1.8; } .favorites-tabs button span { margin-left:4px; font-size:11px; }
  .mobile-collections { display:flex; align-items:flex-end; gap:8px; margin-bottom:20px; } .mobile-collections label { flex:1; min-width:0; color:var(--muted); font-size:12px; } .mobile-collections select { font-size:13px; }
 }
+
+/* Group membership and invitation acceptance share the operational Loti vocabulary. */
+.group-back { display:inline-block; padding:10px 0; margin-bottom:16px; color:var(--primary-ink); min-height:44px; }
+.group-section { margin:32px 0; max-width:900px; }
+.group-section h2 { display:flex; align-items:center; gap:10px; }
+.group-list { list-style:none; margin:16px 0 0; padding:0; border-top:1px solid var(--border); }
+.group-list li { display:flex; align-items:center; gap:14px; padding:18px 0; border-bottom:1px solid var(--border); }
+.group-list li>div { min-width:0; }
+.group-list strong,.group-list p { overflow-wrap:anywhere; }
+.group-list p,.group-section>p { font-size:14px; }
+.group-person { flex:1; }
+.group-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.group-empty { padding:24px 0; }
+.invite-result { display:grid; gap:18px; }
+.invite-page { min-height:100dvh; padding:32px 20px; }
+.invite-container { max-width:480px; margin:0 auto; }
+.invite-container>.brand { display:flex; width:fit-content; margin:0 0 28px; }
+.invite-panel { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:28px; display:grid; gap:20px; }
+.invite-panel h1 { font-size:26px; margin:0; }
+.invite-panel p { margin:0; }
+.invite-address { display:grid; gap:6px; padding:16px 0; border-top:1px solid var(--border); border-bottom:1px solid var(--border); overflow-wrap:anywhere; }
+.invite-panel .invite-validity { font-size:13px; }
+@media (max-width:767px) { .group-list li { flex-wrap:wrap; } .group-person { flex-basis:100%; } .group-actions { width:100%; } .invite-panel { padding:22px; } }
+.profile-actions { margin-top:28px; }
+@media (max-width:767px) {
+ .group-heading { flex-wrap:wrap; }
+ .group-heading>div { flex-basis:100%; }
+ .group-heading>.button { width:auto; padding:11px 17px; }
+ .group-heading>.button .desktop-label { display:inline; }
+}

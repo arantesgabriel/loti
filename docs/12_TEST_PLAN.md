@@ -148,3 +148,15 @@ Fix failures before declaring completion.
 4. Keyboard focus, email/password visual states, invalid password, Enter, held-request loading, success redirect, session after reload, logout and protected-route denial.
 
 Visual QA captures `artifacts/qa/login-{320,390,768,1024,1440}.png` and `login-reduced-motion.png`. Inspect desktop, tablet, mobile and reduced-motion screenshots against `design/mockups/login-orbital.png`. The complete suite currently has twelve Chromium scenarios. See `17_LOGIN_ORBITAL_MOTION.md`.
+
+## Invitation coverage
+
+`tests/integration/invitations.test.ts`: membership boundaries, token hashing, expiry/regeneration/revocation, credentials, rollback on injected membership failure, existing-account requirements, active workspace and persistent limits.
+
+`tests/integration/invitation-concurrency.test.ts`: independent file-backed database connections exercising concurrent issuance, acceptance and acceptance/revocation.
+
+`tests/unit/auth-redirect.test.ts`: only invitation paths may be login return destinations.
+
+`tests/e2e/invitations.spec.ts`: generate/share UI, new mobile signup/session/reload, existing account and wrong-session switching, regeneration/revocation, unauthorized APIs, origin checks, external redirect denial and recovery after session failure. Screenshots under `artifacts/qa/group-{desktop,mobile}.png` and `invitation-mobile.png`.
+
+`tests/integration/invitation-migration.test.ts` validates upgrade from the prior schema with existing users, membership, favorites and view preference, including repeat migration.

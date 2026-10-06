@@ -103,3 +103,7 @@ Use the backup/restore controls available for the Turso database plan. Keep prod
 7. Bootstrap actual private users; keep public signup disabled.
 8. If importing the workbook, review the mapping and dry-run before writing.
 9. Test login, session refresh, favorites, purchase, history, and one write/read round-trip against `loti-prod`.
+
+## Deploying invitations
+
+Apply migrations `0001` and `0002` explicitly to the target database before deploying the invitation code. No new service credentials or email provider are required. Generated links and origin validation use the same `authOrigin()` as Better Auth; configure `BETTER_AUTH_URL` for the intended public deployment. Keep Preview and Production databases distinct. Verify Profile → Meu grupo → invite → new account and existing account acceptance after deployment. Invitation links are bearer credentials; account for token paths in hosting access logs and do not share them publicly.

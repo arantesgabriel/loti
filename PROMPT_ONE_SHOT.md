@@ -823,3 +823,7 @@ Only real MVP limitations, not invented future work.
 Optional short list only. Do not implement them during this task.
 
 Proceed now. Read the canonical docs first, inspect the repository, implement the phases continuously, test aggressively, and stop only for a genuine human-only blocker.
+
+## Private group invitations — approved extension
+
+Members may invite people through Profile → Meu grupo → email → generated link. Links last seven days, are email/workspace-bound and single-use; all members may revoke or regenerate pending invitations. Signup remains disabled on the public Better Auth handler; invited account creation runs only after server validation of the token, inside the account/membership/consumption transaction. Existing accounts must authenticate with the invited email and retain their password. The accepted workspace becomes the user's active context, without deleting existing memberships. No automatic email delivery, member removal, role management or workspace switcher is included. See `docs/18_WORKSPACE_INVITATIONS_PLAN.md`.

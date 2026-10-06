@@ -100,3 +100,7 @@ Decision: Favorites, Purchase, History and item drawers use small neutral **func
 Editorial direction: reserve **Visor-inspired editorial illustrations** (soft 3D, pastels, friendly shapes, whitespace, subtle shadows) for sparse branding surfaces such as existing login or appropriate empty states/collection covers. This does not add new features or require new illustrations now.
 
 Consequences: cleaner operational UI, faster scanning, fewer assets, simpler maintenance and clear separation of functional and decorative imagery. Removed the twenty public operational renders, offline generator, asset-path resolver, large visual component and obsolete rendering CSS. Login remains independent and unchanged. Bookmark/Clozy structure, palette, navigation, business rules and historical data remain intact.
+
+## Private group invitations — 5 October 2026
+
+Approved extension: any member can invite through Profile → Meu grupo → email → generated link → manual sharing. New people define credentials in the token-gated acceptance page; existing accounts authenticate with the invited email. Links expire in seven days, are single-use, and may be revoked/regenerated. No role system, automated email delivery, member removal or workspace switcher is introduced. Public signup remains disabled. Acceptance atomically creates credentials where needed, adds membership, selects the invited workspace and consumes the invitation. Details: `18_WORKSPACE_INVITATIONS_PLAN.md`.

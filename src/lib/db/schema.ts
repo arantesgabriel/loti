@@ -44,9 +44,22 @@ export const purchaseItems = sqliteTable("purchase_items", {
 }, t => [index("item_purchase_idx").on(t.purchaseId), index("item_person_idx").on(t.personId), index("item_cart_idx").on(t.cartStatus), index("item_source_idx").on(t.sourceFavoriteId),
   check("item_quantity", sql`typeof(${t.quantity}) = 'integer' AND ${t.quantity} >= 1`), check("item_price", sql`${t.unitPriceCents} IS NULL OR (typeof(${t.unitPriceCents}) = 'integer' AND ${t.unitPriceCents} >= 0)`), check("item_status", sql`${t.cartStatus} IN ('pending','added')`)]);
 export const userPreferences = sqliteTable("user_preferences", {
-  userId: text("user_id").primaryKey().references(() => user.id), favoritesView: text("favorites_view", { enum: ["list", "cards"] }).notNull().default("list"), ...dates(),
+  userId: text("user_id").primaryKey().references(() => user.id), favoritesView: text("favorites_view", { enum: ["list", "cards"] }).notNull().default("list"), activeWorkspaceId: text("active_workspace_id").references(() => workspaces.id), ...dates(),
 }, t => [check("preference_view", sql`${t.favoritesView} IN ('list','cards')`)]);
 export type Favorite = typeof favorites.$inferSelect;
 export type Collection = typeof collections.$inferSelect;
 export type Purchase = typeof purchases.$inferSelect;
 export type PurchaseItem = typeof purchaseItems.$inferSelect;
+
+export const workspaceInvitations = sqliteTable("workspace_invitations", {
+  id: text("id").primaryKey(), workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+  email: text("email").notNull(), tokenHash: text("token_hash").notNull().unique(),
+  createdBy: text("created_by").notNull().references(() => user.id), createdAt: timestamp("created_at"), expiresAt: timestamp("expires_at"),
+  acceptedAt: integer("accepted_at", { mode: "timestamp_ms" }), acceptedBy: text("accepted_by").references(() => user.id),
+  revokedAt: integer("revoked_at", { mode: "timestamp_ms" }), revokedBy: text("revoked_by").references(() => user.id),
+}, t => [index("invitation_workspace_idx").on(t.workspaceId),
+  uniqueIndex("invitation_open_email_idx").on(t.workspaceId, t.email).where(sql`${t.acceptedAt} IS NULL AND ${t.revokedAt} IS NULL`),
+  check("invitation_terminal_state", sql`${t.acceptedAt} IS NULL OR ${t.revokedAt} IS NULL`)]);
+export const invitationLimits = sqliteTable("invitation_limits", {
+  key: text("key").primaryKey(), window: integer("window").notNull(), count: integer("count").notNull(),
+});

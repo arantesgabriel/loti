@@ -151,3 +151,10 @@ Must cover:
 - no active purchase;
 - active purchase with no items;
 - no history.
+
+## Private invitation surfaces
+
+- `/group`: secondary authenticated page reached from Profile through **Meu grupo**. Members, pending invitations and invitation dialog.
+- `/invite/[token]`: public page accessible only with a valid invitation; outside the membership-protected app layout.
+- Login accepts only a validated internal `/invite/<token>` return destination.
+- Primary desktop/mobile navigation retains Favorites, Purchase and History; Group is not a fourth primary destination.
