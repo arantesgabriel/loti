@@ -112,10 +112,12 @@ Use `design/mockups/favorites-mobile.png`:
 
 - strong page title;
 - `Todos / Meus`;
+- a single segmented control for `Todos` / `Meus`, visually distinct from individual member cards; the control uses functional icons and a neutral base, while member cards use avatars, full names and favorite counts; a full-option selection fill moves smoothly between them; the row scrolls horizontally on narrow screens and honors reduced-motion preferences;
+- the first person card gives a brief, reduced-motion-aware nudge to signal horizontal scrolling;
 - search + filter + list/card toggle;
 - compact item rows/cards;
 - rounded floating bottom navigation island;
-- primary action remains easy to reach.
+- new-favorite action uses a floating plus button at the lower right.
 
 ## Desktop Active Purchase
 
@@ -134,10 +136,10 @@ Use `design/mockups/purchase-desktop.png`:
 Use `design/mockups/purchase-mobile.png`:
 
 - total + progress high in hierarchy;
-- status tabs;
+- selectable `Todos / Pendentes / Adicionados` cards with a full selection fill that slides between options;
 - horizontal/compact person summaries;
 - item rows optimized for one-hand scanning;
-- add-item action;
+- desktop add-item action beside the three-dot purchase menu; separate floating plus button on mobile;
 - same floating bottom navigation island.
 
 ## Mobile navigation island
@@ -147,9 +149,9 @@ The final mobile navigation is **not** a full-width fixed bar. It is a floating 
 Properties:
 
 - three destinations only;
-- broad rounded container;
-- selected destination has its own inner pill/tint;
-- icon + short label;
+- compact rounded container;
+- one full-size selection fill slides between destinations;
+- every destination shows its icon; only the active destination shows its short label;
 - strong touch targets;
 - slight separation/shadow/border from content;
 - safe-area aware;

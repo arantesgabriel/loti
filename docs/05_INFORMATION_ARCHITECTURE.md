@@ -37,9 +37,9 @@ Creation/editing should generally stay in context via Sheet/Drawer/Dialog instea
 
 - no sidebar;
 - page header + avatar/menu;
-- floating rounded bottom navigation island with exactly three items: Favoritos, Compra, Histórico;
-- active destination uses a rounded selected pill/tint;
-- context-specific floating/primary add action where appropriate;
+- compact floating rounded bottom navigation island with exactly three items: Favoritos, Compra, Histórico;
+- only the active destination shows its short label; the full selected fill moves between destinations;
+- on desktop, `Adicionar item` sits immediately to the right of the three-dot purchase menu; on mobile, use a separate floating `+` action at the lower right;
 - navigation island remains visually separated from content and respects device safe area.
 
 ## Surface inventory
@@ -84,11 +84,15 @@ Hierarchy:
 
 1. page title + add favorite action;
 2. `Todos` / `Meus` segmented control;
-3. search;
-4. compact filters;
-5. list/card view toggle;
-6. collection navigation/filter;
-7. favorite content.
+3. compact member cards on the same row for browsing other people's favorites;
+4. search;
+5. compact filters;
+6. list/card view toggle;
+7. collection navigation/filter;
+8. favorite content.
+
+Show one segmented control for `Todos` / `Meus` beside individual cards for other members. Use functional icons and a shared neutral background for the segmented control; member cards show their avatar, complete display name and favorite count. Selecting any option filters the list and smoothly moves its full fill to the active option. Allow horizontal scrolling on narrow screens and honor reduced-motion preferences. Do not show a separate `Outras pessoas` segment.
+On mobile, place the new-favorite action in a floating plus button at the lower right and give the horizontal people rail a brief one-time scroll cue.
 
 ### Favorite card/list item shows
 
@@ -120,10 +124,10 @@ Hierarchy:
 2. unit/person/account metadata;
 3. estimated total;
 4. progress;
-5. Todos / Pendentes / Adicionados;
+5. compact Todos / Pendentes / Adicionados selection cards with the same sliding full-selection animation as the Favorites person selector;
 6. person summaries;
 7. items grouped by person;
-8. add-item action.
+8. add-item action in the heading beside the purchase options menu.
 
 Each item should make its status and open-product action obvious. Its neutral category marker is smaller than the status control; name, variation, quantity, unit price and subtotal remain primary.
 

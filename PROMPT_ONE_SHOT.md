@@ -406,6 +406,8 @@ The editorial scene may use orange for the central symbol and pastel object back
 
 - title + add action;
 - Todos / Meus;
+- a single segmented control for `Todos` / `Meus`, visually distinct from individual member cards, with a full-option selection fill that moves smoothly between all options; person cards show avatar, full name and favorite count; the row scrolls horizontally on narrow screens and honors reduced-motion preferences; do not show an `Outras pessoas` segment;
+- on mobile, use a lower-right floating plus for new favorites and a brief reduced-motion-aware cue beside the first person card to suggest horizontal scrolling;
 - search;
 - compact filters;
 - List/Cards toggle;
@@ -427,6 +429,7 @@ List/card view is a per-user preference persisted in `user_preferences`.
 ### Mobile shell
 
 Use the approved **rounded floating navigation island**, not a full-width bottom bar.
+Keep it compact. Show each destination icon, show the short label only for the selected destination, and animate a full-size selection fill between items.
 
 Three items only:
 
@@ -509,9 +512,10 @@ Active purchase page must show:
 - estimated total;
 - progress;
 - Todos / Pendentes / Adicionados;
+- status filters use compact selection cards and the same full-fill sliding animation as the Favorites people selector;
 - person summary strip/cards;
 - items grouped by person;
-- add item action.
+- desktop: place `Adicionar item` immediately to the right of the purchase three-dot options menu; mobile: use a separate floating plus button at the lower right.
 
 Item rows show:
 

@@ -28,6 +28,8 @@
 - owner can edit/delete it;
 - delete does not destroy purchase snapshots;
 - `Todos` and `Meus` are correct;
+- Favorites has no `Outras pessoas` segment; `Todos` / `Meus` form a single segmented control distinct from member cards; its full-option selection fill moves smoothly (unless reduced motion is requested); person cards show avatar, full display name and favorite count and filter results to the selected member;
+- on mobile, the new-favorite action is a lower-right floating plus; the horizontal people rail gives a brief scroll cue and suppresses it for reduced motion;
 - search covers name/variant/notes;
 - filters combine correctly;
 - list and cards both work;
@@ -54,6 +56,7 @@
 
 ## Purchase items
 
+- active purchase places desktop `Adicionar item` directly to the right of the three-dot options menu and uses a separate floating plus button on mobile;
 - any member can add any visible favorite to active purchase;
 - person defaults to favorite owner and can be changed;
 - favorite price/variation are suggestions and can be changed;
@@ -70,6 +73,7 @@
 - any member can edit/remove items while purchase active;
 - `pending ↔ added` toggle is one-step;
 - Todos/Pendentes/Adicionados filters work;
+- Purchase status filters use equal, compact selection cards with the full sliding selection animation and preserve their filtering behavior;
 - progress is quantity-weighted.
 
 ## Finalization/history
@@ -88,7 +92,7 @@
 - product branding says `Loti`, not `Importa`;
 - desktop structure follows Bookmark App-inspired approved mockups;
 - components/interactions reflect Clozy-inspired polish without visual clutter;
-- mobile uses rounded floating navigation island;
+- mobile uses a compact rounded floating navigation island with a full-size animated selection fill; only the active destination shows its label;
 - navigation has only Favorites/Purchase/History primary destinations;
 - cards/list toggle exists;
 - operational item surfaces display no real product photos, listing thumbnails or large 3D product renders;
