@@ -42,9 +42,11 @@ Vercel uses the following server-side variables:
 | `TURSO_DATABASE_URL` | `loti-prod` URL | `loti-dev` URL (or local file for local development) |
 | `TURSO_AUTH_TOKEN` | `loti-prod` database token | `loti-dev` database token |
 | `BETTER_AUTH_SECRET` | strong random secret, at least 32 characters | separate local/preview secret |
-| `BETTER_AUTH_URL` | exact production HTTPS origin | matching preview/local origin |
+| `BETTER_AUTH_URL` | exact production HTTPS origin | optional for Preview: derives from Vercel branch URL; local uses localhost |
 
 Do not create `NEXT_PUBLIC_` variants of database credentials or the Better Auth secret. Changes to Vercel environment variables take effect only in a new deployment.
+
+For Preview, leave `BETTER_AUTH_URL` unset: authentication and mutation origin checks share the HTTPS branch origin from `VERCEL_BRANCH_URL` (falling back to `VERCEL_URL`). Production has its explicit canonical origin. Open previews through their branch alias so sessions and origin checks use that canonical preview URL.
 
 ## Better Auth and URL
 

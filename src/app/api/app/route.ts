@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth/session";
+import { authOrigin } from "@/lib/auth/origin";
 import { db } from "@/lib/db";
 import { createServices } from "@/lib/domain/services";
 import { DomainError } from "@/lib/domain/errors";
@@ -17,7 +18,7 @@ function failure(error: unknown) {
 export async function GET() { try { const user = await requireUser(); return NextResponse.json(await createServices(db, user.id).getData(), { headers: { "Cache-Control": "private, no-store" } }); } catch (e) { return failure(e); } }
 export async function POST(request: Request) {
   try {
-    const expected = new URL(process.env.BETTER_AUTH_URL ?? "http://localhost:3000").origin;
+    const expected = authOrigin();
     if (request.headers.get("origin") !== expected) throw new DomainError("Origem da solicitação inválida.", 403);
     const user = await requireUser();
     const body = requestSchema.parse(await request.json());

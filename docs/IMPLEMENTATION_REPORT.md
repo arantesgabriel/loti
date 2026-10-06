@@ -1,93 +1,86 @@
-# Loti — relatório da implementação
+# Loti — relatório da migração Vercel + Turso
 
-Validação local em 5 de outubro de 2026. MVP funcional implementado; publicação no Railway depende dos dados de produção e acesso do operador. Não houve deploy, push ou uso de credenciais de produção.
+Atualizado em 5 de outubro de 2026. **Loti está publicado em https://loti-omega.vercel.app**, no projeto Vercel `loti`, conectado ao Turso `loti-prod`. Os dois bancos remotos receberam migrations; login, sessão após recarga, gravação/leitura de favorito e logout foram verificados na URL pública. Usuários reais e importação da planilha aguardam as identidades e decisões do legado.
 
 ## Implementado
 
-- **Favoritos:** criar, consultar, editar/excluir próprios, visibilidade no grupo, Todos/Meus, busca em nome/variação/notas, filtros combinados por pessoa/plataforma/coleção/QC/preço, aviso de duplicidade, abertura do link original, inclusão na compra e preferência Lista/Cards persistida.
-- **Coleções:** pessoais, criação/renomeação/exclusão, filtros e navegação dentro de Favoritos; excluir coleção preserva os favoritos.
-- **Compra:** uma ativa por espaço, metadados editáveis, item de favorito como snapshot ou manual, pessoa/quantidade/variação/preço/notas, colaboração entre membros, checklist HubBuy, filtros, totais por pessoa e geral, progresso ponderado por quantidade.
-- **Histórico:** confirmação explícita com avisos sobre pendências e preços ausentes, ordenação por finalização, reaproveitamento da visualização em modo leitura e rejeição de alterações no servidor.
-- **Interface:** português, marca Loti, paleta canônica, Geist local, Lucide, sidebar contextual, ilha flutuante mobile com três destinos, sheets/dialogs acessíveis, foco de teclado e redução de movimento. Vinte arquétipos SVG monocromáticos locais; nenhuma foto de marketplace.
-- **Operação:** usuário inicial por CLI, seed protegido, migrações, simulação/importação de legado, backup consistente, verificação de integridade, healthcheck, Docker e configuração Railway.
+- Aplicação Next.js sem estado local em produção, configurada para Vercel e Turso/libSQL.
+- Banco usa Drizzle `libsql` e `@libsql/client`; as operações de domínio, autorização, autenticação, rotas e ferramentas de operador agora são assíncronas.
+- Configuração de produção exige `TURSO_DATABASE_URL` e token remoto. Credenciais ficam somente no servidor. `BETTER_AUTH_SECRET` pode ser gerado pelo operador; `BETTER_AUTH_URL` usa a origem final do Vercel.
+- Migrações são aplicadas explicitamente antes do deploy. Healthcheck verifica conectividade com o banco sem expor detalhes de falha.
+- Seed bloqueia bancos remotos/de produção. Dados locais existentes foram preservados; os testes de seed e usuário usam bancos descartáveis.
+- Removidos o driver nativo `better-sqlite3`, o start que migrava automaticamente, o backup de arquivo SQLite, Dockerfile e configuração Railway.
+- Atualizados `AGENTS.md`, `PROMPT_ONE_SHOT.md`, README e documentação canônica de arquitetura, esquema, operação, implantação, decisões e entradas humanas.
+- Registrada a decisão em [VERCEL_TURSO_ARCHITECTURE.md](decisions/VERCEL_TURSO_ARCHITECTURE.md).
 
-## Arquitetura e banco
+## Arquitetura
 
-Stack especificada: Next.js 16.3.8, React 19.3.0, TypeScript strict, Tailwind 4, fundação shadcn/Radix, Better Auth 1.7.7, Drizzle 0.45.3, `better-sqlite3` 13.0.3, Zod 4, React Hook Form e Playwright. Versões diretas exatas e lockfile npm; Node 24 LTS. ESLint e Vitest complementam a validação.
+```text
+Browser → Next.js/Vercel → Better Auth → autorização central → Drizzle/libSQL → Turso
+```
 
-Browser → Route Handler/Server Component → sessão Better Auth → autorização central → validação Zod → serviços transacionais Drizzle → SQLite. Dados de domínio e conexões SQLite permanecem no servidor. Não foi criada infraestrutura paralela nem recurso fora do MVP.
+O esquema continua SQLite e Better Auth continua usando o adaptador Drizzle com `provider: "sqlite"`. O runtime Vercel falha com erro de configuração se a URL ou o token do banco remoto estiverem ausentes. Desenvolvimento pode usar `file:./data/loti.sqlite`; navegador nunca acessa o banco. O runtime de produção não depende de arquivo gravável, volume de aplicação ou número fixo de réplicas.
 
-Os comandos Next usam Webpack: o Turbopack não funcionou no ambiente de execução restrito. O build de produção Webpack passou tanto no host quanto no Docker. A alternativa SVG pseudo-3D é o fallback explicitamente autorizado pela especificação.
+## Banco de dados
 
-Onze tabelas e uma migração versionada em `drizzle/0000_lean_sir_ram.sql`. Foreign keys, WAL, synchronous NORMAL e busy timeout 5000 verificados. Índice parcial de compra ativa e checks de quantidade, preço e estados estão no banco. Histórico imutável é aplicado por todos os serviços de mutação; snapshots não dependem dos campos atuais dos favoritos.
+- Uma migração existente cria as 11 tabelas do domínio e autenticação; `npm run db:generate` não detectou mudança de esquema.
+- Comandos: `npm run db:generate`, `npm run db:migrate`, `npm run db:verify`.
+- Migrations aplicadas a um arquivo libSQL temporário vazio e reaplicadas sem erro; verificação confirmou leitura das 11 tabelas. O banco local original continua intacto.
+- Bancos `loti-prod` e `loti-dev` criados na organização `arantesgabzz`, plano Free, grupo `default`, região AWS São Paulo (`aws-sa-east-1`). Ambos receberam a migração versionada e tiveram as 11 tabelas mais o journal Drizzle verificadas por conexão remota. Proteção contra exclusão está ativa em produção.
 
-Local: `./data/loti.sqlite`. Produção: `/data/loti.sqlite` em volume. `npm run db:generate` gera mudanças de schema em desenvolvimento; `npm run db:migrate` aplica migrações. `npm start` valida a configuração de produção, migra no volume montado e só então inicia o servidor.
+## Autenticação e usuários
 
-## Autenticação
+Signup público continua desabilitado. Após configurar a origem e o segredo no ambiente do Vercel, o comando `npm run user:create -- --name '<nome>' --email '<email>'`, com `LOTI_USER_PASSWORD` no ambiente, cria usuário e associação ao único workspace. O comando foi validado em banco temporário e pode ser repetido. Senhas não devem ir para Git nem ser impressas.
 
-Login email/senha, sessão persistente, logout e rotas privadas. Signup público está desabilitado no servidor e ausente da interface. Better Auth faz hashing e mantém sua proteção de limite de tentativas; cookies de produção são Secure e HttpOnly.
+Os cinco endereços reais dos membros ainda não foram fornecidos. O seed não foi promovido. Uma conta descartável com senha aleatória foi criada exclusivamente para smoke test de produção e removida, junto com o favorito temporário, após validar logout. Produção está pronta para o bootstrap dos membros reais.
 
-`LOTI_USER_PASSWORD` recebe a senha inicial de 12–128 caracteres. Com o ambiente correto, execute `npm run user:create -- --name Gabriel --email EMAIL_REAL`; repita para os demais membros. O comando vincula cada conta ao espaço único e pode ser repetido sem alterar a senha existente. Sintaxe segura para entrada da senha e todos os comandos estão no [README](../README.md).
-
-## Testes e evidências
+## Testes e verificações
 
 | Verificação | Resultado |
 | --- | --- |
-| TypeScript strict | Passou |
-| ESLint | Passou, sem avisos |
-| Unidade | **52 passaram**: plataformas, canonicalização, arquétipos, dinheiro e progresso |
-| Integração SQLite | **38 passaram**: permissões, coleções, snapshots, estados/constraints e legado |
-| Playwright Chromium | **7 cenários passaram**, última execução completa em 47,1 s |
-| Build Next.js de produção | Passou |
-| Build Docker Linux | Passou; dependências de desenvolvimento removidas da imagem final |
-| Migrações em banco vazio e repetição | Passaram |
-| Seed de desenvolvimento | Passou: cinco membros e seis favoritos; repetição idempotente |
-| CLI de usuário | Passou duas vezes: uma conta e uma associação, senha preservada |
-| Importador CLI | Simulação, execução e repetição passaram em banco isolado |
-| Backup/restauração | Integridade `ok`, zero violações de FK; cópia restaurada verificada |
-| Auditoria de dependências de produção | Zero vulnerabilidades reportadas |
+| TypeScript (`npm run typecheck`) | Passou |
+| ESLint (`npm run lint`) | Passou sem avisos |
+| Vitest (`npm test`) | **93 testes passaram**, 5 arquivos |
+| Playwright Chromium (`npm run test:e2e`) | **15 cenários passaram** |
+| Build (`npm run build`) | Passou |
+| Migração em banco vazio + repetição | Passou |
+| `db:verify` | Passou; 11 tabelas acessíveis |
+| Seed e criação de usuário | Passaram em banco temporário |
+| Produção sem URL/token | Ambos rejeitados antes de conectar |
+| Migrations Turso produção/desenvolvimento | Aplicadas; conexão e 11 tabelas verificadas |
+| Smoke test público | Login, sessão após reload, gravação/leitura e logout passaram |
+| Healthcheck público | HTTP 200, `status: ok`, `database: ok` |
+| Segurança pública | API sem sessão HTTP 401; signup HTTP 400/desabilitado |
 
-Os E2E cobrem os oito fluxos obrigatórios distribuídos em sete cenários: login/favorito, visibilidade e proibição de edição por outro membro, favorito → compra/totais, item para outra pessoa, colaboração, checklist/filtros, finalização/histórico, preferência e navegação mobile. Também verificam rotas privadas, API sem sessão, signup desabilitado, preservação após excluir coleção e foco em diálogos aninhados.
+Os E2E cobrem login privado e signup bloqueado, favoritos, permissões, preferências de visualização, coleções, compra colaborativa, histórico imutável, responsividade e reduced motion. O smoke test público confirmou autenticação real e persistência Turso. Evidências locais estão em `artifacts/deploy/` (fora do Git).
 
-QA responsivo em 320, 390, 768, 1024 e 1440 px: sem overflow horizontal, ilha arredondada, navegação selecionada correta, visuais locais e sem erros JavaScript. As quatro capturas foram inspecionadas em `artifacts/qa/favorites-desktop.png`, `favorites-mobile.png`, `purchase-desktop.png` e `purchase-mobile.png`, comparando hierarquia com os mockups aprovados. Dados, contagens e ordenação seguem o domínio, não os textos acidentais das imagens.
+## Migração do legado
 
-Teste adicional da imagem de produção por HTTPS local: login com cookie Secure/HttpOnly, criação de favorito, snapshot de duas unidades, total de R$ 420,50, histórico read-only, origem externa recusada e signup recusado. Reiniciar o container preservou sessão, favorito e compra no volume. Backup da base em uso foi copiado e validado separadamente. Esses testes usam exclusivamente usuários, segredos e certificado locais de QA.
+A planilha de origem contém 125 favoritos, 3 coleções e 26 itens de compra. Ela permanece local e fora do Git. Não foi importada para produção. Antes de importar, mapear os responsáveis para emails reais e confirmar se `Compra Out26` é ativa ou histórica. Validar o relatório de simulação e então executar:
 
-## Legado
+```sh
+npm run import:legacy -- --mapping legacy/mapping.local.json --execute
+```
 
-Comando inicial: `npm run import:legacy -- --mapping legacy/mapping.local.json`. Acrescente `--execute` somente após revisar `legacy/import.report.json`. `--source` e `--report` permitem caminhos alternativos. O mapping de exemplo é deliberadamente incompleto e não cria decisões de produção.
+O caminho do mapping acima é ilustrativo: o mapping de exemplo é deliberadamente incompleto. Não execute contra produção até substituir pelos usuários/status aprovados e revisar o dry-run.
 
-Arquivo original inspecionado: sete abas, **151 linhas de domínio**, sendo **125 favoritos** (Gabriel 34; Brunna 91) e **26 itens** (Set26: 25; Out26: 1). Três coleções: Presentes, Build PC e Pesquisar na HubBuy. Há oito preços ausentes, seis entradas auxiliares ignoradas e quatro avisos. Hyperlinks reais prevalecem sobre texto de exibição divergente; preços de fórmulas usam resultados salvos e são avisados, sem inventar quantidade ou recalcular a planilha. Rótulos QC não mapeados ficam nas notas.
+## Implantação
 
-Execução isolada criou 125 favoritos, três coleções, duas compras e 26 itens; repetir criou **zero registros**, reconhecendo os 125 favoritos, duas compras e 26 itens existentes. A simulação não inseriu dados de domínio. Bloqueios de usuários/status e conflito com compra ativa foram testados sem gravações parciais. Os sete testes de legado exigem a planilha local; sem ela, ficam explicitamente skipped. Os 90 testes deste relatório passaram com o arquivo fornecido presente.
+Projeto: [loti na Vercel](https://vercel.com/arantesgabriels-projects/loti). ID `prj_sJWeSCWt4miiJi3eA6TDOUa7BYKv`, plano Hobby, framework Next.js, raiz `./`, produção acompanhando `feat/mvp` do repositório `arantesgabriel/loti`. A branch `main` tem apenas o README; o primeiro build dela falhou por não conter Next.js. O código validado foi enviado à branch da aplicação e reimplantado como Production.
 
-Antes de produção, fornecer mapping de rótulos para emails reais, operador/membro, datas e estados de carrinho; confirmar especialmente se **Compra Out26** é ativa ou histórica. A planilha recebida continua preservada localmente e é excluída do Git e da imagem Docker. Sua inclusão no histórico Git foi recusada pela revisão automática de aprovação por risco de exposição persistente do artefato privado. O importador é ferramenta de operador, sem UI de importação ou abertura de compras finalizadas.
+Produção usa URL/token de `loti-prod`; Preview usa URL/token de `loti-dev`. Tokens têm Read & Write apenas em seu respectivo banco e estão registrados como valores Secret no Vercel. `BETTER_AUTH_SECRET` aleatório está configurado como Secret. `BETTER_AUTH_URL=https://loti-omega.vercel.app` está configurado em Production. Preview deriva sua origem HTTPS das variáveis do sistema Vercel, com a mesma origem usada nos controles de mutação. A integração GitHub já tinha acesso ao repositório, que é público; não foi necessário ampliar suas permissões.
 
-## Railway e passos humanos restantes
+O build de Production do commit `c5a272b` ficou Ready em 1m14s. Depois da publicação, o código ganhou resolução automática de origem dos Previews; typecheck, lint, 93 testes e build passaram novamente antes do envio desse ajuste. Deploys futuros ocorrem por push em `feat/mvp`.
 
-`Dockerfile` e `railway.json` preparam um serviço Node, uma réplica, `/data/loti.sqlite`, migrações no start, `/api/health`, política de reinício e dependências nativas. A imagem e o ciclo de start foram testados localmente. O Railway real não foi acessado porque não há conta/projeto/credenciais fornecidos.
+## Pendências reais
 
-1. Conectar a branch ao serviço Railway, montar volume em `/data` e manter uma réplica/região.
-2. Definir o segredo real Better Auth e a URL HTTPS final; configurar `DATABASE_PATH=/data/loti.sqlite`.
-3. Publicar e conferir healthcheck; executar a criação das cinco contas no container montado, com emails/senhas reais.
-4. Opcionalmente fornecer a planilha e o mapping aprovado, fazer backup, simular e importar.
-5. Habilitar backups diário/semanal/mensal e ensaiar restore do volume em ambiente de teste, conferindo login e histórico após recuperar.
+- Emails reais para os cinco membros e processo aprovado de credenciamento inicial.
+- Mapping da planilha e decisão sobre o estado de `Compra Out26` antes da importação.
+- `npm install` reportou cinco vulnerabilidades altas na etapa local anterior; a auditoria deve ser conferida separadamente. Nenhuma atualização automática de dependências foi aplicada nesta implantação.
 
-O [README](../README.md) contém os comandos e o procedimento de restore. [Documentação oficial de backups Railway](https://docs.railway.com/volumes/backups) orienta a escolha do snapshot, revisão da troca de volume e novo deploy. Backup local consistente foi testado; agendamentos e restore no Railway dependem do operador.
+## Fontes técnicas
 
-## Limitações reais e acompanhamento
-
-- Deploy/domínio/backups Railway e usuários reais ainda dependem das entradas humanas acima.
-- SQLite exige uma réplica e colaboração sem realtime; os dados atualizam ao retornar à janela ou recarregar.
-- O legado exige revisão das decisões e avisos. IDs de aba/célula pressupõem o arquivo original preservado; repetição não sobrescreve registros já importados.
-- A auditoria completa ainda reporta cinco avisos de severidade alta na cadeia de ferramentas ESLint/Next (braces/fast-glob), sem atualização estável compatível disponível. Essas ferramentas são removidas da imagem final; a auditoria de produção reporta zero. Overrides compatíveis corrigiram uuid/esbuild sem downgrade da stack.
-
-Após o MVP: acompanhar as atualizações dessas ferramentas e validar regularmente a restauração de backups. Trocar os SVGs por renders locais mais refinados é opcional e preserva os mesmos nomes de arquivo. Nenhum desses itens amplia o escopo implementado.
-
-## Refatoração do login — 5 de outubro de 2026
-
-Cena editorial implementada em `OrbitalScene`, CSS próprio de login e doze SVGs locais (14 KB). Desktop split, mini cena elíptica em tablet/mobile, três órbitas de 44/72/108 s com sentidos alternados e contrarrotação, reações de foco/loading e composição estática para reduced motion. O handler de login foi comparado com a versão anterior e permanece idêntico; nenhuma regra, configuração, sessão, cookie ou redirect de autenticação mudou.
-
-Validação desta refatoração: lint, typecheck, 90 testes Vitest (52 unidade + 38 integração), **12 E2E Chromium** e build de produção passaram. Migrações passaram em banco temporário vazio e em repetição. QA visual inspecionou 390/768/1024/1440 px e reduced motion; o teste também cobriu 320 px. Capturas locais `artifacts/qa/login-*.png`. Não foram repetidos Docker, deploy Railway ou testes HTTPS de produção nesta refatoração; os resultados anteriores acima pertencem ao baseline do MVP.
-
-Componentes, sistema de motion, assets, comportamento responsivo, limites da validação e TODOS os documentos alterados estão registrados em [17_LOGIN_ORBITAL_MOTION.md](17_LOGIN_ORBITAL_MOTION.md).
+- [Drizzle ORM — conexão Turso/libSQL](https://orm.drizzle.team/docs/sqlite/connect-turso)
+- [Better Auth — adaptador Drizzle](https://better-auth.com/docs/adapters/drizzle)
+- [Turso — integração com Vercel](https://vercel.com/marketplace/tursocloud/database)
+- [Vercel — variáveis de ambiente](https://vercel.com/docs/environment-variables)

@@ -85,6 +85,8 @@ O E2E usa uma base local isolada em `data/e2e.sqlite`. Testes de legado usam o w
 
 ## Publicar no Vercel
 
+Produção atual: [loti-omega.vercel.app](https://loti-omega.vercel.app). Projeto `loti`, produção na branch `feat/mvp`; bancos `loti-prod` e `loti-dev` na região AWS São Paulo. As migrations estão aplicadas e as variáveis server-side estão configuradas. Usuários reais precisam ser provisionados pelo operador.
+
 Importe o repositório GitHub como projeto Next.js no Vercel. Crie `loti-prod` e `loti-dev` no Turso, aplique migrações a cada banco e configure variáveis server-side. A URL final do projeto será a origem de `BETTER_AUTH_URL`; após ajustá-la, faça novo deploy. Verifique `/login`, `/api/health`, sessão e uma leitura/escrita contra `loti-prod`. O guia completo está em [docs/13_DEPLOYMENT.md](docs/13_DEPLOYMENT.md).
 
 Use a restauração/backup do Turso para a base remota. O runtime não depende de arquivos SQLite, volumes persistentes ou Docker.
