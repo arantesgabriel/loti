@@ -102,3 +102,13 @@
 6. Session creation occurs after commit. Failure to establish a session leaves membership intact and is recovered through normal login.
 7. The token authorizes invited account creation; manual sharing does not independently verify mailbox ownership.
 8. Existing memberships and Favorites view preferences are preserved. The accepted workspace becomes the active context and is checked by centralized authorization.
+
+## Profile editing
+
+1. A signed-in workspace member may update only their own display name and credential password.
+2. A display name is trimmed at the edges and must contain 1–200 characters; one-word names are valid. Email remains read-only.
+3. Name changes preserve the Better Auth user ID and every workspace, favorite, collection, purchase and preference relationship.
+4. Password changes require the current password and a new password of 12–128 characters. Password contents are never trimmed or normalized, and the confirmation is an exact client-side check.
+5. A password change rejects immediate reuse of the current password, revokes every other session, and rotates the session for the current device.
+6. Profile mutations require a valid session, workspace membership, and a trusted request origin. Request payloads cannot select another user or change email/image.
+7. Historical purchase items remain product snapshots; identity labels continue to resolve from the current member record.

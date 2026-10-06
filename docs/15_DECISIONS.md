@@ -104,3 +104,7 @@ Consequences: cleaner operational UI, faster scanning, fewer assets, simpler mai
 ## Private group invitations — 5 October 2026
 
 Approved extension: any member can invite through Profile → Meu grupo → email → generated link → manual sharing. New people define credentials in the token-gated acceptance page; existing accounts authenticate with the invited email. Links expire in seven days, are single-use, and may be revoked/regenerated. No role system, automated email delivery, member removal or workspace switcher is introduced. Public signup remains disabled. Acceptance atomically creates credentials where needed, adds membership, selects the invited workspace and consumes the invitation. Details: `18_WORKSPACE_INVITATIONS_PLAN.md`.
+
+## Profile editing — 6 October 2026
+
+Chosen: one **Nome completo** field stored in Better Auth's existing `user.name`, plus a separate password form. No name-part migration is needed; existing surfaces already resolve identity by user ID. The native Better Auth update/password endpoints remain the only credential-writing path. Path-scoped hooks enforce membership, strict profile payloads and trusted origin; password changes force revocation of other sessions and let Better Auth rotate the current session. No email editing, password recovery, avatar upload or historical identity snapshots are included. Implementation contract: `19_PROFILE_EDITING_PLAN.md`.

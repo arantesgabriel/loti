@@ -167,7 +167,41 @@ form .form-actions { margin-top:4px; } .field-error { color:var(--danger); font-
 .invite-panel .invite-validity { font-size:13px; }
 @media (max-width:767px) { .group-list li { flex-wrap:wrap; } .group-person { flex-basis:100%; } .group-actions { width:100%; } .invite-panel { padding:22px; } }
 .profile-actions { margin-top:28px; }
+.profile-layout { display:grid; grid-template-columns:minmax(250px, 0.8fr) minmax(320px, 1.2fr); align-items:start; gap:20px; }
+.profile-card { width:100%; max-width:none; overflow-wrap:anywhere; }
+.profile-card h2 { overflow-wrap:anywhere; }
+.profile-settings { display:grid; gap:16px; min-width:0; }
+.profile-section { min-width:0; background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:24px; }
+.profile-section-heading { margin-bottom:20px; }
+.profile-section-heading h2 { font-size:18px; }
+.profile-section-heading p { margin-top:5px; font-size:13px; }
+.profile-form { display:grid; gap:10px; }
+.profile-form label { margin-top:3px; }
+.profile-form>.button { justify-self:start; margin-top:8px; }
+.profile-form .error { margin:0; font-size:12px; }
+.profile-success { margin:4px 0; color:var(--success); font-size:13px; }
+.profile-security-action { display:grid; justify-items:start; gap:8px; }
+.profile-security-action>.button,.profile-security-action>button { min-height:44px; }
+.profile-password-field { display:grid; gap:7px; }
+.profile-password-field>label { margin:0; }
+.profile-password-field>p { margin:0; font-size:12px; }
+.profile-password-control { position:relative; }
+.profile-password-control input { padding-right:52px; }
+.profile-password-control>button { position:absolute; right:4px; top:4px; display:grid; place-items:center; width:40px; height:36px; border:0; border-radius:8px; background:transparent; color:var(--muted); }
+.profile-password-control>button:hover { background:var(--surface-muted); }
+.profile-password-control>button svg { width:18px; height:18px; }
+.profile-session-note { margin:3px 0; border-radius:10px; background:var(--surface-muted); padding:12px; color:var(--muted); font-size:12px; }
+.profile-form-actions { display:flex; flex-wrap:wrap; gap:9px; margin-top:6px; }
+.profile-form-actions>.button { min-width:150px; }
+.login-session-notice { margin:0 0 18px; border-radius:10px; background:var(--primary-soft); padding:12px 14px; color:var(--primary-ink); font-size:13px; }
+@media (max-width:1000px) { .profile-layout { grid-template-columns:minmax(220px,.75fr) minmax(300px,1.25fr); gap:14px; } .profile-card { padding:24px; } .profile-section { padding:20px; } }
+@media (max-width:900px) { .profile-layout { grid-template-columns:1fr; } }
 @media (max-width:767px) {
+ .profile-layout { grid-template-columns:1fr; gap:14px; }
+ .profile-card { padding:22px; }
+ .profile-settings { gap:12px; }
+ .profile-section { padding:18px; }
+ .profile-form-actions>.button { flex:1 1 145px; }
  .group-heading { flex-wrap:wrap; }
  .group-heading>div { flex-basis:100%; }
  .group-heading>.button { width:auto; padding:11px 17px; }

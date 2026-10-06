@@ -14,6 +14,16 @@ const { createAuth } = await import("../src/lib/auth/config");
 const invitationFixture = openDatabase();
 try {
   await createAuth(invitationFixture.db, true).api.signUpEmail({ body: { name: "Existing invite account", email: "existing-invite@loti.test", password: "Loti-Dev-Only-2026!" } });
+  const { user, workspaces, workspaceMembers } = await import("../src/lib/db/schema");
+  const { eq } = await import("drizzle-orm");
+  await createAuth(invitationFixture.db, true).api.signUpEmail({ body: { name: "Profile QA", email: "profile-qa@loti.test", password: "Profile-QA-Old-2026!" } });
+  await createAuth(invitationFixture.db, true).api.signUpEmail({ body: { name: "Profile Reader QA", email: "profile-reader@loti.test", password: "Profile-Reader-2026!" } });
+  const qa = await invitationFixture.db.select({ id: user.id }).from(user).where(eq(user.email, "profile-qa@loti.test")).get();
+  const reader = await invitationFixture.db.select({ id: user.id }).from(user).where(eq(user.email, "profile-reader@loti.test")).get();
+  if (!qa || !reader) throw new Error("The isolated profile E2E members could not be provisioned.");
+  const workspaceId = "profile-qa-workspace", createdAt = new Date();
+  await invitationFixture.db.insert(workspaces).values({ id: workspaceId, name: "Perfil QA", createdAt }).run();
+  await invitationFixture.db.insert(workspaceMembers).values([{ workspaceId, userId: qa.id, createdAt }, { workspaceId, userId: reader.id, createdAt }]).run();
 } finally { invitationFixture.client.close(); }
 
 const child = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "--webpack", "-p", "3100"], { stdio: "inherit", env: process.env });

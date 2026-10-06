@@ -30,6 +30,16 @@ flowchart LR
 - email/password focus and submitting get subtle scene feedback; Enter, inline errors and loading retain their behavior;
 - reduced motion shows a static equivalent; no illustration delays authentication or redirect. See `17_LOGIN_ORBITAL_MOTION.md`.
 
+## 1a. Edit profile
+
+`Avatar → Perfil → edit name → Save`
+
+- the complete display name is shared across the member's workspaces; email stays read-only;
+- the profile updates immediately in the current app session and persists through reload/login;
+- `Segurança → Alterar senha → current password + new password + confirmation → Save`;
+- successful password change preserves this device's session and ends all other sessions;
+- cancellation clears password fields; a lost/uncertain response never triggers an automatic retry.
+
 ## 2. Create favorite
 
 `Copy external link → Open Loti → + New favorite → Paste URL → Type name → optional price/details → Save`

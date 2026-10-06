@@ -160,3 +160,11 @@ Visual QA captures `artifacts/qa/login-{320,390,768,1024,1440}.png` and `login-r
 `tests/e2e/invitations.spec.ts`: generate/share UI, new mobile signup/session/reload, existing account and wrong-session switching, regeneration/revocation, unauthorized APIs, origin checks, external redirect denial and recovery after session failure. Screenshots under `artifacts/qa/group-{desktop,mobile}.png` and `invitation-mobile.png`.
 
 `tests/integration/invitation-migration.test.ts` validates upgrade from the prior schema with existing users, membership, favorites and view preference, including repeat migration.
+
+## Profile editing coverage
+
+`tests/unit/profile-validation.test.ts` covers display-name boundaries/trim, strict payloads, password length without normalization, confirmation and immediate reuse.
+
+`tests/integration/profile.test.ts` uses isolated libSQL and real Better Auth HTTP handlers to verify origin/session/membership guards, self-only name updates, unchanged other users, incorrect/reused passwords, current-session rotation, forced other-session revocation and old/new credential behavior.
+
+`tests/e2e/profile.spec.ts` uses a dedicated disposable account created by the isolated E2E server. It covers name persistence and group visibility, password field visibility/cancel/focus, validation and current-password errors, other-session denial, old/new login, and responsive widths from 320 to 1440 pixels.

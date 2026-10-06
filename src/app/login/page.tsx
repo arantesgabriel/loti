@@ -1,6 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Bookmark, Eye, EyeOff, LockKeyhole } from "lucide-react";
 import { loginDestination } from "@/lib/auth/redirect";
@@ -12,8 +12,14 @@ export default function Login() {
   const router = useRouter();
   const { register, handleSubmit, formState: { isSubmitting } } = useForm<{ email: string; password: string }>();
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [recoveryHelp, setRecoveryHelp] = useState(false);
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("reason") !== "session-expired") return;
+    const timer = window.setTimeout(() => setNotice("Sua sessão expirou. Entre novamente para continuar."), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
   async function login(values: { email: string; password: string }) {
     setError("");
     try { const result = await authClient.signIn.email(values); if (result.error) { setError(result.error.status === 429 ? "Muitas tentativas. Aguarde um pouco e tente novamente." : "Email ou senha incorretos."); return; } router.replace(loginDestination(new URLSearchParams(window.location.search).get("returnTo"))); router.refresh(); }
@@ -28,6 +34,7 @@ export default function Login() {
             <h1 id="login-title">Bom ter você aqui.</h1>
             <p className="login-subtitle muted">Seus favoritos. A compra de todo mundo.</p>
           </div>
+          {notice && <p className="login-session-notice" role="status">{notice}</p>}
           <form onSubmit={handleSubmit(login)} aria-busy={isSubmitting}>
             <div className="login-field">
               <label htmlFor="login-email">Email</label>

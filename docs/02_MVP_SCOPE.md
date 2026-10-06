@@ -9,6 +9,8 @@
 - one shared workspace in the UI;
 - five initial users created by operator/seed tooling;
 - logout and persistent sessions.
+- edit the authenticated member's complete display name and change their password from Profile;
+- changing a password requires the current password and revokes other sessions while preserving the current session.
 
 ### Favorites
 

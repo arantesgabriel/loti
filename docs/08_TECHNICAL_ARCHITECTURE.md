@@ -62,6 +62,8 @@ Do not duplicate authorization conditionals across random UI/actions.
 - operator tooling creates users;
 - production passwords/emails are human input, never hardcoded;
 - the Drizzle adapter remains configured with `provider: "sqlite"`.
+- profile edits reuse Better Auth's `/update-user` and `/change-password` endpoints, with path-scoped server hooks that validate trusted origin, authoritative session, workspace membership and strict payloads;
+- password hooks enforce 12–128 characters, reject immediate reuse and force `revokeOtherSessions: true`; Better Auth owns verification, hashing, persistence and cookie rotation.
 
 `BETTER_AUTH_URL` must equal the deployed HTTPS origin. Keep `BETTER_AUTH_SECRET` server-only. Vercel preview environments should use the development database and matching preview URL configuration where sign-in is needed.
 

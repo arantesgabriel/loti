@@ -8,6 +8,13 @@
 - logout invalidates session;
 - no public signup CTA/route is exposed as a supported product flow;
 - users outside the workspace cannot read workspace data.
+- workspace members can update their own trimmed 1–200 character display name; the email remains read-only;
+- profile names update in the sidebar and current-user surfaces without logging out and persist across reload/login;
+- name mutation rejects invalid, extra and alternate-user payload fields at the native Better Auth endpoint;
+- password change requires the current password, 12–128 character new password and exact confirmation; spaces are preserved;
+- immediate password reuse is rejected, the current device remains signed in, and every other session becomes invalid;
+- the old password stops authenticating and the new password authenticates;
+- unauthenticated, nonmember and untrusted-origin profile mutations are rejected; profile forms remain keyboard-accessible and responsive.
 
 ## Favorites
 

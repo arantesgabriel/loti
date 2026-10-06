@@ -53,6 +53,8 @@ Creation/editing should generally stay in context via Sheet/Drawer/Dialog instea
 - Historical Purchase Detail
 - Profile
 
+Profile contains a read-only account email, complete display-name form, independent expandable password-change form, Meu grupo access and logout. It adds no route or primary navigation item.
+
 ### Drawers / Sheets
 
 - Favorite detail
