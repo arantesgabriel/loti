@@ -32,3 +32,9 @@ Canonical details remain in docs/00_CONTEXT.md through docs/16_HUMAN_INPUTS.md. 
 ## Login editorial surface
 
 The approved login direction uses a central Loti box, generic community portraits and shopping/favorite objects in multiple subtle orbital layers. Desktop splits scene and form; mobile uses a compact simplified scene above the form. Preserve accessibility, private email/password auth and a static reduced-motion fallback. Purpose: save → organize → buy together. See docs/17_LOGIN_ORBITAL_MOTION.md.
+
+## Operational representation
+
+Favorites Cards/List, Purchase, History and item drawers use small neutral functional category markers. No large product images, real listing thumbnails or generic 3D product renders. Name, variation, price, owner, platform and actions dominate. Purchase status outranks the marker. Existing `visual_key` persists category keys without migration.
+
+Visor-inspired illustrations (soft 3D, pastel, friendly, spacious) are reserved for sparse editorial/branding surfaces such as login, suitable empty states and collection covers. Preserve Bookmark/Clozy structure, existing palette and mobile island. See docs/07_PRODUCT_VISUALS.md.

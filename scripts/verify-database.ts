@@ -1,11 +1,11 @@
 import "dotenv/config";
-import Database from "better-sqlite3";
-const sqlite = new Database(process.env.DATABASE_PATH ?? "./data/loti.sqlite", { readonly: true, fileMustExist: true });
+import { client } from "../src/lib/db";
+
 try {
-  sqlite.pragma("foreign_keys = ON");
-  const integrity = sqlite.pragma("integrity_check", { simple: true });
-  const violations = sqlite.pragma("foreign_key_check") as unknown[];
-  if (integrity !== "ok" || violations.length) throw new Error("Banco falhou na verificação de integridade ou referências.");
-  sqlite.prepare("SELECT 1 FROM workspaces LIMIT 1").get();
-  console.log(JSON.stringify({ integrity, foreignKeyViolations: violations.length, journalMode: sqlite.pragma("journal_mode", { simple: true }), foreignKeys: sqlite.pragma("foreign_keys", { simple: true }) }));
-} finally { sqlite.close(); }
+  await client.execute("SELECT 1");
+  const tables = ["workspaces", "workspace_members", "collections", "favorites", "purchases", "purchase_items", "user_preferences", "user", "session", "account", "verification"];
+  for (const table of tables) await client.execute(`SELECT COUNT(*) FROM "${table}"`);
+  console.log(JSON.stringify({ status: "ok", schemaTables: tables.length }));
+} finally {
+  client.close();
+}

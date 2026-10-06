@@ -4,43 +4,40 @@
 
 - **Next.js** — full-stack web application
 - **TypeScript** — strict mode
-- **Tailwind CSS**
-- **shadcn/ui** — component foundation, visually customized to Loti
+- **Tailwind CSS** and **shadcn/ui**
 - **Better Auth** — private email/password authentication
-- **Drizzle ORM**
-- **SQLite** via `better-sqlite3`
-- **Zod** — validation
-- **React Hook Form** — form UX where useful
-- **Playwright** — E2E
-- **Railway** — production host
-- **Railway Persistent Volume** — SQLite persistence
+- **Drizzle ORM** — SQLite schema dialect
+- **Turso/libSQL** — remote SQLite-compatible database
+- **`@libsql/client`** — server-side database driver
+- **Zod**, **React Hook Form**, and **Playwright**
+- **Vercel** — production hosting and Git-based deployments
 
-Use current stable package versions compatible with Node 24 LTS unless the existing repository already establishes another supported runtime.
+Keep the stable package versions pinned by the repository. Do not upgrade to RC/latest releases solely to match an example.
 
 ## Runtime model
 
 ```mermaid
 flowchart TD
-    B[Browser] --> N[Next.js application]
+    B[Browser] --> N[Next.js on Vercel]
     N --> A[Better Auth session]
-    N --> S[Server Components / Server Actions / Route Handlers]
-    S --> H[Authorization helpers]
-    H --> D[Drizzle]
-    D --> Q[SQLite /data/loti.sqlite]
-    Q --> V[Railway persistent volume]
+    N --> S[Server Components / Actions / Route Handlers]
+    S --> H[Central authorization helpers]
+    H --> D[Drizzle ORM]
+    D --> L[libSQL client over HTTPS]
+    L --> T[Turso]
 ```
+
+Browser code never receives a database connection or Turso credentials. Application routes use asynchronous database operations.
 
 ## Security boundary
 
-The browser never connects directly to SQLite.
-
-All mutations and sensitive reads go through server-side application code that:
+All sensitive reads and mutations go through server-side application code that:
 
 1. resolves the current Better Auth session;
 2. verifies workspace membership;
-3. applies ownership/purchase-state rules;
+3. applies ownership and purchase-state rules;
 4. validates input using Zod;
-5. executes Drizzle queries/transactions.
+5. executes Drizzle queries against Turso.
 
 No RLS is required because the database is not exposed as a browser data API.
 
@@ -60,14 +57,25 @@ Do not duplicate authorization conditionals across random UI/actions.
 ## Better Auth
 
 - email + password only in MVP;
-- public signup UI disabled;
-- sessions stored in the same SQLite database;
+- public signup UI and endpoint are disabled;
+- sessions use the same Turso database;
 - operator tooling creates users;
-- production passwords/emails are human input, never hardcoded.
+- production passwords/emails are human input, never hardcoded;
+- the Drizzle adapter remains configured with `provider: "sqlite"`.
+
+`BETTER_AUTH_URL` must equal the deployed HTTPS origin. Keep `BETTER_AUTH_SECRET` server-only. Vercel preview environments should use the development database and matching preview URL configuration where sign-in is needed.
+
+## Database runtime
+
+The application creates one reusable libSQL client and Drizzle instance per server process. Runtime credentials are `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`; neither receives a `NEXT_PUBLIC_` prefix. Production has no dependency on a writable filesystem or `better-sqlite3`.
+
+Local development and isolated tests can use `@libsql/client` with a local file URL or in-memory database. The schema, constraints, IDs, integer-cent money, category keys and purchase snapshots stay SQLite-compatible.
+
+## Migrations
+
+`src/lib/db/schema.ts` remains the source of truth. Keep the versioned migrations in `drizzle/` and use the libSQL migrator. Apply migrations explicitly with `npm run db:migrate` against the selected database before deployment. Do not put migrations in a route handler, middleware, server component, or request startup path.
 
 ## Project organization
-
-Recommended shape:
 
 ```text
 src/
@@ -82,7 +90,7 @@ src/
     layout/
     favorites/
     purchase/
-    shared/
+    product-category-icons/
   features/
     favorites/
     collections/
@@ -93,8 +101,7 @@ src/
     money/
     urls/
     validation/
-    product-visuals/
-  types/
+    domain/categories.ts
 
 scripts/
   create-user.ts
@@ -102,10 +109,10 @@ scripts/
   import-legacy-spreadsheet.ts
 
 public/
-  product-visuals/
+  login-stories/
 ```
 
-Adapt if Next.js conventions or generated Better Auth files require slight differences, but preserve separation of concerns.
+Adapt if Next.js conventions or generated Better Auth files require slight differences, but preserve separation of concerns. Operational item markers render inline SVG via `ProductCategoryMarker`; `resolveProductCategory()` derives category keys stored in existing `visual_key` fields. No product render assets or image API. Editorial login assets remain independent. See `07_PRODUCT_VISUALS.md`.
 
 ## Domain mutations
 
@@ -137,31 +144,14 @@ Prefer small domain-oriented actions/functions:
 - removePurchaseItem
 - togglePurchaseItemCartStatus
 
-## Validation
+## Validation and money
 
-Validate at the server boundary even if the client already validates. Shared Zod schemas are encouraged when it improves consistency.
+Validate at the server boundary even if the client already validates. Use integer cents for money and centralize parsing/formatting helpers for BRL display.
 
-## Money
+## URL handling and search
 
-Use integer cents in persistence and arithmetic. Centralize parsing/formatting helpers for BRL display.
+Centralize `detectPlatform(url)`, `normalizeProductUrl(url)` and/or `buildCanonicalProductKey(url)`. Preserve original URLs. For MVP scale, SQLite-compatible case-insensitive matching is sufficient; do not add a separate search service.
 
-## URL handling
+## Realtime and scaling
 
-Centralize:
-
-- `detectPlatform(url)`
-- `normalizeProductUrl(url)` and/or `buildCanonicalProductKey(url)`
-
-Preserve original URLs.
-
-## Search
-
-For MVP scale, SQLite case-insensitive matching is sufficient. Do not add Algolia/Meilisearch/Elasticsearch. FTS may be considered later only if needed.
-
-## Realtime
-
-Not part of MVP. After mutations, revalidate/refetch appropriate server data. Do not add websockets or realtime subscriptions.
-
-## Application replicas
-
-Production must run **one replica** while using a local SQLite file. Horizontal scaling is a future migration trigger, not an MVP requirement.
+Realtime is not part of the MVP. After mutations, revalidate/refetch appropriate data. Vercel can run multiple stateless application instances because persistent state lives in Turso; do not add local-file coordination or application volumes.

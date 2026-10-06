@@ -1,5 +1,5 @@
 import ExcelJS from "exceljs";
-import { normalizeText } from "../src/lib/domain/visuals";
+import { normalizeText } from "../src/lib/domain/categories";
 import { parseMoney } from "../src/lib/domain/money";
 import { productUrl } from "../src/lib/domain/validation";
 export type LegacyRow = { sheet: string; address: string; owner: string | null; collection: string | null; name: string; url: string; priceCents: number | null; variant: string | null; notes: string | null; qc: string | null; quantity: number };

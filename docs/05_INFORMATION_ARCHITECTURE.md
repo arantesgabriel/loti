@@ -92,15 +92,14 @@ Hierarchy:
 
 Primary:
 
-- grayscale archetype visual;
 - name;
+- variation/model;
 - price or `Sem preço`;
 - owner;
 - platform.
 
 Secondary where space permits:
 
-- variation/model;
 - QC;
 - collection.
 
@@ -109,7 +108,7 @@ Primary actions:
 - Abrir produto;
 - + Compra.
 
-Full notes belong in detail/edit surfaces, not the dense list.
+Small decorative category markers support scanning after the textual hierarchy and actions. They are not primary content or product thumbnails. Full notes belong in detail/edit surfaces, not the dense list.
 
 ## Page: Active Purchase
 
@@ -124,7 +123,7 @@ Hierarchy:
 7. items grouped by person;
 8. add-item action.
 
-Each item should make its status and open-product action obvious.
+Each item should make its status and open-product action obvious. Its neutral category marker is smaller than the status control; name, variation, quantity, unit price and subtotal remain primary.
 
 ## Page: History
 
@@ -141,6 +140,8 @@ Visually similar to Active Purchase but strictly read-only. `Abrir produto` may 
 - **Dialog:** short decision/confirmation.
 
 ## Empty states
+
+Sparse Visor-inspired editorial illustrations may support these states; do not repeat them inside operational items or introduce new business flows. Existing functional empty states need no replacement.
 
 Must cover:
 

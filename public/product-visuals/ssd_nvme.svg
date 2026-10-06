@@ -1,5 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 180"><defs>
-<linearGradient id="clay" x1="0" y1="0" x2=".8" y2="1"><stop stop-color="#eeece9"/><stop offset=".55" stop-color="#cac8c5"/><stop offset="1" stop-color="#a3a19e"/></linearGradient>
-<linearGradient id="edge" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#bcbab7"/><stop offset="1" stop-color="#898784"/></linearGradient>
-<linearGradient id="screen" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#6e6c69"/><stop offset="1" stop-color="#a5a3a0"/></linearGradient>
-<filter id="shadow"><feGaussianBlur stdDeviation="4"/></filter></defs><ellipse cx="120" cy="143" rx="73" ry="7" fill="#272421" opacity=".12" filter="url(#shadow)"/><g stroke="#9c9a96" stroke-width="1.1" stroke-linejoin="round" fill="url(#clay)"><g transform="rotate(-14 120 90)"><path d="M40 74h157v41H40Z" fill="url(#edge)"/><rect x="44" y="68" width="153" height="40" rx="3"/><rect x="65" y="75" width="112" height="27" rx="2" fill="#b9b7b4"/><path d="M46 70v37m4-37v37m4-37v37m4-37v37" stroke="#e3e0db" stroke-width="3"/><circle cx="190" cy="87" r="3" fill="#f2f0ed"/></g></g></svg>

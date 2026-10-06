@@ -30,7 +30,7 @@ At minimum cover:
 
 Verify quantity weighting, e.g. one `added` row of quantity 3 counts as 3 units.
 
-### Product visuals
+### Product categories
 
 Examples:
 
@@ -38,13 +38,16 @@ Examples:
 - `Adidas Campus` → sneaker;
 - `Ultraboost 5` → sneaker;
 - `Crocs Bottom` → clog;
-- `WD Blue SN5000 NVMe` → ssd_nvme;
+- `WD Blue SN5000` → ssd_nvme;
+- `SSD NVMe` → ssd_nvme;
 - `Camiseta Uniqlo` → tshirt;
-- unknown → generic.
+- unknown → generic;
+- corrupt stored key → generic marker;
+- all initial category keys, accent/case normalization and ordered NVMe/SATA matching.
 
 ## Integration tests
 
-Use an isolated test SQLite database.
+Use isolated in-memory databases through `@libsql/client` and Drizzle's libSQL dialect.
 
 Cover:
 
@@ -107,7 +110,9 @@ Also smoke-test:
 - 768px tablet;
 - 1024px laptop/tablet landscape.
 
-Use the four approved mockups as structural visual references, not pixel-perfect generated-image snapshots.
+Use the four approved mockups as structural visual references, not pixel-perfect generated-image snapshots. Their large operational product renders are superseded by small category markers.
+
+Verify Cards AND List at every reference width. At 390/1440px inspect screenshots for text hierarchy and compact markers; ensure items contain no images, markers are decorative and purchase status is more prominent. Inspect read-only history and item detail markers too. Screenshots: `artifacts/qa/favorites-{cards,list}-{mobile,desktop}.png`, `purchase-{mobile,desktop}.png`, `history-{390,1440}.png`.
 
 ## Accessibility smoke checks
 

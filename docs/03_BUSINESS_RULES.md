@@ -47,7 +47,7 @@
 
 32. A purchase item may originate from a favorite or be created manually.
 33. Manual purchase items do not automatically become favorites.
-34. When a favorite is added to a purchase, copy snapshot fields into the purchase item: name, URL, platform, visual key, variation and suggested price.
+34. When a favorite is added to a purchase, copy snapshot fields into the purchase item: name, URL, platform, category key (stored in `visual_key`), variation and suggested price.
 35. `source_favorite_id` is optional metadata, never the source of historical display data.
 36. `person_id` means “who this item is for”, not “who created it”.
 37. `created_by` records who performed the action.

@@ -4,7 +4,7 @@ Approved direction implemented and validated on 5 October 2026. Reference: [user
 
 ## Purpose and boundary
 
-Communicate **save → organize → buy together** through a central Loti box, shopping/favorite objects and generic community portraits. Login is an editorial surface, separate from the operational grayscale product markers. Keep the form simple and primary. Do not turn this into an ecommerce storefront, mascot, centered form without the scene, video background or heavy 3D/WebGL experience.
+Communicate **save → organize → buy together** through a central Loti box, shopping/favorite objects and generic community portraits. Login is an editorial surface, separate from the operational functional category markers. Keep the form simple and primary. Do not turn this into an ecommerce storefront, mascot, centered form without the scene, video background or heavy 3D/WebGL experience.
 
 No authentication business logic changed. Better Auth configuration, API handler, validation, React Hook Form registration, sessions, cookies, errors, redirects and logout retain their existing behavior. There is no delayed success animation before navigation.
 
@@ -25,9 +25,9 @@ Twelve local SVGs under `public/login-visuals/`, approximately 14 KB combined:
 - `loti-box.svg`: orange central symbol with soft dimensional highlights;
 - `bookmark.svg`, `bag.svg`: original illustrated favorite/shopping objects;
 - `avatar-1.svg` through `avatar-4.svg`: original generic portraits, not real identities;
-- `sneaker.svg`, `headphones.svg`, `smartphone.svg`, `tshirt.svg`, `package.svg`: editorial color variants derived from existing local archetypes.
+- `sneaker.svg`, `headphones.svg`, `smartphone.svg`, `tshirt.svg`, `package.svg`: independent editorial SVGs originally derived from the former operational archetypes; their sources are no longer runtime dependencies.
 
-Operational assets under `public/product-visuals/` remain unchanged. Editorial assets have pastel backplates, restrained depth, no marketplace photography or brand marks. The supplied mockup is a reference only; none of its product imagery is used by the runtime.
+The later category-marker refactor removed the operational product renders; these login assets remain independent and unchanged. Editorial assets have pastel backplates, restrained depth, no marketplace photography or brand marks. The supplied mockup is a reference only; none of its product imagery is used by the runtime.
 
 ## Motion system
 

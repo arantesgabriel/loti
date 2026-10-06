@@ -46,7 +46,7 @@ Never hard-block.
 
 `Favorites → Todos or Meus → list/cards`
 
-Default sort: newest first.
+Default sort: newest first. Both modes use small decorative category markers; name, variation, price, owner, platform and actions dominate. Cards have no large image header.
 
 ## 5. Find a favorite
 
@@ -116,13 +116,13 @@ Does not create a favorite.
 
 `Compra atual → + Adicionar item → Dos favoritos → search → select one → adjust purchase-specific fields → Add`
 
-One at a time in MVP.
+One at a time in MVP. The picker uses the same compact category markers.
 
 ## 17. View active purchase
 
 `Compra atual → overall summary → progress → person summaries → items grouped by person`
 
-Immediately answer: what, for whom, how much, and what is still pending.
+Immediately answer: what, for whom, how much, and what is still pending. Category markers remain smaller and quieter than the pending/added control.
 
 ## 18. Edit purchase item
 
@@ -166,7 +166,7 @@ Show name/date/people/units/total.
 
 `History item → purchase detail read-only`
 
-Reuse current-purchase visual language but remove all mutation affordances.
+Reuse current-purchase visual language and small category markers but remove all mutation affordances. Category display comes from snapshot `visual_key`.
 
 ## 26. Start next cycle
 

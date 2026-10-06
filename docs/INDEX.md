@@ -11,13 +11,13 @@ This folder is the canonical product and engineering handoff for the Loti MVP.
 | `04_USER_FLOWS.md` | Human-readable flows for all key journeys |
 | `05_INFORMATION_ARCHITECTURE.md` | Routes, navigation, screens, drawers and modals |
 | `06_DESIGN.md` | Canonical visual system and responsive behavior |
-| `07_PRODUCT_VISUALS.md` | Grayscale/clay archetype system for product visuals |
-| `08_TECHNICAL_ARCHITECTURE.md` | Runtime architecture and application boundaries |
-| `09_DATABASE_SCHEMA.md` | Canonical SQLite/Drizzle model and constraints |
+| `07_PRODUCT_VISUALS.md` | Functional category markers and sparse editorial illustrations |
+| `08_TECHNICAL_ARCHITECTURE.md` | Vercel, Turso/libSQL runtime and application boundaries |
+| `09_DATABASE_SCHEMA.md` | Canonical SQLite/Drizzle model for Turso and constraints |
 | `10_IMPLEMENTATION_PLAN.md` | Ordered build phases |
 | `11_ACCEPTANCE_CRITERIA.md` | Feature-level and product-level acceptance criteria |
 | `12_TEST_PLAN.md` | Unit, integration, E2E and responsive testing |
-| `13_DEPLOYMENT.md` | Railway + persistent SQLite deployment model |
+| `13_DEPLOYMENT.md` | Vercel + Turso/libSQL deployment model |
 | `14_LEGACY_MIGRATION.md` | One-time migration from the attached workbook |
 | `15_DECISIONS.md` | Final product/technical decisions and rejected alternatives |
 | `16_HUMAN_INPUTS.md` | Credentials and deployment inputs that an agent cannot invent |

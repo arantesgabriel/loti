@@ -2,26 +2,11 @@
 
 ## Database
 
-SQLite accessed through Drizzle and `better-sqlite3`.
+The schema uses Drizzle's SQLite dialect and runs on Turso/libSQL in production through `@libsql/client`. Local development and isolated tests may use a local file or in-memory libSQL database.
 
-Production file:
+Production connection variables are `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`. They are server-only and must never use a `NEXT_PUBLIC_` prefix. The schema does not depend on a local production database path, WAL configuration, or a persistent application volume.
 
-`/data/loti.sqlite`
-
-Development default:
-
-`./data/loti.sqlite`
-
-## SQLite initialization
-
-Execute centrally for each connection/process as appropriate:
-
-```sql
-PRAGMA foreign_keys = ON;
-PRAGMA journal_mode = WAL;
-PRAGMA synchronous = NORMAL;
-PRAGMA busy_timeout = 5000;
-```
+Apply versioned files in `drizzle/` explicitly with `npm run db:migrate`. Migrations are not run during requests.
 
 ## ID convention
 
@@ -89,7 +74,7 @@ Deleting a user/workspace should be handled deliberately; not a casual UI operat
 | variant | text nullable | |
 | notes | text nullable | |
 | qc_status | text | default `not_reviewed`, checked |
-| visual_key | text | default `generic` |
+| visual_key | text | category key; default `generic` |
 | created_at | timestamp | required |
 | updated_at | timestamp | required |
 
@@ -140,7 +125,7 @@ WHERE status = 'active';
 | name | text | required snapshot |
 | url | text | required snapshot |
 | platform | text | required snapshot |
-| visual_key | text | required snapshot |
+| visual_key | text | required category-key snapshot |
 | variant | text nullable | purchase-specific snapshot |
 | notes | text nullable | |
 | quantity | integer | required, `>= 1`, default 1 |
@@ -181,6 +166,10 @@ Never persist these:
 - number of no-price items.
 
 Derive them from `purchase_items`.
+
+## Category persistence
+
+The existing `visual_key` column is retained as the functional category key (`visualKey` in TypeScript/API). No migration for the visual refactor. No image paths or per-item uploads are persisted. Favorite edits recalculate only their own category; purchase snapshots copy the stored key and remain independent. Unknown stored keys render the generic inline SVG.
 
 ## Finalized purchase immutability
 

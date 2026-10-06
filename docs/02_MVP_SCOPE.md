@@ -68,9 +68,10 @@
 ### Product visuals
 
 - no real product/listing images;
-- local grayscale/clay archetype visual inferred from product name;
+- small neutral functional category marker inferred from product name;
 - deterministic keyword-based resolver;
-- generic fallback.
+- generic fallback;
+- editorial illustrations inspired by Visor Finance are reserved for sparse branding surfaces; existing login remains independent.
 
 ### Legacy migration
 

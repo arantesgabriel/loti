@@ -6,6 +6,7 @@ The visual direction is intentionally a combination of:
 
 - **Bookmark App** — primary structural reference: navigation, tabs, collection organization, separation of content, clean density;
 - **Clozy Cloud Platform Component** — interaction/component polish: smoother surfaces, spacing, rounded components, states and fluidity;
+- **Visor Finance** — editorial illustration language only: soft 3D, friendly shapes, pastels and whitespace, used sparingly;
 - **Loti palette** — warm, restrained identity with orange as interaction accent.
 
 Do not build an enterprise admin dashboard. The result should feel like a clean consumer SaaS/bookmark tool.
@@ -51,7 +52,7 @@ Use semantic CSS variables/tokens. Do not scatter raw hex values throughout comp
 
 ## Iconography
 
-Use **Lucide** consistently. Do not mix icon libraries, emoji or unrelated icon styles for primary UI.
+Use **Lucide** consistently for primary UI. Category markers use the small internal SVG library with consistent neutral strokes and optical weight; no logos, gradients, detailed renders or category colors.
 
 ## Spacing scale
 
@@ -92,7 +93,7 @@ A persistent toggle must exist near search/filters. The setting is per user.
 
 ## Favorite visual content
 
-Do **not** use real product photos. Each item uses the local grayscale/clay archetype described in `07_PRODUCT_VISUALS.md`.
+Do **not** use real product photos, listing thumbnails or large 3D renders. Operational items use small functional category markers described in `07_PRODUCT_VISUALS.md`. Cards use a 36px tile (28px mobile) beside name/variation, with price, ownership and actions using the full card width. List markers are 30px (26px mobile). Purchase/History markers are 20–24px, quieter than the status control. Markers are decorative (`aria-hidden`); product names carry semantics.
 
 ## Desktop Favorites
 
@@ -103,7 +104,7 @@ Use approved mockup `design/mockups/favorites-desktop.png` as structural referen
 - title/search/filter/view-mode area;
 - restrained grid/list;
 - visible open-product and add-to-purchase actions;
-- product archetype visuals.
+- small neutral category markers; no large image area.
 
 ## Mobile Favorites
 
@@ -125,7 +126,7 @@ Use `design/mockups/purchase-desktop.png`:
 - Todos/Pendentes/Adicionados;
 - person summary strip;
 - compact table/list grouped by person;
-- grayscale archetypes;
+- small functional category markers;
 - strong operational readability.
 
 ## Mobile Active Purchase
@@ -189,6 +190,6 @@ Prefer contextual toasts rather than success pages:
 
 ## Login editorial direction and motion
 
-Login is an editorial surface with an approved community-orbit composition: central orange Loti box, generic portraits and local pastel shopping/favorite objects. Richer illustration and ambient motion apply here while operational surfaces retain their restrained grayscale system. Desktop is split; tablet/mobile use a compact simplified scene above the clean form.
+Login is an editorial surface with an approved community-orbit composition: central orange Loti box, generic portraits and local pastel shopping/favorite objects. Richer illustration and ambient motion apply here while operational surfaces use small neutral functional category markers. Desktop is split; tablet/mobile use a compact simplified scene above the clean form.
 
 Use three independent radii/durations, alternating direction and counterrotation to keep subjects upright. The implementation uses 44/72/108 s revolutions, short focus/submitting convergence and gentle float/breathing cycles. Avoid changing animation duration mid-loop. All animation stops for reduced motion, leaving balanced static positions. The scene is decorative and never blocks or delays authentication. Exact assets, layout, states and QA: [login specification](17_LOGIN_ORBITAL_MOTION.md).

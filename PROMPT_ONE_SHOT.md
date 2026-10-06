@@ -74,14 +74,14 @@ Use this stack unless an already-existing repository dependency makes an equival
 - Lucide icons
 - Better Auth with email/password
 - Drizzle ORM
-- SQLite via `better-sqlite3`
+- SQLite schema dialect via Drizzle, running on Turso/libSQL through `@libsql/client`
 - Zod
 - React Hook Form where useful
 - Playwright
 - Node 24 LTS-compatible package versions
 - npm scripts
-- Railway production deployment
-- Railway persistent volume for the SQLite file
+- Vercel production deployment
+- Turso/libSQL production database
 
 Do **not** use:
 
@@ -104,22 +104,11 @@ Do **not** use:
 
 Implement a single Next.js application.
 
-Browser → Next.js server → Better Auth session → centralized authorization → Zod validation → Drizzle → SQLite.
+Browser → Next.js on Vercel → Better Auth session → centralized authorization → Zod validation → Drizzle's SQLite dialect → `@libsql/client` → Turso/libSQL.
 
-Production SQLite path: `/data/loti.sqlite` on a Railway persistent volume.
+Production database credentials are `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`; keep them server-only. Local development and tests may use a file-backed or in-memory libSQL database through the same client. Production must not depend on a local writable file or persistent application volume.
 
-Development may use `./data/loti.sqlite`.
-
-Initialize SQLite with:
-
-```sql
-PRAGMA foreign_keys = ON;
-PRAGMA journal_mode = WAL;
-PRAGMA synchronous = NORMAL;
-PRAGMA busy_timeout = 5000;
-```
-
-Production runs one application replica while SQLite is local.
+Database calls are asynchronous. Migrations are versioned and applied explicitly before deployment; never run migrations in a request lifecycle.
 
 All sensitive reads/mutations are server-side. The client must never receive a raw database connection or bypass authorization helpers.
 
@@ -289,7 +278,7 @@ Canonicalization is only for duplicate comparison. Safely strip/ignore known tra
 
 Never show real marketplace/listing photos.
 
-Implement the deterministic grayscale/clay archetype system in `docs/07_PRODUCT_VISUALS.md`.
+Implement the functional category marker and separate editorial illustration system in `docs/07_PRODUCT_VISUALS.md`.
 
 Minimum keys:
 
@@ -314,15 +303,15 @@ Minimum keys:
 - headphones
 - controller
 
-Implement `resolveProductVisual(name)` with normalized case/accent handling and ordered keyword rules.
+Implement `resolveProductCategory(name)` with normalized case/accent handling and ordered keyword rules.
 
-Store `visual_key` on favorites and purchase-item snapshots.
+Store category keys in the existing `visual_key` on favorites and independent purchase-item snapshots; do not rename the column merely for aesthetics.
 
-Assets must be local under `/public/product-visuals/`.
+Use the internal inline SVG library in `src/components/product-category-icons/`: consistent neutral stroke/fill, small size, no brand, gradient or large shadow. Cards have a 36px marker tile (28px mobile), List 30px (26px mobile), Purchase/History 20–24px, smaller than status controls. Keep names and values primary. Markers are decorative (`aria-hidden`), never extra keyboard stops. Drawers use the same system.
 
-Do not call external image APIs. If you cannot create high-fidelity clay renders, create clean local monochrome pseudo-3D SVG archetypes that preserve the approved visual contract and can later be replaced file-for-file.
+Never use real thumbnails, large product images or generic 3D product renders in operational cards/lists. No public operational render directory, image APIs, runtime generation or per-item upload. Unknown or corrupt key → generic inline SVG marker.
 
-Unknown item → generic visual, never broken image.
+Reserve Visor-inspired editorial illustrations (soft 3D, pastel, friendly, spacious, subtle shadows) for sparse branding surfaces such as existing login, suitable empty states or collection covers; do not add future landing/onboarding features merely for imagery.
 
 ---
 
@@ -393,7 +382,7 @@ Centralize as design tokens/CSS variables.
 - no analytics dashboard look;
 - no glassmorphism/glow-heavy styling;
 - Geist;
-- Lucide only;
+- Lucide for primary UI; original consistent inline SVGs for category markers;
 - ~150–250ms restrained transitions with reduced-motion support.
 
 ### Login — editorial community orbit
@@ -403,7 +392,7 @@ Follow `docs/17_LOGIN_ORBITAL_MOTION.md` and `docs/design/mockups/login-orbital.
 - desktop split: illustrated scene left, simple private login form right;
 - central orange Loti box; generic people and shopping/favorite objects in at least three orbital layers;
 - different radii, durations and directions; counterrotation keeps objects upright;
-- soft local pastel illustration assets separate from operational grayscale product markers;
+- soft local pastel illustration assets separate from operational functional category markers;
 - subtle float/breathing motion and focus/submitting convergence, without timing jumps or delayed redirects;
 - tablet/mobile: simplified compact scene above the form, fewer objects, no horizontal overflow;
 - `prefers-reduced-motion`: fully static, balanced equivalent;
@@ -411,7 +400,7 @@ Follow `docs/17_LOGIN_ORBITAL_MOTION.md` and `docs/design/mockups/login-orbital.
 - preserve Better Auth, React Hook Form, validation, errors, Enter, loading, sessions and logout;
 - no public signup, mascot, video, Three.js/WebGL, runtime generation or new animation dependency when CSS suffices.
 
-The editorial scene may use orange for the central symbol and pastel object backplates. The operational palette and grayscale product system retain their existing rules.
+The editorial scene may use orange for the central symbol and pastel object backplates. The operational palette remains unchanged and product items use the small functional category-marker system.
 
 ### Favorites
 
@@ -421,7 +410,7 @@ The editorial scene may use orange for the central symbol and pastel object back
 - compact filters;
 - List/Cards toggle;
 - collections integrated;
-- local grayscale archetypes;
+- small neutral functional category markers with no large image header;
 - name, variation, price, owner, platform;
 - Abrir produto and + Compra actions;
 - notes stay primarily in detail surface.
@@ -456,7 +445,7 @@ Use:
 - `docs/design/mockups/purchase-desktop.png`
 - `docs/design/mockups/purchase-mobile.png`
 
-Generated-image textual details may contain accidental inconsistencies; preserve the canonical product/domain rules from the docs while matching layout, hierarchy and feel.
+Large operational product renders in the mockups are superseded by small functional category markers. Validate both Cards and List at 390/1440px plus compact Purchase/History; keep navigation, palette and macro layout. Generated-image textual details may contain accidental inconsistencies; preserve the canonical product/domain rules from the docs while matching layout, hierarchy and feel.
 
 ---
 
@@ -479,7 +468,7 @@ Implement:
 - platform badge;
 - owner display;
 - QC state;
-- product visual;
+- small decorative category marker;
 - Abrir produto;
 - + Compra.
 
@@ -527,7 +516,7 @@ Active purchase page must show:
 Item rows show:
 
 - pending/added control;
-- local archetype visual;
+- small neutral category marker, less prominent than status;
 - name/variation;
 - quantity × price;
 - subtotal or pending-price state;
@@ -611,7 +600,7 @@ Mandatory unit coverage:
 
 - detectPlatform
 - URL normalization/canonical key behavior
-- product visual resolver
+- category resolver, all initial categories, corrupt-key fallback and ordered NVMe matching
 - money helpers
 - subtotal/person/purchase total
 - progress calculations
@@ -643,20 +632,20 @@ Use test users, not production credentials.
 
 ---
 
-## 18. Railway production readiness
+## 18. Vercel + Turso production readiness
 
-Prepare the repository for Railway deployment:
+Prepare the repository for Vercel and Turso:
 
-- one app replica;
-- persistent volume mounted at `/data`;
-- `DATABASE_PATH=/data/loti.sqlite`;
-- Better Auth production URL/secret via env;
-- migrations executed after volume is mounted and before app server accepts traffic;
-- `/api/health` (or equivalent) checks app/database without leaking sensitive data;
-- document volume backups and restore expectations;
-- no secrets committed.
+- Next.js project deploys from the GitHub repository at its root;
+- `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` are server-only variables;
+- production uses an isolated Turso database; Preview uses development data;
+- Better Auth uses `BETTER_AUTH_URL` and a strong server-side `BETTER_AUTH_SECRET`;
+- migrations are applied explicitly to Turso before dependent code is deployed;
+- `/api/health` checks application/database reachability without leaking sensitive data;
+- document Turso backup/restore expectations;
+- no secrets or private workbook data are committed.
 
-Do not attempt to create/login to Railway on behalf of the human if credentials are unavailable. Complete all repository-side work and clearly report the exact human step required.
+Use already-authenticated Vercel/Turso sessions or a CLI that is already authenticated. Complete all repository-side work and report a concrete external permission blocker only when necessary.
 
 ---
 
@@ -726,10 +715,9 @@ Do **not** stop for approval between phases.
 
 Continue autonomously unless you encounter a true human-only blocker, such as:
 
-- missing production Better Auth secret that must be supplied by owner;
-- Railway account authentication/approval;
-- unknown final production domain;
+- a required Vercel/Turso account permission or explicit confirmation to create scoped database credentials or grant repository access;
 - production user emails/passwords;
+- missing workbook owner/status mappings required for a production import;
 - operator decision whether a stale legacy purchase should be active or historical.
 
 If blocked:
@@ -737,7 +725,7 @@ If blocked:
 1. finish all work not dependent on the blocker;
 2. leave the repository in a passing state;
 3. document the exact missing human input and exact next command/action;
-4. do not invent secrets or credentials.
+4. do not invent production identities or claim data was migrated when it was not.
 
 Ordinary bugs, test failures, UI decisions already in docs, and missing real product images are **not** blockers.
 
@@ -756,8 +744,9 @@ Before declaring the MVP complete, verify:
 - empty database migrations pass;
 - development seed works;
 - user-create/operator tooling works;
-- SQLite WAL + foreign keys are active;
-- app uses persistent production DB path configuration;
+- isolated local libSQL migrations and tests pass;
+- production runtime connects to Turso and does not depend on a local database file;
+- production server fails closed when the Turso URL or remote database token is missing;
 - no public signup;
 - no client DB access;
 - server authorization prevents forbidden mutations;
@@ -779,7 +768,7 @@ The MVP is functionally done only when this entire scenario works without the sp
 1. user logs in;
 2. user saves a favorite from a marketplace link;
 3. another member sees it but cannot edit it;
-4. favorite has an appropriate grayscale archetype;
+4. favorite has a small neutral category marker and dominant textual content;
 5. favorite is added to the active purchase;
 6. person, price, variation and quantity are configured;
 7. other members add their items;
@@ -823,7 +812,7 @@ Exact command, mapping inputs and result/report behavior.
 
 ### Deployment
 
-Repository-side Railway readiness and remaining human actions, if any.
+Actual Vercel project, Turso database, migration, environment, deployment and URL status. Report only completed actions; identify concrete blockers and remaining operator inputs.
 
 ### Known limitations
 

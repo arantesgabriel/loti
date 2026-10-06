@@ -26,7 +26,9 @@
 - list and cards both work;
 - selected view mode persists after reload/new session;
 - external link opens original stored URL;
-- product visual always resolves to a local archetype/fallback.
+- category always resolves to a small neutral vector marker/generic fallback;
+- name, variation and price dominate; Cards have no large image header;
+- markers are decorative and hidden from assistive technology.
 
 ## Collections
 
@@ -82,7 +84,10 @@
 - mobile uses rounded floating navigation island;
 - navigation has only Favorites/Purchase/History primary destinations;
 - cards/list toggle exists;
-- no real product photos are displayed;
+- operational item surfaces display no real product photos, listing thumbnails or large 3D product renders;
+- operational item lists/cards, purchase/history and drawers use consistent small functional category markers;
+- sparse Visor-inspired illustrations are reserved for editorial/branding surfaces;
+- purchase markers remain smaller and quieter than pending/added controls;
 - layout has no page-level horizontal overflow at 390px and remains usable down to 320px where practical;
 - desktop is polished around 1440px;
 - focus and keyboard interaction are usable;
@@ -96,9 +101,9 @@
 - migrations run on empty DB;
 - seed works in development;
 - tests pass;
-- SQLite WAL and foreign keys are enabled;
-- production DB path points to persistent volume;
-- application runs one production replica;
+- migrations run against a fresh local libSQL database and the remote Turso database;
+- production Next.js runtime on Vercel uses Turso/libSQL, not a local file;
+- production has no filesystem-persistence or one-replica requirement;
 - no secrets committed;
 - browser cannot directly query DB;
 - critical authorization is server-enforced.

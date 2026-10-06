@@ -11,6 +11,19 @@ test("favorite → collaborative purchase → HubBuy checklist → immutable his
   await page.getByRole("button", { name: /^Pendentes/ }).click(); await expect(page.getByTestId("purchase-item")).toHaveCount(2); await page.getByRole("button", { name: "Marcar Tênis E2E Gabriel editado como adicionado", exact: true }).click(); await expect(page.getByTestId("purchase-item")).toHaveCount(1); await expect(page.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "60"); await page.getByRole("button", { name: /^Adicionados/ }).click(); await expect(page.getByTestId("purchase-item")).toHaveCount(1);
   const data = await (await page.request.get("/api/app")).json(); const purchase = data.purchases.find((p: { status: string }) => p.status === "active"); const item = data.items.find((i: { purchaseId: string }) => i.purchaseId === purchase.id);
   await page.getByRole("button", { name: "Finalizar compra", exact: true }).click(); await expect(page.getByRole("dialog")).toContainText("2 unidades ainda pendentes"); await expect(page.getByRole("dialog")).toContainText("2 unidades estão sem preço"); await page.getByRole("button", { name: "Confirmar finalização", exact: true }).click(); await page.waitForURL(/\/history\//); await expect(page.getByText("Finalizada", { exact: true })).toBeVisible(); await expect(page.getByRole("button", { name: "Adicionar item", exact: true })).toHaveCount(0); await expect(page.getByRole("button", { name: /^Marcar / })).toHaveCount(0); await expect(page.getByTestId("purchase-total")).toContainText("330,00");
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+    await expect(page.getByTestId("purchase-item").locator("img")).toHaveCount(0);
+    await expect(page.getByTestId("purchase-item").locator('[data-category="sneaker"]')).toHaveCount(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await expect(page.locator("[data-sonner-toast]")).toHaveCount(0, { timeout: 6000 });
+    await page.screenshot({ path: `artifacts/qa/history-${width}.png`, fullPage: true });
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.getByRole("button", { name: "Tênis E2E Gabriel editado", exact: true }).click();
+  await expect(page.getByRole("dialog").locator(".category-marker")).toHaveAttribute("data-category", "sneaker");
+  await expect(page.getByRole("dialog").locator("img")).toHaveCount(0);
+  await page.keyboard.press("Escape");
   for (const payload of [{ operation: "item.status", id: item.id, input: "pending" }, { operation: "item.delete", id: item.id }, { operation: "item.save", id: item.id, input: { name: "overwrite", url: item.url, personId: item.personId, quantity: 1, unitPriceCents: 1 } }, { operation: "purchase.save", id: purchase.id, input: { name: "overwrite" } }]) { const r = await page.request.post("/api/app", { headers: { Origin: "http://localhost:3100" }, data: payload }); expect(r.status()).toBe(409); }
   const source = data.favorites.find((f: { name: string }) => f.name === "Tênis E2E Gabriel editado"); await page.request.post("/api/app", { headers: { Origin: "http://localhost:3100" }, data: { operation: "favorite.delete", id: source.id } }); await page.reload(); await expect(page.getByRole("button", { name: "Tênis E2E Gabriel editado", exact: true })).toBeVisible();
   await page.goto("/history"); await expect(page.getByRole("link", { name: /Compra E2E Outubro/ })).toBeVisible(); await page.goto("/purchase"); await page.getByRole("button", { name: "Criar compra", exact: true }).click(); await page.getByRole("dialog").getByRole("button", { name: "Criar compra", exact: true }).click(); await expect(page.getByText("Em andamento", { exact: true })).toBeVisible();

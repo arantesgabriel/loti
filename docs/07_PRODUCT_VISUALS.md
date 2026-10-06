@@ -1,39 +1,25 @@
-# Product Visual Archetype System
+# Product Representation — Functional Markers and Editorial Illustrations
 
-## Goal
+## Operational UI
 
-Provide useful visual recognition without scraping or displaying the actual marketplace product.
+Favorites Cards/List, Current Purchase, History, detail sheets and favorite pickers use **functional category markers**: small, neutral, low emphasis and independent of the specific item, brand or listing. Product name, variation, price, owner, platform and actions dominate. Purchase status, quantity and subtotal also precede the marker.
 
-Example:
+Never use large product images, real thumbnails, generic 3D product renders, product logos or per-category colors in these surfaces. Cards have no large image header. No remote classification, image scraping, AI or runtime generation.
 
-- `WD Blue SN5000 SSD NVMe` → generic grayscale 3D/clay NVMe silhouette;
-- `Nike Vomero 18` → generic grayscale 3D/clay sneaker silhouette;
-- `Camiseta Uniqlo` → generic grayscale 3D/clay T-shirt silhouette.
+## Category resolution and persistence
 
-The visual communicates **shape/category**, not brand, exact model, colorway or listing content.
-
-## Non-goals
-
-- no runtime AI generation;
-- no scraping image URLs;
-- no hotlinking marketplace thumbnails;
-- no brand logos;
-- no exact replication of a commercial product;
-- no per-item image uploads in MVP.
-
-## Implementation model
-
-A deterministic function:
+`src/lib/domain/categories.ts` exports:
 
 ```ts
-resolveProductVisual(name: string): ProductVisualKey
+resolveProductCategory(name: string): ProductCategoryKey
+productCategoryKey(key: string): ProductCategoryKey
 ```
 
-returns a stable local archetype key saved to `visual_key`.
+The resolver normalizes accents/case and applies ordered keyword rules. NVMe matching precedes generic SSD matching. Examples: Nike Vomero, Ultraboost and Adidas Campus → `sneaker`; Crocs → `clog`; WD Blue SN5000 and SSD NVMe → `ssd_nvme`; Camiseta → `tshirt`; unknown → `generic`.
 
-Recalculate `visual_key` when a favorite/purchase item's name is intentionally changed. Purchase-item snapshots otherwise remain independent.
+Keep the existing `visual_key` column and `visualKey` API property as the category key. No schema change or migration is needed. Saving a favorite or editing an active item's name recalculates its own category; adding a favorite copies its key into the independent purchase snapshot. Favorite changes/deletion never mutate existing item keys. Finalized snapshots remain read-only. Unknown or corrupt stored keys render the generic marker without a broken asset request.
 
-## Initial archetypes
+## Initial categories
 
 - `generic`
 - `sneaker`
@@ -82,23 +68,29 @@ Recalculate `visual_key` when a favorite/purchase item's name is intentionally c
 
 Normalize accents/case before matching. Use explicit ordered matching so `ssd nvme` beats generic `ssd`.
 
-## Asset requirements
+## Marker library and sizing
 
-Preferred production assets:
+`src/components/product-category-icons/index.tsx` contains the 20 original inline SVG silhouettes and `ProductCategoryMarker`. They share a 24px viewBox, 1.5px neutral stroke, rounded joins/caps and no gradients, shadows, brand marks or bitmap dependencies. Color derives from the existing semantic tokens.
 
-- local files under `/public/product-visuals/`;
-- grayscale / light gray clay render;
-- transparent or neutral background;
-- consistent camera angle and lighting;
-- no branding;
-- optimized WebP or SVG/PNG as appropriate.
+| Surface | Desktop tile | Mobile tile | SVG |
+| --- | --- | --- | --- |
+| Favorites Cards | 36px | 28px | 22px / 18px |
+| Favorites List | 30px | 26px | 19px |
+| Purchase / History | 24px; 22px at intermediate widths | 20px | 20px / 18px |
+| Picker / detail sheets | 36px | 36px | 22px |
 
-A coding agent without image-generation capability may initially create clean monochrome pseudo-3D SVG archetypes as local assets, but must preserve the exact contract and file/key structure so higher-fidelity renders can replace them later without component changes.
+Purchase markers have no tile border/background and stay smaller than the checkbox. Markers have `aria-hidden="true"`; SVGs are not focusable. The textual product name is the semantic source. Category is never the sole carrier of critical information.
 
-## Fallback
+## Editorial UI
 
-Unknown items use `generic`, a neutral 3D package/object form. Never show a broken image.
+**Visor-inspired editorial illustrations** may appear sparingly on login, relevant empty states, collection covers, future landing/onboarding or branding: soft 3D objects, pastel surfaces, friendly forms, generous negative space and subtle shadows. This is a style reference, not permission to reproduce proprietary artwork or add these future features now. Never use editorial illustrations as repeated product thumbnails.
 
-## Editorial login assets
+The existing orbital login uses twelve independent local assets in `public/login-visuals/`. Preserve its composition, form, motion and static reduced-motion fallback. No editorial assets or empty states were added in this refactor. See [login direction](17_LOGIN_ORBITAL_MOTION.md).
 
-The grayscale resolver/archetype contract above applies to operational product rows and cards. Login is a distinct editorial surface, permitted to use pastel object backplates, soft dimensional SVGs and generic illustrated community portraits. Its twelve local assets live under `/public/login-visuals/`; they are independent from resolver keys and never replace historical purchase visuals. No real listing photos, brand marks, external image dependency or runtime generation. See [login direction](17_LOGIN_ORBITAL_MOTION.md).
+## Superseded approach
+
+Large gray 3D/clay archetypes and the public product-render asset directory were removed. The former asset-path resolver, large-image component, rendering CSS and offline generator are no longer used. Do not recreate them. See [decision and consequences](15_DECISIONS.md#operational-category-markers--5-october-2026).
+
+## Validation
+
+Unit tests cover all 20 categories, accents/case, ordered NVMe matching and corrupt-key fallback. E2E checks both favorite modes at 320/390/768/1024/1440px, marker sizes, absent item images, purchase checkbox priority, persisted view preference, immutable history and drawer markers. Screenshots at 390/1440px are inspected for content hierarchy and responsive coherence.

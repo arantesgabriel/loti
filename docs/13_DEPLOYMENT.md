@@ -1,112 +1,103 @@
-# Deployment — Railway + SQLite
+# Deployment — Vercel + Turso/libSQL
 
 ## Production topology
 
-One Railway service runs the Next.js Node server and Better Auth. A Railway persistent volume stores the SQLite file.
-
 ```text
-Railway service
-  Next.js
-  Better Auth
-  Drizzle
-  better-sqlite3
-      |
-      v
-/data/loti.sqlite
-      |
-Railway persistent volume
+GitHub repository
+  └─ Vercel deployment
+       └─ Next.js server functions
+            ├─ Better Auth + Drizzle (SQLite provider)
+            └─ @libsql/client over HTTPS
+                 └─ Turso production database
 ```
 
-## One replica
+The application is stateless. Production does not use a local SQLite file, writable application filesystem, persistent volume, `better-sqlite3`, or a replica-count restriction.
 
-Run exactly **one application replica** while using local SQLite. Do not enable horizontal autoscaling/multiple replicas.
+## Turso databases
 
-If the product later requires multiple app replicas, that is a trigger to migrate the persistence layer to a network database such as PostgreSQL; do not attempt shared local-file hacks.
+Keep production and development data isolated:
 
-## Volume
+- `loti-prod` — production Vercel environment;
+- `loti-dev` — local development and optional Preview environment.
 
-Mount a persistent volume at:
+Create one database auth token per database and store it only in the matching server-side environment. Never use a platform API token as an application database token. Never commit, log, or expose either credential.
 
-`/data`
-
-Production DB path:
-
-`/data/loti.sqlite`
-
-## Environment variables
-
-Minimum expected variables:
+Turso connection variables:
 
 ```text
-BETTER_AUTH_SECRET=
-BETTER_AUTH_URL=https://<production-domain>
-DATABASE_PATH=/data/loti.sqlite
+TURSO_DATABASE_URL=libsql://<database-host>
+TURSO_AUTH_TOKEN=<database-token>
 ```
 
-Add only variables actually required by the final Better Auth/Next.js configuration.
+The Vercel production environment uses `loti-prod`. Preview should use `loti-dev` so tests and previews cannot write to production. Local development may use `loti-dev` or a file-backed libSQL URL for offline work.
 
-Development example:
+## Vercel project
 
-```text
-BETTER_AUTH_URL=http://localhost:3000
-DATABASE_PATH=./data/loti.sqlite
-```
+Import the current GitHub repository as a Next.js project. Use the repository root and the intended production branch. Let Vercel detect Next.js and use its default build command (`npm run build`). No Dockerfile or Railway configuration is needed.
 
-Never commit secrets.
+Vercel uses the following server-side variables:
+
+| Variable | Production | Preview/Development |
+|---|---|---|
+| `TURSO_DATABASE_URL` | `loti-prod` URL | `loti-dev` URL (or local file for local development) |
+| `TURSO_AUTH_TOKEN` | `loti-prod` database token | `loti-dev` database token |
+| `BETTER_AUTH_SECRET` | strong random secret, at least 32 characters | separate local/preview secret |
+| `BETTER_AUTH_URL` | exact production HTTPS origin | matching preview/local origin |
+
+Do not create `NEXT_PUBLIC_` variants of database credentials or the Better Auth secret. Changes to Vercel environment variables take effect only in a new deployment.
+
+## Better Auth and URL
+
+After the first deployment, set `BETTER_AUTH_URL` to the real `https://<project>.vercel.app` origin, plus any explicitly configured trusted-origin value if the application adds one. Redeploy after changing it. Keep public signup disabled.
 
 ## Migrations
 
-The database lives on the mounted volume. Ensure migrations execute in a context that actually has volume access.
+Generate migration files from the schema during development:
 
-Preferred production start lifecycle:
+```sh
+npm run db:generate
+```
 
-1. application container starts with volume mounted;
-2. run pending Drizzle migrations safely;
-3. start Next.js server.
+Apply the reviewed migration set explicitly to the target database before deploying code that depends on it:
 
-For one replica, a simple sequential start script is acceptable. Migrations must be idempotent and safe to re-run when no pending migration exists.
+```sh
+npm run db:migrate
+```
 
-## Health endpoint
+Run the command with the target `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` in the operator environment. Production migrations are not run per request or by the Next.js startup path. Verify the schema after migration with `npm run db:verify` and `/api/health`.
 
-Provide `/api/health` or equivalent that checks application/database reachability without exposing secrets, schema contents or user information.
+## User bootstrap
 
-## Backups
+The application has no public signup flow. Create the initial private members with the operator command after production migration:
 
-Enable/document Railway volume backups, ideally:
+```sh
+LOTI_USER_PASSWORD='<secure-initial-password>' npm run user:create -- --name '<name>' --email '<real-address>'
+```
 
-- daily;
-- weekly;
-- monthly.
+Supply actual member addresses and secure initial passwords through a protected operator environment. Do not put production identities or passwords in Git. Existing accounts retain their password when rerun; membership creation is idempotent.
 
-Also document how to restore a backup before production use. A backup that has never been tested/documented is not considered sufficient.
+## Health check
 
-## Initial production setup
+`GET /api/health` runs a minimal database query and returns `{"status":"ok","database":"ok"}` when the application and Turso are reachable. Failure returns HTTP 503 without credentials or schema details.
 
-Human/operator steps:
+## Data import and preservation
 
-1. create/connect Railway project;
-2. attach persistent volume at `/data`;
-3. set environment variables;
-4. deploy;
-5. create initial private users with operator script;
-6. ensure all five users are members of the singleton workspace;
-7. optionally run legacy migration;
-8. configure backups;
-9. verify health endpoint and auth from production domain.
+The supplied spreadsheet is private migration input and is not bundled in Git. Review `docs/14_LEGACY_MIGRATION.md`. Map each workbook owner to an already-created production user. Confirm whether `Compra Out26` is still active before execution. Run the dry-run report first; execute the import only after reviewing it. The importer is idempotent and does not mutate records already imported.
 
-## Domain
+The previous local database contains development seed identities (`@loti.test`) and is not production data. It remains intact locally. No inaccessible Railway data is represented as migrated.
 
-Use Railway-provided domain initially if desired. A custom domain is optional for MVP.
+## Backups and recovery
 
-## Future migration triggers away from SQLite
+Use the backup/restore controls available for the Turso database plan. Keep production and development recovery procedures separate. Before restoring production, confirm the target database and expected data-loss window; test the restore procedure against a non-production copy when available. After recovery, verify `/api/health`, login, favorites, active purchase, and history.
 
-Consider PostgreSQL only when real needs appear, such as:
+## Deployment checklist
 
-- horizontal scaling/multiple replicas;
-- sustained concurrent writes;
-- many simultaneous users;
-- multiple services writing to the same DB;
-- HA requirements;
-- operational analytics requiring a network DB.
-
-Do not migrate merely because the favorite count grows from hundreds to thousands.
+1. Create or verify `loti-prod` and `loti-dev`.
+2. Apply reviewed migrations to both databases.
+3. Connect the GitHub repository to Vercel and set production/preview variables.
+4. Deploy from the intended production branch.
+5. Set `BETTER_AUTH_URL` to the final HTTPS URL and redeploy.
+6. Verify `/login` and `/api/health` publicly.
+7. Bootstrap actual private users; keep public signup disabled.
+8. If importing the workbook, review the mapping and dry-run before writing.
+9. Test login, session refresh, favorites, purchase, history, and one write/read round-trip against `loti-prod`.

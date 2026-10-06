@@ -44,8 +44,10 @@ Do **not** revive discarded architecture decisions such as Supabase, Neon, Postg
 - Product name: **Loti**.
 - The app is a private MVP for a small trusted group, initially five people.
 - The app replaces a spreadsheet-based favorites + shared-purchase workflow.
-- Stack: Next.js + TypeScript + Tailwind CSS + shadcn/ui + Better Auth + Drizzle ORM + SQLite (`better-sqlite3`) + Zod + React Hook Form + Playwright.
-- Production target: Railway, one application replica, SQLite on a persistent volume.
+- Stack: Next.js + TypeScript + Tailwind CSS + shadcn/ui + Better Auth + Drizzle ORM + SQLite schema dialect via Turso/libSQL (`@libsql/client`) + Zod + React Hook Form + Playwright.
+- Production target: Vercel + Turso/libSQL. Local development may use a file-backed libSQL database.
+- Production must not depend on a writable local filesystem, Railway persistent volumes, or `better-sqlite3`. Better Auth remains on the Drizzle adapter with `provider: "sqlite"`; database access uses server-only environment variables `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`.
+- Migrations are applied explicitly to the target database; never run them inside a request lifecycle or automatically per request.
 - Browser code must never access SQLite directly.
 - Authorization is enforced server-side with centralized helpers.
 - No public signup UI.
@@ -55,7 +57,8 @@ Do **not** revive discarded architecture decisions such as Supabase, Neon, Postg
 - Finalized purchases are immutable/read-only.
 - Purchase items are snapshots; editing/deleting a favorite must never mutate historical purchase data.
 - Favorites support **List** and **Cards** views; preference persists per user.
-- Never use real listing/product photos. Operational surfaces use local grayscale/clay product archetype visuals; login uses separate local pastel editorial assets.
+- Never use large product images, real product thumbnails, or generic 3D product renders inside operational product cards/lists. Favorites, Purchase, History and item drawers use small functional category markers. Visor-inspired soft 3D/pastel illustrations are reserved for sparse editorial/branding surfaces such as login, empty states, collection covers and marketing. No new editorial surfaces are required by this rule.
+- Persist category keys in the existing `visual_key` fields, including independent purchase snapshots. Use `resolveProductCategory()` and the internal SVG marker library; do not restore the removed product render assets.
 - The login page is an editorial surface: a central Loti box/symbol with community avatars and shopping/favorite objects orbiting in multiple subtle motion layers. Preserve form simplicity, accessibility and the static reduced-motion fallback. Do not replace this direction with a static centered login card, ecommerce hero, mascot, video background or heavy 3D/WebGL scene. See `docs/17_LOGIN_ORBITAL_MOTION.md`.
 - Mobile navigation uses the approved rounded floating island.
 - Collections live inside Favorites, not as a primary app section.

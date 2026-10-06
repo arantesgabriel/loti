@@ -27,11 +27,12 @@ Gate: local app starts; lint, typecheck and build pass.
 - Better Auth schema/integration;
 - application Drizzle schema;
 - migrations;
-- SQLite PRAGMAs;
+- Turso/libSQL runtime through `@libsql/client` and the existing SQLite schema dialect;
+- explicit migration command for local and remote databases;
 - partial unique active-purchase index;
 - constraints/indexes;
 - dev seed foundation;
-- migration command.
+- migration command using the libSQL migrator.
 
 Gate: empty DB migrates successfully; constraints tested.
 
@@ -74,7 +75,7 @@ Gate: responsive checks at 390/768/1024/1440 widths.
 - QC;
 - external product opening;
 - add-to-purchase entry point;
-- product visual resolver integration.
+- category resolver and small inline SVG marker integration.
 
 Gate: all Favorites acceptance criteria + E2E flow pass.
 
@@ -118,17 +119,19 @@ Gate: purchase calculations, permissions and E2E flows pass.
 
 Gate: finalize→history E2E passes.
 
-## Phase 09 — Product visual system
+## Phase 09 — Functional category markers
 
 The resolver may be built earlier to unblock Favorites, but this phase completes it:
 
 - full initial key list;
 - keyword normalization/matching;
-- local archetype asset set;
+- internal vector marker library, with consistent neutral strokes;
+- compact Cards/List/Purchase/History and drawer representation;
+- separate sparse editorial illustration direction inspired by Visor Finance;
 - generic fallback;
 - unit tests using names from the legacy workbook and mockups.
 
-Gate: no real remote product images are used anywhere.
+Gate: no real remote product images or large 3D item renders; Cards/List and Purchase/History inspected at 390/1440px. Existing `visual_key` persistence and independent snapshots require no migration.
 
 ## Phase 10 — Legacy migration
 
@@ -150,10 +153,10 @@ No new features.
 - accessibility pass;
 - visual QA against four mockups;
 - production env docs;
-- Railway persistent volume;
-- startup migrations;
+- Vercel production environment and Turso connection;
+- explicit remote migration step before deploy;
 - health endpoint;
-- backup checklist;
+- Turso backup/recovery guidance;
 - final build.
 
 ## Autonomous execution rule

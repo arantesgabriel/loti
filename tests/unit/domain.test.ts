@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { detectPlatform, buildCanonicalProductKey, normalizeProductUrl } from "@/lib/domain/urls";
-import { resolveProductVisual, visualPath } from "@/lib/domain/visuals";
+import { resolveProductCategory, productCategoryKey } from "@/lib/domain/categories";
 import { parseMoney, formatMoney, subtotal, purchaseSummary, personSummary } from "@/lib/domain/money";
 describe("platforms", () => {
   it.each([["hubbuycn.com", "hubbuy"], ["weidian.com", "weidian"], ["item.taobao.com", "taobao"], ["detail.1688.com", "1688"], ["goofish.com", "goofish"], ["shopee.com.br", "shopee"], ["br.shein.com", "shein"], ["example.com", "other"], ["weidian.com.evil.test", "other"]])("detects %s", (host, platform) => expect(detectPlatform(`https://${host}/item`)).toBe(platform));
@@ -10,9 +10,9 @@ describe("platforms", () => {
   it("retains unknown identity parameters", () => expect(normalizeProductUrl("https://www.example.com/x?variant=2&utm_campaign=x&source=1#top")).toBe("https://example.com/x?source=1&variant=2"));
   it("does not accept unsafe schemes", () => expect(normalizeProductUrl("javascript:alert(1)")).toBeNull());
 });
-describe("archetypes", () => {
-  it.each([["Nike Vomero 18", "sneaker"], ["Adidas Campus", "sneaker"], ["Ultraboost 5", "sneaker"], ["Crocs Bottom", "clog"], ["WD Blue SN5000 NVMe", "ssd_nvme"], ["Camiseta Uniqlo", "tshirt"], ["CALÇA", "pants"], ["Placa-mãe B650", "motherboard"], ["SSD SATA", "ssd_sata"], ["Memória RAM", "ram"], ["Ryzen 5", "cpu"], ["GeForce", "gpu"], ["Macbook", "laptop"], ["iPhone", "smartphone"], ["Apple Watch", "smartwatch"], ["Teclado", "keyboard"], ["Mouse", "mouse"], ["Fone", "headphones"], ["Controle", "controller"], ["Sandália", "sandal"], ["Moletom", "hoodie"], ["Unknown", "generic"]])("resolves %s", (name, key) => expect(resolveProductVisual(name)).toBe(key));
-  it("falls back for corrupt keys", () => expect(visualPath("bad")).toBe("/product-visuals/generic.svg"));
+describe("product categories", () => {
+  it.each([["Nike Vomero 18", "sneaker"], ["Adidas Campus", "sneaker"], ["Ultraboost 5", "sneaker"], ["Crocs Bottom", "clog"], ["WD Blue SN5000", "ssd_nvme"], ["SSD NVMe", "ssd_nvme"], ["Camiseta Uniqlo", "tshirt"], ["CALÇA", "pants"], ["Placa-mãe B650", "motherboard"], ["SSD SATA", "ssd_sata"], ["Memória RAM", "ram"], ["Ryzen 5", "cpu"], ["GeForce", "gpu"], ["Macbook", "laptop"], ["iPhone", "smartphone"], ["Apple Watch", "smartwatch"], ["Teclado", "keyboard"], ["Mouse", "mouse"], ["Fone", "headphones"], ["Controle", "controller"], ["Sandália", "sandal"], ["Moletom", "hoodie"], ["produto desconhecido", "generic"]])("resolves %s", (name, key) => expect(resolveProductCategory(name)).toBe(key));
+  it("falls back for corrupt keys", () => expect(productCategoryKey("bad")).toBe("generic"));
 });
 describe("money and quantities", () => {
   it.each([["R$ 1.234,56", 123456], ["0", 0], ["12.30", 1230], ["", null], ["12,3", 1230]])("parses %s", (value, expected) => expect(parseMoney(value)).toBe(expected));

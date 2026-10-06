@@ -2,15 +2,15 @@ import { test, expect } from "@playwright/test";
 import { login } from "./helpers";
 test("private routes redirect and public signup is disabled", async ({ page, request }) => {
   for (const path of ["/favorites", "/purchase", "/history", "/history/private-id", "/profile"]) { await page.goto(path); await expect(page).toHaveURL(/\/login/); } await expect(page.getByText(/cadast/i)).toHaveCount(0);
-  const health = await request.get("/api/health"); expect(health.status()).toBe(200); expect(await health.json()).toEqual({ status: "ok" });
+  const health = await request.get("/api/health"); expect(health.status()).toBe(200); expect(await health.json()).toEqual({ status: "ok", database: "ok" });
   const app = await request.get("/api/app"); expect(app.status()).toBe(401);
   const r = await request.post("/api/auth/sign-up/email", { data: { name: "Public", email: "public@loti.test", password: "Loti-Dev-Only-2026!" }, headers: { Origin: "http://localhost:3100" } }); expect(r.ok()).toBe(false);
 });
-test("favorite lifecycle: create, search, edit with local archetype", async ({ page }) => {
+test("favorite lifecycle: create, search, edit with category marker", async ({ page }) => {
   await login(page); await page.getByRole("button", { name: "Novo favorito", exact: true }).click();
   await page.getByLabel("Link do produto").fill("https://weidian.com/item.html?itemID=999999&spm=test"); await page.getByLabel("Nome do produto", { exact: true }).fill("Tênis E2E Gabriel"); await page.getByLabel("Preço de referência (R$)").fill("125,00"); await page.getByText("Mais detalhes", { exact: true }).click(); await page.getByLabel("Variação / modelo").fill("42"); await page.getByRole("button", { name: "Salvar favorito", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0); await page.getByLabel("Buscar favoritos").fill("E2E Gabriel");
-  const row = page.getByTestId("favorite"); await expect(row).toHaveCount(1); await expect(row.locator("img")).toHaveAttribute("src", "/product-visuals/sneaker.svg");
+  const row = page.getByTestId("favorite"); await expect(row).toHaveCount(1); await expect(row.locator(".category-marker")).toHaveAttribute("data-category", "sneaker"); await expect(row.locator("img")).toHaveCount(0);
   await page.getByRole("button", { name: "Tênis E2E Gabriel", exact: true }).click(); await page.getByRole("button", { name: "Editar favorito", exact: true }).click(); await page.getByLabel("Nome do produto", { exact: true }).fill("Tênis E2E Gabriel editado"); await page.getByRole("button", { name: "Salvar favorito", exact: true }).click(); await expect(row).toContainText("Tênis E2E Gabriel editado");
 });
 test("another member sees the favorite and cannot mutate it", async ({ page }) => {
