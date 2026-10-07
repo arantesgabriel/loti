@@ -9,7 +9,7 @@ test("ownership, single input focus border and aligned prices", async ({ page })
   await expect(page.getByText("Minhas coleções", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: /^Meus / }).click();
   for (const row of await page.getByTestId("favorite").all()) await expect(row).toContainText("Seu favorito");
-  await page.getByRole("button", { name: /^Outras pessoas / }).click();
+  await page.locator(".favorite-person").first().click();
   expect(await page.getByTestId("favorite").count()).toBeGreaterThan(0);
   for (const row of await page.getByTestId("favorite").all()) {
     await expect(row.locator(".owner")).toContainText("De ");

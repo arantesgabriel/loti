@@ -124,7 +124,7 @@ Use `design/mockups/favorites-mobile.png`:
 Use `design/mockups/purchase-desktop.png`:
 
 - purchase title/status;
-- clear progress and total;
+- clear progress and an estimated-total carousel that can be dragged between all, pending, and added items;
 - Todos/Pendentes/Adicionados;
 - person summary strip;
 - compact table/list grouped by person;
@@ -135,11 +135,12 @@ Use `design/mockups/purchase-desktop.png`:
 
 Use `design/mockups/purchase-mobile.png`:
 
-- total + progress high in hierarchy;
+- total carousel + progress high in hierarchy; totals can be swiped between all, pending, and added items;
 - selectable `Todos / Pendentes / Adicionados` cards with a full selection fill that slides between options;
 - horizontal/compact person summaries;
 - item rows optimized for one-hand scanning;
-- desktop add-item action beside the three-dot purchase menu; separate floating plus button on mobile;
+- desktop purchase header with separate Edit/Finalize buttons and an Add Item action; show the floating plus only when the header action is outside the viewport;
+- keep the three-dot options menu and always-visible floating plus on mobile;
 - same floating bottom navigation island.
 
 ## Mobile navigation island

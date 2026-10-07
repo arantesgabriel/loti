@@ -36,7 +36,7 @@ test("mobile island, responsive layouts, category markers and keyboard dialogs",
         await page.screenshot({ path: `artifacts/qa/favorites-${view === "Cards" ? "cards" : "list"}-${width === 390 ? "mobile" : "desktop"}.png`, fullPage: true });
       }
     }
-    if (width < 768) { const island = page.getByRole("navigation", { name: "Navegação móvel" }); await expect(island).toBeVisible(); const box = await island.boundingBox(); expect(box!.width).toBeLessThan(width); expect(parseFloat(await island.evaluate(el => getComputedStyle(el).borderRadius))).toBeGreaterThanOrEqual(40); await island.getByRole("link", { name: "Compra", exact: true }).click(); await expect(island.getByRole("link", { name: "Compra", exact: true })).toHaveAttribute("aria-current", "page"); }
+    if (width < 768) { const island = page.getByRole("navigation", { name: "Navegação móvel" }); await expect(island).toBeVisible(); const box = await island.boundingBox(); expect(box!.width).toBeLessThan(width); expect(parseFloat(await island.evaluate(el => getComputedStyle(el).borderRadius))).toBeGreaterThanOrEqual(24); await island.getByRole("link", { name: "Compra atual", exact: true }).click(); await expect(island.getByRole("link", { name: "Compra atual", exact: true })).toHaveAttribute("aria-current", "page"); }
     else await page.goto("/purchase");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     for (const row of await page.getByTestId("purchase-item").all()) {

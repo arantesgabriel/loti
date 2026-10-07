@@ -56,7 +56,10 @@
 
 ## Purchase items
 
-- active purchase places desktop `Adicionar item` directly to the right of the three-dot options menu and uses a separate floating plus button on mobile;
+- active purchase shows separate all, pending, and added totals in a horizontal carousel, navigable by dragging/swiping, keyboard, arrows, or position controls;
+- favorite rows show a direct edit icon for the current user's favorites; a favorite already in the active purchase is marked `Na compra` and returns to the normal `Compra` action after its purchase item is removed;
+- desktop active purchase has separate `Editar compra` and `Finalizar compra` buttons; a floating plus appears only while the heading `Adicionar item` action is outside the viewport;
+- mobile retains the three-dot purchase menu and separate floating plus button;
 - any member can add any visible favorite to active purchase;
 - person defaults to favorite owner and can be changed;
 - favorite price/variation are suggestions and can be changed;

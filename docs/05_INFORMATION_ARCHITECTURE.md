@@ -39,7 +39,8 @@ Creation/editing should generally stay in context via Sheet/Drawer/Dialog instea
 - page header + avatar/menu;
 - compact floating rounded bottom navigation island with exactly three items: Favoritos, Compra, Histórico;
 - only the active destination shows its short label; the full selected fill moves between destinations;
-- on desktop, `Adicionar item` sits immediately to the right of the three-dot purchase menu; on mobile, use a separate floating `+` action at the lower right;
+- on desktop, show separate `Editar compra` and `Finalizar compra` buttons beside `Adicionar item`; retain the three-dot options menu on mobile;
+- on desktop, show a lower-right floating `+` only while the heading `Adicionar item` action is outside the viewport; hide it again when that action returns into view. Mobile keeps its separate floating `+` action;
 - navigation island remains visually separated from content and respects device safe area.
 
 ## Surface inventory
@@ -122,12 +123,12 @@ Hierarchy:
 
 1. purchase name + status;
 2. unit/person/account metadata;
-3. estimated total;
+3. estimated total in a draggable carousel for all, pending, and added items;
 4. progress;
 5. compact Todos / Pendentes / Adicionados selection cards with the same sliding full-selection animation as the Favorites person selector;
 6. person summaries;
 7. items grouped by person;
-8. add-item action in the heading beside the purchase options menu.
+8. separate edit/finalize actions and add-item action in the heading; on desktop, a floating plus appears only while the heading add action is outside the viewport.
 
 Each item should make its status and open-product action obvious. Its neutral category marker is smaller than the status control; name, variation, quantity, unit price and subtotal remain primary.
 

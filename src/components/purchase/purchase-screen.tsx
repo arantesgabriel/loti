@@ -1,9 +1,9 @@
 "use client";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { Plus, ShoppingCart, MoreHorizontal, Check, RotateCcw, Pencil, Trash2, LockKeyhole, ArrowLeft, AlertTriangle } from "lucide-react";
+import { Plus, ShoppingCart, MoreHorizontal, Check, RotateCcw, Pencil, Trash2, LockKeyhole, ArrowLeft, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "../ui/button";
 import { Confirm, Surface } from "../ui/surface";
 import { Avatar, ProductCategoryMarker, OpenProduct, EmptyState, PlatformBadge } from "../shared";
@@ -12,6 +12,101 @@ import { formatMoney, purchaseSummary, personSummary, subtotal } from "@/lib/dom
 import { PurchaseEditor } from "./purchase-editor";
 import { AddItemFlow, ItemEditor, type ClientItem } from "./item-editor";
 import type { ClientData } from "@/lib/domain/services";
+
+const totalOptions = [
+  { label: "Todos os itens", status: "all" },
+  { label: "Pendentes", status: "pending" },
+  { label: "Adicionados", status: "added" },
+] as const;
+
+function PurchaseTotalCarousel({ items }: { items: ClientData["items"] }) {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<{ pointerId: number; startX: number; startScrollLeft: number; moved: boolean } | null>(null);
+  const totals = totalOptions.map(option => ({
+    ...option,
+    summary: purchaseSummary(option.status === "all" ? items : items.filter(item => item.cartStatus === option.status)),
+  }));
+
+  function updateActiveIndex() {
+    const viewport = viewportRef.current;
+    if (!viewport || !viewport.clientWidth) return;
+    const nextIndex = Math.max(0, Math.min(totals.length - 1, Math.round(viewport.scrollLeft / viewport.clientWidth)));
+    setActiveIndex(current => current === nextIndex ? current : nextIndex);
+  }
+
+  function goToIndex(index: number) {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const nextIndex = Math.max(0, Math.min(totals.length - 1, index));
+    setActiveIndex(nextIndex);
+    viewport.scrollTo({
+      left: nextIndex * viewport.clientWidth,
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+    });
+  }
+
+  function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    if (event.pointerType !== "mouse" || event.button !== 0) return;
+    dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startScrollLeft: event.currentTarget.scrollLeft, moved: false };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function handlePointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const distance = event.clientX - drag.startX;
+    if (!drag.moved && Math.abs(distance) > 4) {
+      drag.moved = true;
+      event.currentTarget.classList.add("is-dragging");
+    }
+    if (drag.moved) {
+      event.currentTarget.scrollLeft = drag.startScrollLeft - distance;
+      event.preventDefault();
+    }
+  }
+
+  function handlePointerEnd(event: React.PointerEvent<HTMLDivElement>) {
+    if (dragRef.current?.pointerId !== event.pointerId) return;
+    dragRef.current = null;
+    event.currentTarget.classList.remove("is-dragging");
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  }
+
+  return <section className="total-panel" aria-label="Totais estimados da compra">
+    <div className="total-carousel-heading">
+      <span className="muted">Valor total (estimado)</span>
+      <div className="total-carousel-arrows">
+        <button className="total-carousel-arrow" type="button" aria-label="Total anterior" onClick={() => goToIndex(activeIndex - 1)} disabled={activeIndex === 0}><ChevronLeft size={17}/></button>
+        <button className="total-carousel-arrow" type="button" aria-label="Próximo total" onClick={() => goToIndex(activeIndex + 1)} disabled={activeIndex === totals.length - 1}><ChevronRight size={17}/></button>
+      </div>
+    </div>
+    <div className="total-carousel-viewport" ref={viewportRef} role="region" aria-roledescription="carrossel" aria-label="Totais da compra" tabIndex={0} onScroll={updateActiveIndex} onKeyDown={event => {
+      if (event.key === "ArrowRight") { event.preventDefault(); goToIndex(activeIndex + 1); }
+      if (event.key === "ArrowLeft") { event.preventDefault(); goToIndex(activeIndex - 1); }
+      if (event.key === "Home") { event.preventDefault(); goToIndex(0); }
+      if (event.key === "End") { event.preventDefault(); goToIndex(totals.length - 1); }
+    }} onPointerDown={handlePointerDown} onPointerMove={handlePointerMove} onPointerUp={handlePointerEnd} onPointerCancel={handlePointerEnd}>
+      <div className="total-carousel-track">
+        {totals.map((total, index) => <div className="total-carousel-slide" key={total.status} role="group" aria-roledescription="slide" aria-label={`${index + 1} de ${totals.length}: ${total.label}`} aria-hidden={index !== activeIndex}>
+          <span className="total-carousel-scope" data-testid={index === activeIndex ? "purchase-total-scope" : undefined}>{total.label}</span>
+          <strong data-testid={index === activeIndex ? "purchase-total" : undefined}>{formatMoney(total.summary.totalCents)}</strong>
+          {total.summary.noPriceUnits > 0
+            ? <small>{total.summary.noPriceUnits} {total.summary.noPriceUnits === 1 ? "unidade sem preço neste total" : "unidades sem preço neste total"}</small>
+            : <small>{total.summary.units === 0 ? "Nenhuma unidade neste total" : `${total.summary.units} ${total.summary.units === 1 ? "unidade" : "unidades"} neste total`}</small>}
+        </div>)}
+      </div>
+    </div>
+    <div className="total-carousel-footer">
+      <div className="total-carousel-dots" role="group" aria-label="Escolher total estimado">
+        {totals.map((total, index) => <button key={total.status} type="button" aria-label={`Mostrar total: ${total.label}`} aria-pressed={activeIndex === index} onClick={() => goToIndex(index)}><span/></button>)}
+      </div>
+      <span className="total-carousel-hint">Arraste para ver</span>
+      <span className="sr-only" aria-live="polite">{activeIndex + 1} de {totals.length}: {totals[activeIndex]?.label}</span>
+    </div>
+  </section>;
+}
+
 export function PurchaseScreen() {
   const { data } = useWorkspace(); const params = useSearchParams(); const [create, setCreate] = useState(false);
   const purchase = data.purchases.find(p => p.status === "active");
@@ -20,8 +115,8 @@ export function PurchaseScreen() {
 }
 export function PurchaseView({ purchase }: { purchase: ClientData["purchases"][number] }) {
   const { data, busy, mutate } = useWorkspace(), params = useSearchParams(), router = useRouter();
-  const [filter, setFilter] = useState<"all" | "pending" | "added">("all"), [person, setPerson] = useState(""), [add, setAdd] = useState(false), [metadata, setMetadata] = useState(false), [finalize, setFinalize] = useState(false), [edit, setEdit] = useState<ClientItem | null>(null), [remove, setRemove] = useState<ClientItem | null>(null), [detail, setDetail] = useState<ClientItem | null>(null);
-  const filterRailRef = useRef<HTMLDivElement>(null), filterRefs = useRef(new Map<string, HTMLButtonElement>());
+  const [filter, setFilter] = useState<"all" | "pending" | "added">("all"), [person, setPerson] = useState(""), [add, setAdd] = useState(false), [metadata, setMetadata] = useState(false), [finalize, setFinalize] = useState(false), [edit, setEdit] = useState<ClientItem | null>(null), [remove, setRemove] = useState<ClientItem | null>(null), [detail, setDetail] = useState<ClientItem | null>(null), [showFloatingAdd, setShowFloatingAdd] = useState(false);
+  const filterRailRef = useRef<HTMLDivElement>(null), filterRefs = useRef(new Map<string, HTMLButtonElement>()), addButtonRef = useRef<HTMLButtonElement>(null);
   const [filterSelection, setFilterSelection] = useState<{ left: number; width: number } | null>(null);
   const readonly = purchase.status === "finalized", items = data.items.filter(i => i.purchaseId === purchase.id), summary = purchaseSummary(items);
   const favorite = !readonly ? data.favorites.find(f => f.id === params.get("favorite")) : undefined;
@@ -36,11 +131,18 @@ export function PurchaseView({ purchase }: { purchase: ClientData["purchases"][n
     window.addEventListener("resize", updateSelection);
     return () => window.removeEventListener("resize", updateSelection);
   }, [filter]);
+  useEffect(() => {
+    const target = addButtonRef.current;
+    if (!target) return;
+    const observer = new IntersectionObserver(([entry]) => setShowFloatingAdd(!entry.isIntersecting), { threshold: 0 });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, []);
   function closeAdd() { setAdd(false); if (params.get("favorite")) router.replace("/purchase", { scroll: false }); }
-  return <>{readonly && <Link href="/history" className="back-link"><ArrowLeft size={16}/>Histórico</Link>}<div className="page-heading purchase-heading"><div><div className="purchase-title"><h1>{purchase.name}</h1><span className={`badge purchase-status ${readonly ? "finalized" : ""}`}>{readonly ? <LockKeyhole size={12}/> : <span className="status-dot"/>}{readonly ? "Finalizada" : "Em andamento"}</span></div><p className="muted">{summary.units} {summary.units === 1 ? "unidade" : "unidades"} · {summary.people} {summary.people === 1 ? "pessoa" : "pessoas"}{purchase.hubbuyAccount && <span> · Conta HubBuy: {purchase.hubbuyAccount}</span>}{readonly && purchase.finalizedAt && <span> · {new Date(purchase.finalizedAt).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}</span>}</p></div>{!readonly && <div className="purchase-heading-actions"><DropdownMenu.Root><DropdownMenu.Trigger asChild><Button variant="outline" size="icon" aria-label="Opções da compra"><MoreHorizontal size={20}/></Button></DropdownMenu.Trigger><DropdownMenu.Portal><DropdownMenu.Content className="dropdown" align="end" sideOffset={8}><DropdownMenu.Item onSelect={() => setMetadata(true)}><Pencil size={15}/>Editar compra</DropdownMenu.Item><DropdownMenu.Item onSelect={() => setFinalize(true)}><Check size={15}/>Finalizar compra</DropdownMenu.Item></DropdownMenu.Content></DropdownMenu.Portal></DropdownMenu.Root><Button className="purchase-add-button" onClick={() => setAdd(true)} aria-label="Adicionar item"><Plus size={18}/><span className="desktop-label">Adicionar item</span></Button></div>}</div>
-  <div className="purchase-summary"><div className="progress-panel"><div className="progress-label"><strong>{summary.added} de {summary.units} adicionadas</strong><span>{summary.progress}%</span></div><div className="progress-track" role="progressbar" aria-label="Itens adicionados ao carrinho" aria-valuemin={0} aria-valuemax={100} aria-valuenow={summary.progress}><span style={{ width: `${summary.progress}%` }}/></div></div><div className="total-panel"><span className="muted">Valor total (estimado)</span><strong data-testid="purchase-total">{formatMoney(summary.totalCents)}</strong>{summary.noPriceRows > 0 && <small>{summary.noPriceUnits} {summary.noPriceUnits === 1 ? "unidade sem preço" : "unidades sem preço"}</small>}</div></div>
+  return <>{readonly && <Link href="/history" className="back-link"><ArrowLeft size={16}/>Histórico</Link>}<div className="page-heading purchase-heading"><div><div className="purchase-title"><h1>{purchase.name}</h1><span className={`badge purchase-status ${readonly ? "finalized" : ""}`}>{readonly ? <LockKeyhole size={12}/> : <span className="status-dot"/>}{readonly ? "Finalizada" : "Em andamento"}</span></div><p className="muted">{summary.units} {summary.units === 1 ? "unidade" : "unidades"} · {summary.people} {summary.people === 1 ? "pessoa" : "pessoas"}{purchase.hubbuyAccount && <span> · Conta HubBuy: {purchase.hubbuyAccount}</span>}{readonly && purchase.finalizedAt && <span> · {new Date(purchase.finalizedAt).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}</span>}</p></div>{!readonly && <div className="purchase-heading-actions"><div className="purchase-desktop-actions"><Button variant="outline" className="purchase-heading-option" aria-label="Editar compra" onClick={() => setMetadata(true)}><Pencil size={16}/><span className="purchase-heading-option-label">Editar compra</span></Button><Button variant="soft" className="purchase-heading-option" aria-label="Finalizar compra" onClick={() => setFinalize(true)}><Check size={16}/><span className="purchase-heading-option-label">Finalizar compra</span></Button></div><div className="purchase-mobile-options"><DropdownMenu.Root><DropdownMenu.Trigger asChild><Button variant="outline" size="icon" aria-label="Opções da compra"><MoreHorizontal size={20}/></Button></DropdownMenu.Trigger><DropdownMenu.Portal><DropdownMenu.Content className="dropdown" align="end" sideOffset={8}><DropdownMenu.Item onSelect={() => setMetadata(true)}><Pencil size={15}/>Editar compra</DropdownMenu.Item><DropdownMenu.Item onSelect={() => setFinalize(true)}><Check size={15}/>Finalizar compra</DropdownMenu.Item></DropdownMenu.Content></DropdownMenu.Portal></DropdownMenu.Root></div><Button ref={addButtonRef} className="purchase-add-button" onClick={() => setAdd(true)} aria-label="Adicionar item"><Plus size={18}/><span className="desktop-label">Adicionar item</span></Button></div>}</div>
+  <div className="purchase-summary"><div className="progress-panel"><div className="progress-label"><strong>{summary.added} de {summary.units} adicionadas</strong><span>{summary.progress}%</span></div><div className="progress-track" role="progressbar" aria-label="Itens adicionados ao carrinho" aria-valuemin={0} aria-valuemax={100} aria-valuenow={summary.progress}><span style={{ width: `${summary.progress}%` }}/></div></div><PurchaseTotalCarousel items={items}/></div>
   <div className="purchase-toolbar"><div className="purchase-filter-rail" ref={filterRailRef} role="group" aria-label="Filtrar itens da compra" style={{ "--selection-left": `${filterSelection?.left ?? 0}px`, "--selection-width": `${filterSelection?.width ?? 0}px` } as React.CSSProperties}><span className={`purchase-filter-selection${filterSelection ? " ready" : ""}`} aria-hidden="true"/><button ref={element => { if (element) filterRefs.current.set("all", element); else filterRefs.current.delete("all"); }} className={`purchase-filter-option${filter === "all" ? " selected" : ""}`} aria-pressed={filter === "all"} onClick={() => setFilter("all")}><strong>Todos</strong><span>{summary.units}</span></button><button ref={element => { if (element) filterRefs.current.set("pending", element); else filterRefs.current.delete("pending"); }} className={`purchase-filter-option${filter === "pending" ? " selected" : ""}`} aria-pressed={filter === "pending"} onClick={() => setFilter("pending")}><strong>Pendentes</strong><span>{summary.pending}</span></button><button ref={element => { if (element) filterRefs.current.set("added", element); else filterRefs.current.delete("added"); }} className={`purchase-filter-option${filter === "added" ? " selected" : ""}`} aria-pressed={filter === "added"} onClick={() => setFilter("added")}><strong>Adicionados</strong><span>{summary.added}</span></button></div></div>
-  {!readonly && <Button className="purchase-mobile-add" onClick={() => setAdd(true)} aria-label="Adicionar item"><Plus size={24}/></Button>}
+  {!readonly && <Button className={`purchase-floating-add${showFloatingAdd ? " is-visible" : ""}`} data-testid="purchase-floating-add" onClick={() => setAdd(true)} aria-label="Adicionar item"><Plus size={24}/></Button>}
   {!!people.length && <div className="person-strip">{people.map(m => { const s = personSummary(items, m.id); return <button className={`person-summary ${person === m.id ? "selected" : ""}`} key={m.id} onClick={() => setPerson(person === m.id ? "" : m.id)} aria-pressed={person === m.id}><Avatar name={m.name}/><span><strong>{m.name}</strong><small>{s.units} {s.units === 1 ? "unidade" : "unidades"} · {s.added}/{s.units} adicionadas</small><b>{formatMoney(s.totalCents)}</b></span></button>; })}</div>}
   {data.members.filter(m => filtered.some(i => i.personId === m.id)).map(m => { const group = filtered.filter(i => i.personId === m.id), s = personSummary(items, m.id); return <section className="purchase-group" key={m.id}><div className="group-heading"><Avatar name={m.name}/><div><h2>{m.name}</h2><p className="muted">{s.units} {s.units === 1 ? "unidade" : "unidades"} · {formatMoney(s.totalCents)} · {s.added}/{s.units} adicionadas</p></div>{!readonly && <Button className="group-bulk-status" variant="soft" size="sm" disabled={busy} onClick={() => mutate("item.status.person", { personId: m.id, status: s.pending > 0 ? "added" : "pending" }, purchase.id, s.pending > 0 ? `Itens de ${m.name} marcados como adicionados` : `Itens de ${m.name} marcados como pendentes`)}><span className="group-bulk-icon" aria-hidden="true">{s.pending > 0 ? <Check size={15}/> : <RotateCcw size={15}/>}</span><span>Marcar todos como {s.pending > 0 ? "adicionados" : "pendentes"}</span></Button>}</div><div className="table-head"><span>Produto</span><span>Qtd × Preço unitário</span><span>Subtotal</span></div>{group.map(i => <article className="purchase-row" key={i.id} data-testid="purchase-item">{readonly ? <span className={`cart-readonly ${i.cartStatus}`} aria-label={i.cartStatus === "added" ? "Adicionado" : "Pendente"}>{i.cartStatus === "added" ? <Check size={16}/> : <span/>}</span> : <button className={`cart-toggle ${i.cartStatus}`} aria-pressed={i.cartStatus === "added"} aria-label={`Marcar ${i.name} como ${i.cartStatus === "added" ? "pendente" : "adicionado"}`} disabled={busy} onClick={() => mutate("item.status", i.cartStatus === "added" ? "pending" : "added", i.id, i.cartStatus === "added" ? "Marcado como pendente" : "Marcado como adicionado")}>{i.cartStatus === "added" && <Check size={16}/>}</button>}<ProductCategoryMarker visualKey={i.visualKey}/><div className="purchase-item-info"><button className="favorite-title" onClick={() => setDetail(i)}>{i.name}</button><div className="purchase-item-meta"><p className="muted">{i.variant || "Sem variação"}</p><span className="cart-text">{i.cartStatus === "added" ? "Adicionado" : "Pendente"}</span></div><span className="mobile-item-price">{i.quantity} × {formatMoney(i.unitPriceCents)}</span></div><span className="item-unit-price">{i.quantity} × {formatMoney(i.unitPriceCents)}</span><strong className={`item-subtotal ${i.unitPriceCents === null ? "price-pending" : ""}`}>{formatMoney(subtotal(i))}</strong><div className="purchase-row-actions"><OpenProduct url={i.url} compact/>{!readonly && <DropdownMenu.Root><DropdownMenu.Trigger asChild><Button variant="ghost" size="icon" aria-label={`Opções de ${i.name}`}><MoreHorizontal size={18}/></Button></DropdownMenu.Trigger><DropdownMenu.Portal><DropdownMenu.Content className="dropdown" align="end" sideOffset={5}><DropdownMenu.Item onSelect={() => setEdit(i)}><Pencil size={15}/>Editar item</DropdownMenu.Item><DropdownMenu.Item className="danger-text" onSelect={() => setRemove(i)}><Trash2 size={15}/>Remover item</DropdownMenu.Item></DropdownMenu.Content></DropdownMenu.Portal></DropdownMenu.Root>}</div></article>)}</section>; })}
   {!filtered.length && <EmptyState icon={ShoppingCart} title={items.length ? "Tudo certo por aqui" : "A compra ainda está vazia"} description={items.length ? "Nenhum item com estes filtros. Selecione Todos para ver a compra completa." : readonly ? "Esta compra foi finalizada sem itens." : "Adicione um favorito ou um item manual para começar."}/>}

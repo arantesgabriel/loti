@@ -509,13 +509,14 @@ Active purchase page must show:
 - unit count;
 - people count;
 - HubBuy account if defined;
-- estimated total;
+- estimated total in a draggable carousel with separate totals for all items, pending items, and added items;
 - progress;
 - Todos / Pendentes / Adicionados;
 - status filters use compact selection cards and the same full-fill sliding animation as the Favorites people selector;
 - person summary strip/cards;
 - items grouped by person;
-- desktop: place `Adicionar item` immediately to the right of the purchase three-dot options menu; mobile: use a separate floating plus button at the lower right.
+- desktop: show separate `Editar compra` and `Finalizar compra` buttons, followed by `Adicionar item`; keep the three-dot options menu on mobile.
+- desktop: show a lower-right floating plus only while the heading `Adicionar item` action is outside the viewport, and hide it again when that action returns into view; mobile keeps its separate floating plus button.
 
 Item rows show:
 

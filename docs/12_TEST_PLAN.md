@@ -97,6 +97,10 @@ Cover:
 
 At mobile viewport, verify rounded island navigates Favorites/Purchase/History and active destination changes.
 
+### E2E 10: Purchase controls
+
+Verify the draggable estimated-total carousel shows all, pending, and added values; favorite actions reflect active-purchase membership and reset after removal; desktop purchase actions are separate; and the floating plus appears only when the heading add action leaves the viewport.
+
 ## Visual/responsive QA
 
 Primary reference viewports:
