@@ -19,20 +19,74 @@ const totalOptions = [
   { label: "Adicionados", status: "added" },
 ] as const;
 
+function bezierCoordinate(t: number, point1: number, point2: number) {
+  const inverse = 1 - t;
+  return 3 * inverse * inverse * t * point1 + 3 * inverse * t * t * point2 + t * t * t;
+}
+
+function selectionEase(progress: number) {
+  if (progress <= 0 || progress >= 1) return progress;
+  let low = 0, high = 1, t = progress;
+  for (let iteration = 0; iteration < 12; iteration++) {
+    t = (low + high) / 2;
+    if (bezierCoordinate(t, 0.2, 0.2) < progress) low = t;
+    else high = t;
+  }
+  return bezierCoordinate((low + high) / 2, 0.8, 1);
+}
+
 function PurchaseTotalCarousel({ items }: { items: ClientData["items"] }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const viewportRef = useRef<HTMLDivElement>(null);
+  const animationFrameRef = useRef<number | null>(null);
   const dragRef = useRef<{ pointerId: number; startX: number; startScrollLeft: number; moved: boolean } | null>(null);
   const totals = totalOptions.map(option => ({
     ...option,
     summary: purchaseSummary(option.status === "all" ? items : items.filter(item => item.cartStatus === option.status)),
   }));
 
+  useEffect(() => () => {
+    if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current);
+  }, []);
+
   function updateActiveIndex() {
     const viewport = viewportRef.current;
-    if (!viewport || !viewport.clientWidth) return;
+    if (!viewport || !viewport.clientWidth || animationFrameRef.current !== null) return;
     const nextIndex = Math.max(0, Math.min(totals.length - 1, Math.round(viewport.scrollLeft / viewport.clientWidth)));
     setActiveIndex(current => current === nextIndex ? current : nextIndex);
+  }
+
+  function cancelScrollAnimation(viewport = viewportRef.current) {
+    if (animationFrameRef.current !== null) cancelAnimationFrame(animationFrameRef.current);
+    animationFrameRef.current = null;
+    viewport?.classList.remove("is-programmatic");
+  }
+
+  function animateScrollTo(viewport: HTMLDivElement, target: number) {
+    cancelScrollAnimation(viewport);
+    const start = viewport.scrollLeft;
+    const distance = target - start;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || Math.abs(distance) < 1) {
+      viewport.scrollTo({ left: target, behavior: "auto" });
+      updateActiveIndex();
+      return;
+    }
+
+    const duration = 260;
+    const startedAt = performance.now();
+    viewport.classList.add("is-programmatic");
+    const step = (now: number) => {
+      const progress = Math.min(1, (now - startedAt) / duration);
+      viewport.scrollLeft = start + distance * selectionEase(progress);
+      if (progress < 1) {
+        animationFrameRef.current = requestAnimationFrame(step);
+      } else {
+        animationFrameRef.current = null;
+        viewport.classList.remove("is-programmatic");
+        updateActiveIndex();
+      }
+    };
+    animationFrameRef.current = requestAnimationFrame(step);
   }
 
   function goToIndex(index: number) {
@@ -40,14 +94,12 @@ function PurchaseTotalCarousel({ items }: { items: ClientData["items"] }) {
     if (!viewport) return;
     const nextIndex = Math.max(0, Math.min(totals.length - 1, index));
     setActiveIndex(nextIndex);
-    viewport.scrollTo({
-      left: nextIndex * viewport.clientWidth,
-      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
-    });
+    animateScrollTo(viewport, nextIndex * viewport.clientWidth);
   }
 
   function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
     if (event.pointerType !== "mouse" || event.button !== 0) return;
+    cancelScrollAnimation(event.currentTarget);
     dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startScrollLeft: event.currentTarget.scrollLeft, moved: false };
     event.currentTarget.setPointerCapture(event.pointerId);
   }
@@ -68,9 +120,15 @@ function PurchaseTotalCarousel({ items }: { items: ClientData["items"] }) {
 
   function handlePointerEnd(event: React.PointerEvent<HTMLDivElement>) {
     if (dragRef.current?.pointerId !== event.pointerId) return;
+    const drag = dragRef.current;
     dragRef.current = null;
     event.currentTarget.classList.remove("is-dragging");
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+    if (drag.moved && event.currentTarget.clientWidth) {
+      goToIndex(Math.round(event.currentTarget.scrollLeft / event.currentTarget.clientWidth));
+    } else {
+      updateActiveIndex();
+    }
   }
 
   return <section className="total-panel" aria-label="Totais estimados da compra">

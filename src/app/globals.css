@@ -112,6 +112,7 @@ form .form-actions { margin-top:4px; } .field-error { color:var(--danger); font-
 .total-carousel-viewport::-webkit-scrollbar { display:none; }
 .total-carousel-viewport:focus-visible { outline:2px solid var(--primary-ink); outline-offset:2px; border-radius:5px; }
 .total-carousel-viewport.is-dragging { cursor:grabbing; user-select:none; scroll-snap-type:none; }
+.total-carousel-viewport.is-programmatic { scroll-snap-type:none; scroll-behavior:auto; }
 .total-carousel-track { display:flex; width:100%; }
 .total-carousel-slide { min-width:0; flex:0 0 100%; display:flex; flex-direction:column; align-items:flex-start; gap:3px; scroll-snap-align:start; }
 .total-carousel-scope { max-width:100%; overflow:hidden; color:var(--primary-ink); font-size:11px; font-weight:600; text-overflow:ellipsis; white-space:nowrap; }
