@@ -237,8 +237,30 @@ form .form-actions { margin-top:4px; } .field-error { color:var(--danger); font-
  .profile-settings { gap:12px; }
  .profile-section { padding:18px; }
  .profile-form-actions>.button { flex:1 1 145px; }
- .group-heading { flex-wrap:wrap; }
- .group-heading>div { flex-basis:100%; }
- .group-heading>.button { width:auto; padding:11px 17px; }
- .group-heading>.button .desktop-label { display:inline; }
+}
+
+/* Keep the per-person completion count beside its compact bulk status action. */
+.group-heading-copy { min-width:0; }
+.group-heading-copy h2 { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.group-bulk-controls { display:flex; align-items:center; gap:8px; margin-left:auto; flex-shrink:0; }
+.group-added-count { display:inline-flex; align-items:center; justify-content:center; padding:5px 7px; border-radius:7px; background:var(--surface-muted); color:var(--muted); font-size:11px; font-weight:600; white-space:nowrap; }
+.group-bulk-status { gap:6px; margin-left:0; min-height:36px; padding:7px 10px; white-space:nowrap; }
+.group-bulk-label { white-space:nowrap; }
+@media (max-width:767px) {
+ .group-heading { display:grid; grid-template-columns:30px minmax(0,1fr) auto; align-items:center; padding:16px 14px; gap:10px; }
+ .group-heading>.avatar { grid-column:1; grid-row:1; width:30px; height:30px; }
+ .group-heading-copy { display:contents; }
+ .group-heading-copy h2 { grid-column:2; grid-row:1; min-width:0; font-size:17px; }
+ .group-heading-copy p { grid-column:2 / 4; grid-row:2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; }
+ .group-bulk-controls { grid-column:3; grid-row:1; gap:5px; margin:0; }
+ .group-added-count { padding:5px 6px; font-size:10px; }
+ .group-bulk-status { width:auto; min-width:0; max-width:none; min-height:36px; margin:0; padding:7px 8px; font-size:11px; line-height:1.1; }
+}
+@media (max-width:359px) {
+ .group-heading { grid-template-columns:28px minmax(0,1fr) auto; padding-inline:10px; gap:8px; }
+ .group-heading>.avatar { width:28px; height:28px; }
+ .group-bulk-controls { gap:4px; }
+ .group-added-count { padding:4px 5px; font-size:9px; }
+ .group-bulk-status { width:34px; min-width:34px; height:34px; min-height:34px; padding:7px; }
+ .group-bulk-label { display:none; }
 }
