@@ -94,3 +94,42 @@ Aceite executa criação de conta/credencial, vínculo, seleção do workspace e
 Validação local: lint, typecheck, 106 testes Vitest, 19 cenários da suíte Chromium completa e um cenário adicional de recuperação de sessão (20 no total), build e migrações repetidas em bases vazias/existentes passaram. Capturas de Meu grupo desktop/mobile e formulário mobile foram inspecionadas.
 
 Migrações novas: `0001_bouncy_inertia.sql` e `0002_loose_shocker.sql`; aplicar antes de publicar o código. Não houve migração de produção nem deploy. Detalhes: [plano e decisões](18_WORKSPACE_INVITATIONS_PLAN.md).
+
+## Rateio colaborativo de itens — 7 de outubro de 2026
+
+Implementada a extensão faseada descrita em [plano de rateio](20_PURCHASE_COST_SHARING_PLAN.md). Um item continua sendo uma única linha física da compra, com quantidade, subtotal, favorito de origem e estado compartilhado. A tabela `purchase_item_participants` guarda as pessoas e a ordem estável da distribuição; `sharing_mode` guarda divisão igual, percentual em pontos-base ou valor fixo em centavos. A migração `0003_simple_exiles.sql` adiciona o modo, cria a relação e converte cada item existente em uma participação igual para o `person_id` original, sem alterar preço, quantidade ou estado.
+
+### Compatibilidade e arquivos
+
+- As leituras autenticadas de `getData()` e `ClientData` agora expõem `participants` com a parcela calculada. `personId` continua sendo o espelho legado do primeiro participante, usado por consumidores antigos durante a transição.
+- A validação de escrita aceita temporariamente o contrato pessoal antigo (`personId`) e o normaliza para uma participação; a forma nova recebe `sharingMode` e `participants`. O importador legado também grava item e participação na mesma transação.
+- Os cálculos ficam em `src/lib/domain/cost-sharing.ts`; autorização de membros, persistência transacional e finalização protegida ficam em `src/lib/domain/authorization.ts` e `purchase-services.ts`.
+- A tela de item permite selecionar várias pessoas, escolher um dos três modos e revisar a prévia. Grupos pessoais mostram a parcela, unidades pessoais e produtos compartilhados; o total e a quantidade física da compra contam o produto uma vez. Ações de status e remoção continuam globais para todos os participantes. Histórico reaproveita os mesmos dados em modo somente leitura.
+- `PROMPT_ONE_SHOT.md`, regras, fluxos, esquema, critérios de aceite, plano de teste e decisões foram atualizados. Cobertura nova está em `tests/unit/cost-sharing.test.ts`, `tests/integration/purchase-sharing-migration.test.ts`, `tests/integration/purchase-sharing-concurrency.test.ts` e `tests/e2e/purchase.spec.ts`.
+
+Todas as mutações de compra e a finalização são serializadas no processo e executadas dentro de transações libSQL. A verificação de compra editável ocorre dentro da transação. Isso também evita a falha de concorrência observada no adapter SQLite local quando uma transação `BEGIN IMMEDIATE` encontra outra escrita em andamento. O teste com duas conexões cobre rollback entre item e participantes e a disputa entre edição e finalização.
+
+### Verificações desta implementação
+
+| Verificação | Resultado |
+| --- | --- |
+| `npm run typecheck` | Passou |
+| `npm run lint` | Passou |
+| `npm test` | **127 testes passaram**, 14 arquivos |
+| `npm run build` | Passou |
+| `npm exec -- playwright test` | **22 cenários Chromium passaram**, incluindo os três modos e layout responsivo |
+| `TURSO_DATABASE_URL=file:/private/tmp/loti-cost-sharing-final-20261007-r1.sqlite npm run db:migrate` | Passou em banco local isolado vazio |
+| Mesmo alvo com `npm run db:verify` | Passou; 12 tabelas de esquema verificadas |
+| Migração de esquema anterior e composição financeira | Passaram nos testes de integração |
+
+Não foi aplicada migração em produção nem feito deploy.
+
+### Publicação e retorno de versão
+
+Antes da publicação, fazer snapshot/backup do banco e aplicar `npm run db:migrate` explicitamente ao alvo aprovado; depois publicar o código e executar um smoke test autenticado de leitura, criação, edição, rateio e histórico. Não use o banco de produção como alvo local nem deixe a URL de `.env` escolher o destino acidentalmente.
+
+Depois de criar itens compartilhados, uma versão antiga da aplicação lê apenas o espelho `personId` e atribui a compra somente à primeira pessoa. Não faça rollback cego do código. Se for necessário voltar, coordene restauração de banco e aplicação usando o mesmo ponto de backup; dados compartilhados criados depois dele exigem migração/correção para frente ou recuperação explícita antes da restauração.
+
+### Reparo do banco local após validação de runtime
+
+Em 7 de outubro, a rota `/purchase` retornou 500 porque o `data/loti.sqlite` local ainda tinha o esquema anterior: `purchase_items` não possuía `sharing_mode` e a tabela `purchase_item_participants` não existia. Confirmei que esse era o alvo local configurado pelo app e apliquei nele, explicitamente, `TURSO_DATABASE_URL=file:./data/loti.sqlite npm run db:migrate`. `npm run db:verify` passou com 12 tabelas. A chamada de domínio `getData()` que aparecia na stack passou para os cinco membros; os oito itens retornaram com participações. Nenhum banco remoto foi consultado ou alterado.

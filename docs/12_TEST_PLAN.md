@@ -25,6 +25,8 @@ At minimum cover:
 - subtotal;
 - person total;
 - purchase total.
+- equal, percentage and fixed allocations; exact-cent closure, deterministic largest-remainder rounding, null/zero pricing and safe limits;
+- personal share totals distinct from physical total/units/progress.
 
 ### Progress
 
@@ -62,6 +64,9 @@ Cover:
 - finalized purchase mutation rejection;
 - collection deletion preserving favorites;
 - quantity/price constraints.
+- additive participant backfill for active and finalized purchases;
+- atomic item + participant creation/update/removal, membership validation, global status, finalized immutability and concurrent finalization;
+- legacy input compatibility and rejection of ambiguous mixed payloads.
 
 ## E2E — Playwright
 
@@ -100,6 +105,10 @@ At mobile viewport, verify rounded island navigates Favorites/Purchase/History a
 ### E2E 10: Purchase controls
 
 Verify the draggable estimated-total carousel shows all, pending, and added values; favorite actions reflect active-purchase membership and reset after removal; desktop purchase actions are separate; and the floating plus appears only when the heading add action leaves the viewport.
+
+### E2E 11: Purchase cost sharing
+
+Create one R$ 300 physical item shared by three members; verify each sees R$ 100, the overall purchase remains R$ 300/one unit, all groups share one status, and deletion applies to everyone. Repeat with percentage and fixed-value allocations and test invalid closure/revision behavior. Follow the BRL examples and exact expected values in [the phased cost-sharing plan](20_PURCHASE_COST_SHARING_PLAN.md).
 
 ## Visual/responsive QA
 

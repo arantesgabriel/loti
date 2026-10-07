@@ -30,7 +30,7 @@ flowchart LR
     F -->|optionally organized in| C[Collection]
     F -->|can be copied into| PI[Purchase Item]
     P[Purchase] --> PI
-    U -->|person receiving item| PI
+    U -->|person sharing item cost| PI
     W[Workspace] --> U
     W --> F
     W --> P
@@ -54,7 +54,7 @@ One collective buying round, e.g. `Compra Outubro/2026`. Only one can be active 
 
 ### Purchase Item
 
-A concrete item inside a purchase. It is an immutable-history-friendly snapshot of product data and may originate from a favorite or be created manually.
+A concrete physical item inside a purchase. It is an immutable-history-friendly snapshot of product data and may originate from a favorite or be created manually. One item may have cost shares assigned to several workspace members; it remains one physical row and one quantity in the purchase. See [the purchase cost-sharing plan](20_PURCHASE_COST_SHARING_PLAN.md).
 
 ## Primary product loop
 

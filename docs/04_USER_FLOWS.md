@@ -112,13 +112,13 @@ Block if another purchase is already active.
 
 ## 14. Favorite → purchase
 
-`Favorite → + Compra → person defaults to favorite owner → variation/quantity/price prefilled → adjust if needed → Add`
+`Favorite → + Compra → owner defaults as sole participant → optionally select participants and split mode → preview personal shares and physical subtotal → Add`
 
 Creates a snapshot.
 
 ## 15. Add manual purchase item
 
-`Compra atual → + Adicionar item → Manual → name + URL + person → optional details → Add`
+`Compra atual → + Adicionar item → Manual → name + URL + participant(s) → optional equal/percentage/fixed split → preview → Add`
 
 Does not create a favorite.
 
@@ -130,19 +130,19 @@ One at a time in MVP. The picker uses the same compact category markers.
 
 ## 17. View active purchase
 
-`Compra atual → overall summary → progress → person summaries → items grouped by person`
+`Compra atual → physical overall summary and progress → personal share summaries → the same physical items grouped under every selected participant`
 
 Immediately answer: what, for whom, how much, and what is still pending. Category markers remain smaller and quieter than the pending/added control.
 
 ## 18. Edit purchase item
 
-`Open active item → Edit → change person/variation/quantity/price/notes → Save → derived totals refresh`
+`Open active item → Edit → change participants/mode/shares and variation/quantity/price/notes → preview → Save → derived totals refresh for everyone`
 
 Does not mutate favorite.
 
 ## 19. Change quantity
 
-`Edit item → quantity 1 → N → save → subtotal/person/overall/progress recompute`
+`Edit item → quantity 1 → N → save → physical subtotal, allocated shares and overall progress recompute; fixed shares need review`
 
 ## 20. Item without price
 

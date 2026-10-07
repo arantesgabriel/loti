@@ -13,7 +13,7 @@
 6. Every workspace member can view every favorite in that workspace.
 7. Only the favorite owner can edit or delete that favorite.
 8. Any workspace member can add another member's favorite to the active purchase.
-9. The person receiving the purchase item defaults to the favorite owner, but can be changed.
+9. The favorite owner is the default sole cost participant when the favorite is added to a purchase; participants can be changed while the purchase is active.
 10. Favorite price is optional and is only a reference price.
 11. Favorite variation/model and notes are optional.
 12. Quantity does not exist on a favorite.
@@ -49,18 +49,25 @@
 33. Manual purchase items do not automatically become favorites.
 34. When a favorite is added to a purchase, copy snapshot fields into the purchase item: name, URL, platform, category key (stored in `visual_key`), variation and suggested price.
 35. `source_favorite_id` is optional metadata, never the source of historical display data.
-36. `person_id` means “who this item is for”, not “who created it”.
+36. A purchase item is one physical product row. Its cost participants are a separate relation; they are not extra units or duplicate products.
 37. `created_by` records who performed the action.
 38. Quantity is required, integer, and minimum 1.
 39. Unit price may be null while preparing the purchase.
 40. A null price must display as `Preço pendente`, never `R$ 0,00`.
 41. Subtotal is derived: `quantity * unit_price_cents`; never persist subtotal.
 42. Purchase total is derived from items with prices; never persist total.
-43. Person total is derived from that person's priced items.
+43. Personal totals sum allocated priced shares, not full item subtotals. `purchase_items.person_id` is retained as a compatibility mirror of the first participant by stable allocation order and does not determine recipients, access, filtering or totals.
 44. The UI must indicate how many items/units remain without price when totals are incomplete.
 45. Different variations are separate purchase-item rows.
 46. Same person + same variation may use quantity > 1.
 47. Do not automatically merge duplicate purchase-item rows.
+48. Each item has one of `equal`, `percentage`, or `fixed` allocation modes. A one-person item normalizes to `equal`.
+49. Participants are selected explicitly from the purchase workspace, unique per item, and kept in a persisted stable order. New members do not join existing items automatically.
+50. Equal shares divide subtotal cents with remainder cents assigned in participant order. Percentage shares use integer basis points summing to 10,000 and the largest-remainder method. Fixed shares use nonnegative integer cents summing exactly to the priced subtotal.
+51. Equal and percentage allocations preserve participants when price is null and show shares as pending. Fixed allocations require a known price. Zero price and zero shares are valid.
+52. Item edits, removals and HubBuy status are global to the single item. Marking all items for one person also changes shared items they participate in. Removing the product removes all its participations; removing one participant only edits the allocation.
+53. Changing participants in unequal modes requires an explicit recomposition. Changing price or quantity recalculates equal/percentage shares; fixed shares must be revised to match the new subtotal.
+54. Item and participant writes are atomic, and all purchase mutations remain prohibited after finalization. The complete rounding and input contract is in [the cost-sharing plan](20_PURCHASE_COST_SHARING_PLAN.md).
 
 ## HubBuy transfer status
 

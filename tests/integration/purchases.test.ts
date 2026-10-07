@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { eq } from "drizzle-orm";
-import { purchaseItems, purchases } from "@/lib/db/schema";
+import { purchaseItems, purchaseItemParticipants, purchases } from "@/lib/db/schema";
+import { personSummary, purchaseSummary } from "@/lib/domain/money";
 import { fixture, favorite, type Fixture } from "./helpers";
 
 let f: Fixture;
@@ -30,6 +31,8 @@ describe("purchase rules", () => {
     const { saved } = await snapshot();
     expect(saved.name).toBe(favorite.name); expect(saved.url).toBe(favorite.url);
     expect(saved.createdBy).toBe("bob"); expect(saved.personId).toBe("alice"); expect(saved.quantity).toBe(3);
+    const participants = await f.db.select().from(purchaseItemParticipants).where(eq(purchaseItemParticipants.purchaseItemId, saved.id)).all();
+    expect(participants).toEqual([{ purchaseItemId: saved.id, personId: "alice", allocationOrder: 0, percentageBps: null, amountCents: null }]);
   });
   it("editing favorite never alters snapshot", async () => {
     const { saved, fav } = await snapshot();
@@ -56,6 +59,26 @@ describe("purchase rules", () => {
   it("does not merge duplicate rows", async () => {
     await f.alice.savePurchase({ name: "Manual" }); await f.alice.saveManualItem(item); await f.alice.saveManualItem(item);
     expect((await f.alice.getData()).items).toHaveLength(2);
+  });
+  it("shows one shared item in each selected member group without multiplying physical totals", async () => {
+    await f.alice.savePurchase({ name: "Compartilhada" });
+    const shared = await f.alice.saveManualItem({
+      name: "RAM", url: "https://example.com/ram", quantity: 1, unitPriceCents: 30_000, sharingMode: "equal",
+      participants: [{ personId: "alice" }, { personId: "bob" }],
+    });
+    const items = (await f.alice.getData()).items;
+    const visible = items.find(row => row.id === shared?.id)!;
+    expect(visible.personId).toBe("alice");
+    expect(visible.participants.map(p => [p.personId, p.shareCents])).toEqual([["alice", 15_000], ["bob", 15_000]]);
+    expect(purchaseSummary(items)).toMatchObject({ totalCents: 30_000, units: 1, people: 2 });
+    expect(personSummary(items, "bob")).toMatchObject({ totalCents: 15_000, units: 1, sharedItems: 1, personalUnits: 0 });
+  });
+  it("rejects ambiguous old and shared item input formats", async () => {
+    await f.alice.savePurchase({ name: "Compartilhada" });
+    await expect(f.alice.saveManualItem({ ...item, sharingMode: "equal", participants: [{ personId: "bob" }] })).rejects.toThrow();
+    await expect(f.alice.saveManualItem({ name: item.name, url: item.url, quantity: 1, unitPriceCents: 100, sharingMode: "percentage", participants: [{ personId: "bob", percentageBps: 9_900 }, { personId: "alice", percentageBps: 0 }] })).rejects.toThrow(/100%/);
+    await expect(f.alice.saveManualItem({ name: item.name, url: item.url, quantity: 1, unitPriceCents: null, sharingMode: "fixed", participants: [{ personId: "bob", amountCents: 0 }, { personId: "alice", amountCents: 0 }] })).rejects.toThrow(/preço/);
+    expect(await f.db.select().from(purchaseItems)).toHaveLength(0);
   });
   it("requires target membership", async () => {
     await f.alice.savePurchase({ name: "Manual" });
@@ -90,6 +113,14 @@ describe("purchase rules", () => {
     expect((await f.bob.getData()).items.map(row => row.cartStatus)).toEqual(["pending", "pending"]);
     await expect(f.outsider.setPersonItemsStatus(purchase!.id, { personId: "outsider", status: "added" })).rejects.toThrow();
     expect(first!.purchaseId).toBe(second!.purchaseId);
+  });
+  it("updates a shared item's one cart status from any participating person's group", async () => {
+    const purchase = await f.alice.savePurchase({ name: "Shared checklist" });
+    const shared = await f.alice.saveManualItem({ name: "RAM", url: "https://example.com/ram", quantity: 1, unitPriceCents: 30_000, sharingMode: "equal", participants: [{ personId: "alice" }, { personId: "bob" }] });
+    await f.bob.setPersonItemsStatus(purchase!.id, { personId: "bob", status: "added" });
+    const item = (await f.alice.getData()).items.find(row => row.id === shared?.id);
+    expect(item?.cartStatus).toBe("added");
+    expect((await f.bob.getData()).items.filter(row => row.id === shared?.id)).toHaveLength(1);
   });
   it("requires explicit confirmation but allows pending/no-price finalization", async () => {
     const { p } = await snapshot(); await f.alice.saveManualItem({ ...item, unitPriceCents: null });

@@ -40,9 +40,19 @@ export const purchaseItems = sqliteTable("purchase_items", {
   id: text("id").primaryKey(), purchaseId: text("purchase_id").notNull().references(() => purchases.id), sourceFavoriteId: text("source_favorite_id").references(() => favorites.id, { onDelete: "set null" }),
   personId: text("person_id").notNull().references(() => user.id), createdBy: text("created_by").notNull().references(() => user.id),
   name: text("name").notNull(), url: text("url").notNull(), platform: text("platform").notNull(), visualKey: text("visual_key").notNull(), variant: text("variant"), notes: text("notes"),
-  quantity: integer("quantity").notNull().default(1), unitPriceCents: integer("unit_price_cents"), cartStatus: text("cart_status", { enum: ["pending", "added"] }).notNull().default("pending"), ...dates(),
+  quantity: integer("quantity").notNull().default(1), unitPriceCents: integer("unit_price_cents"), sharingMode: text("sharing_mode", { enum: ["equal", "percentage", "fixed"] }).notNull().default("equal"), cartStatus: text("cart_status", { enum: ["pending", "added"] }).notNull().default("pending"), ...dates(),
 }, t => [index("item_purchase_idx").on(t.purchaseId), index("item_person_idx").on(t.personId), index("item_cart_idx").on(t.cartStatus), index("item_source_idx").on(t.sourceFavoriteId),
-  check("item_quantity", sql`typeof(${t.quantity}) = 'integer' AND ${t.quantity} >= 1`), check("item_price", sql`${t.unitPriceCents} IS NULL OR (typeof(${t.unitPriceCents}) = 'integer' AND ${t.unitPriceCents} >= 0)`), check("item_status", sql`${t.cartStatus} IN ('pending','added')`)]);
+  check("item_quantity", sql`typeof(${t.quantity}) = 'integer' AND ${t.quantity} >= 1`), check("item_price", sql`${t.unitPriceCents} IS NULL OR (typeof(${t.unitPriceCents}) = 'integer' AND ${t.unitPriceCents} >= 0)`), check("item_status", sql`${t.cartStatus} IN ('pending','added')`), check("item_sharing_mode", sql`${t.sharingMode} IN ('equal','percentage','fixed')`)]);
+export const purchaseItemParticipants = sqliteTable("purchase_item_participants", {
+  purchaseItemId: text("purchase_item_id").notNull().references(() => purchaseItems.id, { onDelete: "cascade" }),
+  personId: text("person_id").notNull().references(() => user.id),
+  allocationOrder: integer("allocation_order").notNull(),
+  percentageBps: integer("percentage_bps"), amountCents: integer("amount_cents"),
+}, t => [primaryKey({ columns: [t.purchaseItemId, t.personId] }), uniqueIndex("item_participant_order_idx").on(t.purchaseItemId, t.allocationOrder), index("item_participant_person_idx").on(t.personId),
+  check("item_participant_order", sql`typeof(${t.allocationOrder}) = 'integer' AND ${t.allocationOrder} >= 0`),
+  check("item_participant_percentage", sql`${t.percentageBps} IS NULL OR (typeof(${t.percentageBps}) = 'integer' AND ${t.percentageBps} BETWEEN 0 AND 10000)`),
+  check("item_participant_amount", sql`${t.amountCents} IS NULL OR (typeof(${t.amountCents}) = 'integer' AND ${t.amountCents} BETWEEN 0 AND 1000000000000)`),
+  check("item_participant_one_value", sql`${t.percentageBps} IS NULL OR ${t.amountCents} IS NULL`)]);
 export const userPreferences = sqliteTable("user_preferences", {
   userId: text("user_id").primaryKey().references(() => user.id), favoritesView: text("favorites_view", { enum: ["list", "cards"] }).notNull().default("list"), activeWorkspaceId: text("active_workspace_id").references(() => workspaces.id), ...dates(),
 }, t => [check("preference_view", sql`${t.favoritesView} IN ('list','cards')`)]);

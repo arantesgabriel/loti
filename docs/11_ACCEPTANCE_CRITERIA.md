@@ -78,6 +78,15 @@
 - Todos/Pendentes/Adicionados filters work;
 - Purchase status filters use equal, compact selection cards with the full sliding selection animation and preserve their filtering behavior;
 - progress is quantity-weighted.
+- one physical row can appear under all selected participants without multiplying the overall total, physical units or progress;
+- each member sees their allocated cost and a clear shared-item indicator;
+- equal, percentage (basis points summing to 100%), and fixed-cent allocations close exactly, including deterministic remainder cents;
+- participant selection is explicit, unique, and limited to workspace members; personal items default to the favorite owner or current user;
+- invalid compositions and fixed shares without a price fail server-side without partial writes;
+- status changes from one participant's group affect all groups; bulk status includes shared items and the UI explains this effect;
+- deleting a shared product confirms that it is removed for everyone, while removing one participant preserves the physical item;
+- price/quantity and participant edits follow the recomposition rules in [the cost-sharing plan](20_PURCHASE_COST_SHARING_PLAN.md);
+- old purchases backfill to one equal participant and historical shares remain immutable after finalization.
 
 ## Finalization/history
 

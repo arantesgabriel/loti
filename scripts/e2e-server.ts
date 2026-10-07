@@ -26,6 +26,6 @@ try {
   await invitationFixture.db.insert(workspaceMembers).values([{ workspaceId, userId: qa.id, createdAt }, { workspaceId, userId: reader.id, createdAt }]).run();
 } finally { invitationFixture.client.close(); }
 
-const child = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "--webpack", "-p", "3100"], { stdio: "inherit", env: process.env });
+const child = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "--webpack", "-H", "localhost", "-p", "3100"], { stdio: "inherit", env: process.env });
 for (const signal of ["SIGINT", "SIGTERM"] as const) process.on(signal, () => child.kill(signal));
 child.on("exit", code => process.exit(code ?? 0));

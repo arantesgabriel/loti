@@ -53,7 +53,7 @@ Build Loti, a private collaborative responsive web application for a small group
 - organizes favorites into personal collections;
 - moves favorites into one shared active purchase without copy/paste;
 - supports manual purchase-only items;
-- calculates purchase totals by person and overall;
+- calculates allocated purchase cost by person while counting each physical product and quantity once in overall totals;
 - tracks whether each purchase item has already been added to the real HubBuy cart;
 - finalizes purchases into immutable history;
 - replaces the existing spreadsheet workflow.
@@ -216,10 +216,11 @@ All members may add another person's favorite to the active purchase.
 ### Purchase item
 
 - may originate from favorite or be manual;
-- `person_id` means who item is for;
+- remains one physical product row even when its cost is split across several selected workspace members;
+- participants and equal/percentage/fixed cost shares are stored separately; `person_id` is a compatibility mirror only;
 - `created_by` means who added it;
 - favorite→purchase creates a snapshot of display fields;
-- default person = favorite owner, editable;
+- default sole participant = favorite owner for a favorite, current user for a manual item;
 - default quantity = 1;
 - default price/variation may copy favorite values, editable;
 - price may be null;
@@ -234,7 +235,7 @@ All members may add another person's favorite to the active purchase.
 
 Purchase total = sum of priced subtotals.
 
-Person total = sum of that person's priced subtotals.
+Overall totals, units and progress count each physical item once. A person's total sums allocated shares, not full shared-item subtotals.
 
 Progress is quantity-weighted:
 
@@ -836,3 +837,7 @@ Members may invite people through Profile → Meu grupo → email → generated 
 ## Profile editing — approved extension
 
 Profile lets each authenticated workspace member change their complete display name (`user.name`) and separately change their password. Name accepts 1–200 characters after edge trimming; email is read-only. Password change requires current password, 12–128 character new password, exact confirmation, rejects immediate reuse, and forces revocation of all other sessions while preserving the current device through Better Auth's rotated cookie. Enforce session, membership, trusted origin and strict self-only payload rules in hooks on the native `/update-user` and `/change-password` endpoints. Keep the three existing primary destinations and Meu grupo/logout actions. No migration, email change, avatar upload, recovery flow or historical identity snapshots. See `docs/19_PROFILE_EDITING_PLAN.md`.
+
+## Purchase cost sharing — approved extension
+
+One physical purchase item may appear in every participant's personal group, with their allocated share. Support equal, percentage in basis points, and fixed-cent modes; keep quantity physical and HubBuy status global. Item plus participant writes are atomic, workspace membership is checked server-side, and finalized purchases remain immutable. Preserve old `personId` input during transition and treat `purchase_items.person_id` as a first-participant compatibility mirror only. The approved defaults for arithmetic, edits, null prices and history are in `docs/20_PURCHASE_COST_SHARING_PLAN.md`.

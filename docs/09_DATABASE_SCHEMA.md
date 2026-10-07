@@ -115,6 +115,8 @@ WHERE status = 'active';
 
 ## `purchase_items`
 
+Migration `0003_*` adds `sharing_mode` (`equal`, `percentage`, `fixed`, default `equal`). The required `person_id` column remains as a compatibility mirror of the first participant by persisted allocation order; it is not used to determine recipients, access, filters or totals after this migration.
+
 | Column | Type | Rules |
 |---|---|---|
 | id | text PK | generated |
@@ -143,6 +145,12 @@ Indexes:
 - cart_status
 - source_favorite_id
 
+## `purchase_item_participants`
+
+One row per selected member and physical purchase item. The composite primary key `(purchase_item_id, person_id)` prevents duplicates; `(purchase_item_id, allocation_order)` is also unique. `purchase_item_id` references the item with cascade delete, and `person_id` references `user`. Membership is validated by the purchase domain service.
+
+Fields: `purchase_item_id` (text FK, cascade with item), `person_id` (text FK user), `allocation_order` (integer `>= 0`, stable rounding order), `percentage_bps` (nullable integer from 0–10,000), and `amount_cents` (nullable nonnegative integer). The two financial fields cannot both be set. Domain validation requires mode-appropriate fields and an exact total. Equal shares need neither field. A migration backfills each existing row as one equal participant without changing the item, including finalized history. See [the cost-sharing plan](20_PURCHASE_COST_SHARING_PLAN.md).
+
 ## `user_preferences`
 
 | Column | Type | Rules |
@@ -159,13 +167,13 @@ Default view may be `list` because it is closest to the primary Bookmark App ref
 Never persist these:
 
 - purchase item subtotal;
-- person total;
+- person total or derived equal/percentage allocation;
 - purchase total;
 - purchase unit count;
 - purchase progress;
 - number of no-price items.
 
-Derive them from `purchase_items`.
+Derive physical values once from `purchase_items`; derive participant shares from the physical subtotal and `purchase_item_participants`. Fixed share amounts are explicit inputs and are persisted.
 
 ## Category persistence
 

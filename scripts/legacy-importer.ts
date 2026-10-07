@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 import type { AppDatabase } from "../src/lib/db/connection";
-import { user, collections, favorites, purchases, purchaseItems, workspaceMembers } from "../src/lib/db/schema";
+import { user, collections, favorites, purchases, purchaseItems, purchaseItemParticipants, workspaceMembers } from "../src/lib/db/schema";
 import { readLegacy, type LegacyIssue } from "./legacy-reader";
 import { buildCanonicalProductKey, detectPlatform } from "../src/lib/domain/urls";
 import { resolveProductCategory } from "../src/lib/domain/categories";
@@ -80,7 +80,10 @@ export async function importLegacy(db: AppDatabase, path: string, input: unknown
           report.warnings.push({ sheet: row.sheet, address: row.address, reason: "Compra já importada e finalizada; linha nova não foi acrescentada ao histórico." }); continue;
         }
         report.created.items++;
-        if (!dryRun) await tx.insert(purchaseItems).values({ id, purchaseId, sourceFavoriteId: null, createdBy: creatorId, ...value, platform: detectPlatform(row.url), visualKey: resolveProductCategory(row.name), cartStatus: mapping.purchases[row.sheet].cartStatus, createdAt: new Date(mapping.purchases[row.sheet].createdAt), updatedAt: now }).run();
+        if (!dryRun) {
+          await tx.insert(purchaseItems).values({ id, purchaseId, sourceFavoriteId: null, createdBy: creatorId, name: value.name, url: value.url, personId: value.personId, sharingMode: value.sharingMode, variant: value.variant, notes: value.notes, quantity: value.quantity, unitPriceCents: value.unitPriceCents, platform: detectPlatform(row.url), visualKey: resolveProductCategory(row.name), cartStatus: mapping.purchases[row.sheet].cartStatus, createdAt: new Date(mapping.purchases[row.sheet].createdAt), updatedAt: now }).run();
+          await tx.insert(purchaseItemParticipants).values(value.participants.map((participant, allocationOrder) => ({ purchaseItemId: id, personId: participant.personId, allocationOrder, percentageBps: null, amountCents: null }))).run();
+        }
       } else {
         if (await tx.select().from(favorites).where(eq(favorites.id, id)).get()) { report.existing.favorites++; continue; }
         let collectionId: string | null = null;

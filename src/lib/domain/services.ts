@@ -1,12 +1,13 @@
 import { desc, eq, inArray } from "drizzle-orm";
 import type { AppDatabase } from "../db/connection";
-import { collections, favorites, purchases, purchaseItems, userPreferences, user, workspaceMembers } from "../db/schema";
+import { collections, favorites, purchases, purchaseItems, purchaseItemParticipants, userPreferences, user, workspaceMembers } from "../db/schema";
 import { authorization } from "./authorization";
 import { favoriteInput, collectionInput } from "./validation";
 import { buildCanonicalProductKey, detectPlatform } from "./urls";
 import { resolveProductCategory } from "./categories";
 import { DomainError } from "./errors";
 import { purchaseServices } from "./purchase-services";
+import { allocateItemCost } from "./cost-sharing";
 
 export function createServices(db: AppDatabase, userId: string) {
   const guard = authorization(db, userId);
@@ -20,7 +21,7 @@ export function createServices(db: AppDatabase, userId: string) {
   async function getData() {
     const { workspaceId } = await guard.requireWorkspaceMember();
     const allPurchases = await db.select().from(purchases).where(eq(purchases.workspaceId, workspaceId)).orderBy(desc(purchases.createdAt)).all();
-    const [currentUser, members, favoriteRows, collectionRows, items, preference] = await Promise.all([
+    const [currentUser, members, favoriteRows, collectionRows, itemRows, preference] = await Promise.all([
       db.select({ id: user.id, name: user.name, email: user.email }).from(user).where(eq(user.id, userId)).get(),
       db.select({ id: user.id, name: user.name }).from(user).innerJoin(workspaceMembers, eq(user.id, workspaceMembers.userId)).where(eq(workspaceMembers.workspaceId, workspaceId)).orderBy(user.name).all(),
       db.select().from(favorites).where(eq(favorites.workspaceId, workspaceId)).orderBy(desc(favorites.createdAt)).all(),
@@ -29,6 +30,14 @@ export function createServices(db: AppDatabase, userId: string) {
       db.select().from(userPreferences).where(eq(userPreferences.userId, userId)).get(),
     ]);
     if (!currentUser) throw new DomainError("Conta não encontrada.", 401);
+    const participantRows = itemRows.length ? await db.select().from(purchaseItemParticipants).where(inArray(purchaseItemParticipants.purchaseItemId, itemRows.map(item => item.id))).orderBy(purchaseItemParticipants.purchaseItemId, purchaseItemParticipants.allocationOrder).all() : [];
+    const participantMap = new Map<string, typeof participantRows>();
+    for (const participant of participantRows) participantMap.set(participant.purchaseItemId, [...(participantMap.get(participant.purchaseItemId) ?? []), participant]);
+    const items = itemRows.map(item => {
+      const stored = participantMap.get(item.id) ?? [{ purchaseItemId: item.id, personId: item.personId, allocationOrder: 0, percentageBps: null, amountCents: null }];
+      const allocation = allocateItemCost(item, stored.map(p => ({ personId: p.personId, percentageBps: p.percentageBps, amountCents: p.amountCents })));
+      return { ...item, participants: stored.map((participant, index) => ({ ...participant, shareCents: allocation.participants[index].amountCents })) };
+    });
     return {
       currentUser, members, favorites: favoriteRows, collections: collectionRows,
       purchases: allPurchases, items, view: preference?.favoritesView ?? "list" as "list" | "cards",

@@ -45,12 +45,14 @@
 - optional HubBuy account/email metadata;
 - add favorite to active purchase;
 - add manual item directly to purchase;
-- choose person receiving the item;
+- choose one or more workspace members who share the item's cost;
+- split item cost equally, by percentages, or by fixed currency amounts;
 - variation/model per purchase item;
 - quantity >= 1;
 - optional unit price;
 - automatic subtotal and totals;
 - total by person;
+- show each participant's allocated share while counting the physical item and its quantity once in overall purchase totals;
 - total overall;
 - unit count;
 - group items by person;
@@ -97,6 +99,7 @@ Do not implement any of the following in the MVP:
 - taxes/customs calculations;
 - RMB/BRL exchange conversion;
 - inventory/resale management;
+- cost sharing does not record ownership transfers, payments, revenue, profit or stock;
 - payments/Pix between members;
 - notifications;
 - chat/comments;
