@@ -22,14 +22,29 @@ test("mobile island, responsive layouts, category markers and keyboard dialogs",
       await page.getByRole("button", { name: view, exact: true }).click();
       await expect(page.getByTestId("favorites-content")).toHaveClass(view === "Cards" ? /cards/ : /list/);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      const favoritesBrowser = page.locator(".favorites-browser");
+      const hasHorizontalOverflow = await favoritesBrowser.evaluate(element => element.scrollWidth > element.clientWidth + 2);
+      await expect(favoritesBrowser).toHaveCSS("scrollbar-width", "none");
+      if (hasHorizontalOverflow) {
+        await expect(favoritesBrowser).toHaveClass(/has-fade-right/);
+        await expect(favoritesBrowser).not.toHaveClass(/has-fade-left/);
+        await favoritesBrowser.evaluate(element => { element.scrollLeft = element.scrollWidth; });
+        await expect(favoritesBrowser).toHaveClass(/has-fade-left/);
+        await expect(favoritesBrowser).not.toHaveClass(/has-fade-right/);
+        await favoritesBrowser.evaluate(element => { element.scrollLeft = 0; });
+        await expect(favoritesBrowser).toHaveClass(/has-fade-right/);
+        await expect(favoritesBrowser).not.toHaveClass(/has-fade-left/);
+      }
       for (const row of await page.getByTestId("favorite").all()) {
         await expect(row.locator("img")).toHaveCount(0);
         const marker = row.locator(".category-marker");
         await expect(marker).toHaveAttribute("aria-hidden", "true");
         const box = await marker.boundingBox();
-        expect(box!.width).toBeLessThanOrEqual(view === "Cards" ? (width < 768 ? 28 : 36) : 30);
-        expect(box!.height).toBeLessThanOrEqual(36);
+        expect(box!.width).toBeLessThanOrEqual(view === "Cards" ? (width <= 420 ? 36 : width < 768 ? 40 : 42) : width < 768 ? 26 : 30);
+        expect(box!.height).toBeLessThanOrEqual(view === "Cards" ? (width <= 420 ? 36 : width < 768 ? 40 : 42) : 36);
         expect((await row.locator(".favorite-title").boundingBox())!.width).toBeGreaterThan(box!.width);
+        await expect(row.locator(".favorite-card-heading")).toHaveCount(view === "Cards" ? 1 : 0);
+        if (view === "Cards") await expect(row.locator(".favorite-actions>.button")).toHaveCount(2);
       }
       if (width === 390 || width === 1440) {
         await expect(page.locator("[data-sonner-toast]")).toHaveCount(0, { timeout: 6000 });
@@ -43,7 +58,19 @@ test("mobile island, responsive layouts, category markers and keyboard dialogs",
       await expect(row.locator("img")).toHaveCount(0);
       const marker = await row.locator(".category-marker").boundingBox();
       const status = await row.locator(".cart-toggle").boundingBox();
-      expect(marker!.width).toBeLessThan(status!.width);
+      if (width < 768) {
+        expect(marker!.width).toBeLessThanOrEqual(width <= 359 ? 36 : 40);
+        expect(status!.width).toBeLessThan(marker!.width);
+        await expect(row.locator(".purchase-row-main")).toBeVisible();
+        await expect(row.locator(".purchase-row-cost .item-unit-price")).toBeVisible();
+        await expect(row.locator(".purchase-mobile-status")).toBeVisible();
+        await expect(row.locator(".purchase-row-actions")).toBeVisible();
+        const rowBox = await row.boundingBox();
+        const costBox = await row.locator(".purchase-row-cost").boundingBox();
+        const actionsBox = await row.locator(".purchase-row-actions").boundingBox();
+        expect(costBox!.x + costBox!.width).toBeLessThanOrEqual(actionsBox!.x + 1);
+        expect(actionsBox!.x + actionsBox!.width).toBeLessThanOrEqual(rowBox!.x + rowBox!.width);
+      } else expect(marker!.width).toBeLessThan(status!.width);
     }
     if (width === 390 || width === 1440) { await expect(page.locator("[data-sonner-toast]")).toHaveCount(0, { timeout: 6000 }); await page.screenshot({ path: `artifacts/qa/purchase-${width === 390 ? "mobile" : "desktop"}.png`, fullPage: true }); }
     if (width < 768) { await page.getByRole("navigation", { name: "Navegação móvel" }).getByRole("link", { name: "Histórico", exact: true }).click(); await expect(page.getByRole("heading", { name: "Histórico", exact: true })).toBeVisible(); }

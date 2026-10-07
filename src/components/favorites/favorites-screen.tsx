@@ -19,6 +19,7 @@ export function FavoritesScreen() {
   const [tab, setTab] = useState<"all" | "mine">("all"), [search, setSearch] = useState(""), [person, setPerson] = useState(""), [platform, setPlatform] = useState(""), [qc, setQc] = useState(""), [price, setPrice] = useState(""), [filters, setFilters] = useState(false);
   const browserRef = useRef<HTMLDivElement>(null), optionRefs = useRef(new Map<string, HTMLButtonElement>());
   const [selection, setSelection] = useState<{ left: number; width: number } | null>(null);
+  const [scrollFades, setScrollFades] = useState({ left: false, right: false });
   const [editor, setEditor] = useState<ClientFavorite | "new" | null>(null), [detail, setDetail] = useState<ClientFavorite | null>(null), [remove, setRemove] = useState<ClientFavorite | null>(null);
   const [collectionEditor, setCollectionEditor] = useState<ClientData["collections"][number] | "new" | null>(null);
   const collectionId = params.get("collection") ?? "", queryNewCollection = params.get("newCollection") === "1";
@@ -30,13 +31,31 @@ export function FavoritesScreen() {
   const results = data.favorites.filter(f => (tab !== "mine" || f.ownerId === data.currentUser.id) && (!person || f.ownerId === person) && (!platform || f.platform === platform) && (!qc || f.qcStatus === qc) && (!collectionId || (collectionId === "none" ? !f.collectionId : f.collectionId === collectionId)) && (!price || (price === "yes" ? f.priceCents !== null : f.priceCents === null)) && (!search || normalizeText([f.name, f.variant, f.notes].join(" ")).includes(normalizeText(search))));
   const otherMembers = data.members.filter(member => member.id !== data.currentUser.id);
   useLayoutEffect(() => {
-    const updateSelection = () => {
+    const updateBrowser = () => {
+      const browser = browserRef.current;
       const selected = optionRefs.current.get(activeOption);
-      if (selected) setSelection({ left: selected.offsetLeft, width: selected.offsetWidth });
+      if (selected) setSelection(current => current?.left === selected.offsetLeft && current.width === selected.offsetWidth ? current : { left: selected.offsetLeft, width: selected.offsetWidth });
+      if (browser) {
+        const maxScroll = browser.scrollWidth - browser.clientWidth;
+        const left = browser.scrollLeft > 2;
+        const right = maxScroll - browser.scrollLeft > 2;
+        setScrollFades(current => current.left === left && current.right === right ? current : { left, right });
+      }
     };
-    updateSelection();
-    window.addEventListener("resize", updateSelection);
-    return () => window.removeEventListener("resize", updateSelection);
+    const browser = browserRef.current;
+    const resizeObserver = new ResizeObserver(updateBrowser);
+    if (browser) {
+      resizeObserver.observe(browser);
+      Array.from(browser.children).forEach(child => resizeObserver.observe(child));
+      browser.addEventListener("scroll", updateBrowser, { passive: true });
+    }
+    updateBrowser();
+    window.addEventListener("resize", updateBrowser);
+    return () => {
+      resizeObserver.disconnect();
+      browser?.removeEventListener("scroll", updateBrowser);
+      window.removeEventListener("resize", updateBrowser);
+    };
   }, [activeOption, otherMembers.length]);
   function chooseCollection(id: string) { router.replace(id ? `/favorites?collection=${encodeURIComponent(id)}` : "/favorites", { scroll: false }); }
   function closeCollection() { setCollectionEditor(null); if (queryNewCollection) router.replace("/favorites", { scroll: false }); }
@@ -47,7 +66,7 @@ export function FavoritesScreen() {
   }
   return <><div className="page-heading"><div><h1>Favoritos</h1><p className="muted">Produtos salvos pelo grupo, organizados do seu jeito.</p></div><Button className="favorites-heading-add" onClick={() => setEditor("new")} aria-label="Novo favorito"><Plus size={19}/><span className="desktop-label">Novo favorito</span></Button></div>
   <Button className="favorites-mobile-add" onClick={() => setEditor("new")} aria-label="Novo favorito"><Plus size={24}/></Button>
-  <div className="favorites-browser" ref={browserRef} role="group" aria-label="Filtrar favoritos por pessoa" style={{ "--selection-left": `${selection?.left ?? 0}px`, "--selection-width": `${selection?.width ?? 0}px` } as React.CSSProperties}>
+  <div className={`favorites-browser${scrollFades.left ? " has-fade-left" : ""}${scrollFades.right ? " has-fade-right" : ""}`} ref={browserRef} role="group" aria-label="Filtrar favoritos por pessoa" style={{ "--selection-left": `${selection?.left ?? 0}px`, "--selection-width": `${selection?.width ?? 0}px` } as React.CSSProperties}>
     <span className={`favorite-selection${selection ? " ready" : ""}`} aria-hidden="true" />
     <div className="favorite-modes" role="group" aria-label="Favoritos">
       <button ref={element => { if (element) optionRefs.current.set("all", element); else optionRefs.current.delete("all"); }} type="button" className={`favorite-mode${activeOption === "all" ? " selected" : ""}`} aria-pressed={activeOption === "all"} onClick={() => { setTab("all"); setPerson(""); }}><Users size={17}/><span>Todos</span><small>{data.favorites.length}</small></button>
@@ -56,7 +75,7 @@ export function FavoritesScreen() {
     {otherMembers.map(member => {
     const count = data.favorites.filter(f => f.ownerId === member.id).length;
     const selected = person === member.id;
-    return <button key={member.id} ref={element => { if (element) optionRefs.current.set(member.id, element); else optionRefs.current.delete(member.id); }} type="button" className={`favorite-person${selected ? " selected" : ""}${member.id === otherMembers[0]?.id ? " first-person-option" : ""}`} aria-pressed={selected} onClick={() => { setTab("all"); setPerson(selected ? "" : member.id); }}>
+    return <button key={member.id} ref={element => { if (element) optionRefs.current.set(member.id, element); else optionRefs.current.delete(member.id); }} type="button" className={`favorite-person${selected ? " selected" : ""}`} aria-pressed={selected} onClick={() => { setTab("all"); setPerson(selected ? "" : member.id); }}>
       <Avatar name={member.name}/><span className="favorite-person-copy"><strong>{member.name}</strong><span>{count} {count === 1 ? "favorito" : "favoritos"}</span></span>
     </button>;
   })}</div>
@@ -64,7 +83,21 @@ export function FavoritesScreen() {
   {filters && <div className="filter-panel"><label>Pessoa<select value={person} onChange={e => { setPerson(e.target.value); if (e.target.value) setTab("all"); }}><option value="">Todas as pessoas</option>{data.members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></label><label>Plataforma<select value={platform} onChange={e => setPlatform(e.target.value)}><option value="">Todas as plataformas</option>{platforms.map(p => <option key={p} value={p}>{platformLabels[p]}</option>)}</select></label><label>Coleção<select value={collectionId} onChange={e => chooseCollection(e.target.value)}><option value="">Todas as coleções</option><option value="none">Sem coleção</option>{data.collections.map(c => <option key={c.id} value={c.id}>{c.name} · {data.members.find(m => m.id === c.ownerId)?.name}</option>)}</select></label><label>QC<select value={qc} onChange={e => setQc(e.target.value)}><option value="">Todas as avaliações</option>{Object.entries(qcLabels).map(([v, name]) => <option key={v} value={v}>{name}</option>)}</select></label><label>Preço<select value={price} onChange={e => setPrice(e.target.value)}><option value="">Todos</option><option value="yes">Com preço</option><option value="no">Sem preço</option></select></label><Button variant="ghost" onClick={() => { setPerson(""); setPlatform(""); setQc(""); setPrice(""); chooseCollection(""); }}>Limpar filtros</Button></div>}
   <div className="mobile-collections"><label>Coleção<select aria-label="Filtrar por coleção" value={collectionId} onChange={e => chooseCollection(e.target.value)}><option value="">Todas as coleções</option><option value="none">Sem coleção</option><optgroup label="Minhas coleções">{data.collections.filter(c => c.ownerId === data.currentUser.id).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</optgroup>{data.members.filter(m => m.id !== data.currentUser.id && data.collections.some(c => c.ownerId === m.id)).map(m => <optgroup key={m.id} label={`De ${m.name}`}>{data.collections.filter(c => c.ownerId === m.id).map(c => <option key={c.id} value={c.id}>{c.name} · {m.name}</option>)}</optgroup>)}</select></label><Button variant="outline" size="icon" aria-label="Nova coleção" onClick={() => setCollectionEditor("new")}><Plus size={18}/></Button></div>
   {collection && <div className="collection-heading"><h2><Folder size={18}/>{collection.name}</h2><span className="muted">{collection.ownerId === data.currentUser.id ? "Sua coleção" : `Coleção de ${data.members.find(m => m.id === collection.ownerId)?.name}`}</span>{collection.ownerId === data.currentUser.id && <Button size="sm" variant="ghost" onClick={() => setCollectionEditor(collection)}><Pencil size={14}/>Editar coleção</Button>}</div>}
-  <div className={`favorites-content ${data.view}`} data-testid="favorites-content">{results.map(f => { const owner = data.members.find(m => m.id === f.ownerId)!; return <article key={f.id} className="favorite" data-testid="favorite"><ProductCategoryMarker visualKey={f.visualKey}/><div className="favorite-info"><button className="favorite-title" title={f.name} onClick={() => setDetail(f)}>{f.name}</button><p className="favorite-variant muted">{f.variant || "Sem variação"}</p><div className="favorite-price">{f.priceCents === null ? <span className="favorite-price-missing">Preço não informado</span> : formatMoney(f.priceCents)}</div><div className="favorite-meta"><span className={`owner ${f.ownerId === data.currentUser.id ? "owner-self" : ""}`}><Avatar name={owner.name}/><span>{f.ownerId === data.currentUser.id ? "Seu favorito" : `De ${owner.name}`}</span></span><PlatformBadge platform={f.platform}/></div></div><div className="favorite-actions"><OpenProduct url={f.url}/>{purchaseAction(f)}{f.ownerId === data.currentUser.id && <Button size="icon" variant="ghost" className="favorite-edit-action" aria-label={`Editar ${f.name}`} title="Editar favorito" onClick={() => setEditor(f)}><Pencil size={17}/></Button>}</div></article>; })}</div>
+  <div className={`favorites-content ${data.view}`} data-testid="favorites-content">{results.map(f => {
+    const owner = data.members.find(m => m.id === f.ownerId)!;
+    const isOwner = f.ownerId === data.currentUser.id;
+    const ownerLabel = isOwner ? "Seu favorito" : `De ${owner.name}`;
+    const editAction = isOwner && <Button size="icon" variant="outline" className="favorite-icon-action" aria-label={`Editar ${f.name}`} title="Editar favorito" onClick={() => setEditor(f)}><Pencil size={18}/></Button>;
+    const deleteAction = isOwner && <Button size="icon" variant="outline" className="favorite-icon-action favorite-delete-action danger-text" aria-label={`Excluir ${f.name}`} title="Excluir favorito" onClick={() => setRemove(f)}><Trash2 size={18}/></Button>;
+    const price = f.priceCents === null ? <span className="favorite-price-missing">Preço não informado</span> : formatMoney(f.priceCents);
+    if (data.view === "cards") return <article key={f.id} className="favorite favorite-card" data-testid="favorite">
+      <div className="favorite-card-heading"><ProductCategoryMarker visualKey={f.visualKey}/><div className="favorite-heading-copy"><button className="favorite-title" title={f.name} onClick={() => setDetail(f)}>{f.name}</button><p className="favorite-variant muted">{f.variant || "Sem variação"}</p></div><div className="favorite-card-tools"><PlatformBadge platform={f.platform}/>{editAction}{deleteAction}</div></div>
+      <div className="favorite-meta"><span className={`owner ${isOwner ? "owner-self" : ""}`}><Avatar name={owner.name}/><span>{ownerLabel}</span></span></div>
+      <div className="favorite-price">{price}</div>
+      <div className="favorite-actions"><OpenProduct url={f.url}/>{purchaseAction(f)}</div>
+    </article>;
+    return <article key={f.id} className="favorite" data-testid="favorite"><ProductCategoryMarker visualKey={f.visualKey}/><div className="favorite-info"><button className="favorite-title" title={f.name} onClick={() => setDetail(f)}>{f.name}</button><p className="favorite-variant muted">{f.variant || "Sem variação"}</p><div className="favorite-price">{price}</div><div className="favorite-meta"><span className={`owner ${isOwner ? "owner-self" : ""}`}><Avatar name={owner.name}/><span>{ownerLabel}</span></span><PlatformBadge platform={f.platform}/></div></div><div className="favorite-actions"><OpenProduct url={f.url}/>{purchaseAction(f)}{editAction}{deleteAction}</div></article>;
+  })}</div>
   {!results.length && <EmptyState icon={Bookmark} title={data.favorites.length ? "Nenhum favorito por aqui" : "Seu próximo achado começa aqui"} description={data.favorites.length ? "Ajuste a busca ou os filtros para encontrar o que procura." : "Salve um produto pelo link e compartilhe seus achados com o grupo."}>{!data.favorites.length && <Button onClick={() => setEditor("new")}><Plus size={18}/>Novo favorito</Button>}</EmptyState>}
   {editor && <FavoriteEditor key={editor === "new" ? "new" : editor.id} favorite={editor === "new" ? undefined : editor} onClose={() => setEditor(null)} onExisting={f => { setEditor(null); setDetail(f); }}/>} 
   {detail && <Surface sheet title="Detalhes do favorito" open onOpenChange={v => { if (!v) setDetail(null); }}><ProductCategoryMarker visualKey={detail.visualKey}/><div className="detail-heading"><h2>{detail.name}</h2><PlatformBadge platform={detail.platform}/></div><p className="muted">{detail.variant}</p><p className="detail-price">{detail.priceCents === null ? "Sem preço" : formatMoney(detail.priceCents)}</p><div className="detail-meta"><span className="owner"><Avatar name={data.members.find(m => m.id === detail.ownerId)?.name ?? ""}/>{data.members.find(m => m.id === detail.ownerId)?.name}</span><span className={`badge qc-${detail.qcStatus}`}>{qcLabels[detail.qcStatus]}</span></div>{detail.collectionId && <p className="muted">Coleção: {data.collections.find(c => c.id === detail.collectionId)?.name}</p>}{detail.notes && <div className="detail-notes"><h3>Notas</h3><p>{detail.notes}</p></div>}<div className="detail-actions"><OpenProduct url={detail.url}/>{purchaseAction(detail)}</div>{detail.ownerId === data.currentUser.id && <div className="detail-owner-actions"><Button variant="outline" onClick={() => { setEditor(detail); setDetail(null); }}><Pencil size={16}/>Editar favorito</Button><Button variant="ghost" className="danger-text" onClick={() => setRemove(detail)}><Trash2 size={16}/>Excluir favorito</Button></div>}</Surface>}
