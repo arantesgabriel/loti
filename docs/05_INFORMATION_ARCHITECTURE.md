@@ -2,11 +2,12 @@
 
 ## Primary navigation
 
-Loti has only three operational areas:
+The original MVP has three operational areas. The approved Packages and costs extension adds a fourth:
 
 1. **Favoritos**
 2. **Compra atual**
 3. **Histórico**
+4. **Pacotes e custos** (between Compra atual and Histórico)
 
 Profile/logout is accessed from the user avatar. Collections live inside Favorites.
 
@@ -19,6 +20,8 @@ Profile/logout is accessed from the user avatar. Collections live inside Favorit
 /purchase
 /history
 /history/[purchaseId]
+/packages
+/packages/[trackingId]
 /profile
 ```
 
@@ -37,7 +40,7 @@ Creation/editing should generally stay in context via Sheet/Drawer/Dialog instea
 
 - no sidebar;
 - page header + avatar/menu;
-- compact floating rounded bottom navigation island with exactly three items: Favoritos, Compra, Histórico;
+- compact floating rounded bottom navigation island with four items: Favoritos, Compra, Pacotes e custos, Histórico;
 - only the active destination shows its short label; the full selected fill moves between destinations;
 - on desktop, show separate `Editar compra` and `Finalizar compra` buttons beside `Adicionar item`; retain the three-dot options menu on mobile;
 - on desktop, show a lower-right floating `+` only while the heading `Adicionar item` action is outside the viewport; hide it again when that action returns into view. Mobile keeps its separate floating `+` action;
@@ -52,6 +55,8 @@ Creation/editing should generally stay in context via Sheet/Drawer/Dialog instea
 - Active Purchase
 - History
 - Historical Purchase Detail
+- Packages and costs list
+- Purchase cost follow-up detail
 - Profile
 
 Profile contains a read-only account email, complete display-name form, independent expandable password-change form, Meu grupo access and logout. It adds no route or primary navigation item.
@@ -165,3 +170,10 @@ Must cover:
 - `/invite/[token]`: public page accessible only with a valid invitation; outside the membership-protected app layout.
 - Login accepts only a validated internal `/invite/<token>` return destination.
 - Primary desktop/mobile navigation retains Favorites, Purchase and History; Group is not a fourth primary destination.
+
+## Packages and costs surfaces
+
+- `/packages`: open/closed follow-ups with purchase name, package count, partial/final total and outstanding values.
+- `/packages/[trackingId]`: product cost table, product charge, package list/details, personal allocations, closure and reopening.
+- Existing finalized purchases start follow-up explicitly from History; new finalizations create it atomically.
+- Fee editing and payment confirmation use existing accessible Sheets/Surfaces; mobile lists stay compact and never force page-wide horizontal scrolling. See [screen contract](21_PACKAGES_AND_COSTS_PLAN.md#7-experiência-de-uso).

@@ -70,6 +70,10 @@ flowchart LR
     H --> I[Create next purchase]
 ```
 
+### Approved extension: Packages and costs
+
+After finalization, members may continue a separate financial follow-up for effective item prices, China and Brazil freight, customs charges, payment fees and package allocation. Closing or reopening this follow-up never reopens or changes the finalized purchase snapshot. See [the approved phased plan](21_PACKAGES_AND_COSTS_PLAN.md).
+
 ## UX principles
 
 1. **Faster than a spreadsheet.** Common actions must require very few steps.

@@ -1,18 +1,30 @@
 "use client";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Copy, Plus, Share2, Users } from "lucide-react";
 import { toast } from "sonner";
 import type { GroupData } from "@/lib/domain/invitations";
 import { Avatar } from "./shared";
 import { Button } from "./ui/button";
 import { Confirm, Surface } from "./ui/surface";
+import { basisPointsFromPercent, costRequest, percentInputFromBasisPoints } from "./packages/package-cost-client";
 const date = (value: string) => new Date(value).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 export function GroupScreen({ initialData }: { initialData: GroupData }) {
   const [data, setData] = useState(initialData), [open, setOpen] = useState(false), [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [link, setLink] = useState(""), [expires, setExpires] = useState("");
   const [action, setAction] = useState<{ id: string; email: string; kind: "issue" | "revoke" } | null>(null);
+  const [pixPercent, setPixPercent] = useState("1.00"), [cardPercent, setCardPercent] = useState("5.00"), [settingsBusy, setSettingsBusy] = useState(false), [settingsError, setSettingsError] = useState("");
+  useEffect(() => { let active = true; void costRequest<{ pixBps: number; cardBps: number }>("/api/cost-settings").then(result => { if (!active || !result.ok || !result.data) return; setPixPercent(percentInputFromBasisPoints(result.data.pixBps)); setCardPercent(percentInputFromBasisPoints(result.data.cardBps)); }); return () => { active = false; }; }, []);
   const pending = data.invitations.filter(i => i.state === "pending");
+  async function saveCostSettings(event: React.FormEvent) {
+    event.preventDefault(); setSettingsBusy(true); setSettingsError("");
+    const pixBps = basisPointsFromPercent(pixPercent), cardBps = basisPointsFromPercent(cardPercent);
+    if (pixBps === null || cardBps === null) { setSettingsError("Informe percentuais entre 0% e 100%, com até duas casas decimais."); setSettingsBusy(false); return; }
+    const result = await costRequest<{ pixBps: number; cardBps: number }>("/api/cost-settings", { pixBps, cardBps });
+    if (result.ok && result.data) { setPixPercent(percentInputFromBasisPoints(result.data.pixBps)); setCardPercent(percentInputFromBasisPoints(result.data.cardBps)); toast.success("Taxas padrão atualizadas"); }
+    else setSettingsError(result.error ?? "Não foi possível salvar as taxas.");
+    setSettingsBusy(false);
+  }
   async function mutate(body: unknown) {
     setBusy(true); setError("");
     try {
@@ -41,6 +53,7 @@ export function GroupScreen({ initialData }: { initialData: GroupData }) {
     <Link className="group-back" href="/profile">← Seu perfil</Link>
     <div className="page-heading group-heading"><div><h1>Meu grupo</h1><p className="muted">{data.workspace?.name} · Favoritos e compras compartilhados.</p></div><Button aria-label="Convidar pessoa" onClick={() => { setError(""); setOpen(true); }}><Plus size={18}/><span className="desktop-label">Convidar pessoa</span></Button></div>
     <section className="group-section" aria-labelledby="members-heading"><h2 id="members-heading"><Users size={20}/>Membros ({data.members.length})</h2><p className="muted">Todos podem convidar pessoas e colaborar na compra atual.</p><ul className="group-list">{data.members.map(m => <li key={m.id}><Avatar name={m.name}/><div><strong>{m.name}</strong><p className="muted">{m.email}</p></div></li>)}</ul></section>
+    <section className="group-section cost-settings-section" aria-labelledby="cost-settings-heading"><h2 id="cost-settings-heading">Taxas padrão de pagamento</h2><p className="muted">Usadas ao escolher Pix ou cartão em uma cobrança. Alterar estes padrões não muda pagamentos já registrados.</p><form className="cost-settings-form" onSubmit={event => void saveCostSettings(event)}><label>Pix (%)<input type="number" min="0" max="100" step="0.01" value={pixPercent} onChange={event => setPixPercent(event.target.value)} /></label><label>Cartão (%)<input type="number" min="0" max="100" step="0.01" value={cardPercent} onChange={event => setCardPercent(event.target.value)} /></label><div className="cost-settings-actions">{settingsError && <p className="error" role="alert">{settingsError}</p>}<Button type="submit" disabled={settingsBusy}>{settingsBusy ? "Salvando…" : "Salvar taxas"}</Button></div></form></section>
     <section className="group-section" aria-labelledby="invites-heading"><h2 id="invites-heading">Convites pendentes ({pending.length})</h2><p className="muted">O link aparece ao gerar o convite. Para compartilhá-lo novamente, gere um novo link.</p>
       {pending.length ? <ul className="group-list">{pending.map(i => <li key={i.id}><div className="group-person"><strong>{i.email}</strong><p className="muted">Por {data.members.find(m => m.id === i.createdBy)?.name ?? "membro do grupo"} · Válido até {date(i.expiresAt)}</p></div><div className="group-actions"><Button variant="outline" disabled={busy} onClick={() => { setError(""); setAction({ id: i.id, email: i.email, kind: "issue" }); }}>Gerar novo link</Button><Button variant="ghost" disabled={busy} onClick={() => { setError(""); setAction({ id: i.id, email: i.email, kind: "revoke" }); }}>Revogar</Button></div></li>)}</ul> : <p className="group-empty muted">Nenhum convite pendente. Convide alguém para organizar favoritos e comprar com o grupo.</p>}
     </section>

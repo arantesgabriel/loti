@@ -63,7 +63,7 @@ Do **not** revive discarded architecture decisions such as Supabase, Neon, Postg
 - Mobile navigation uses the approved rounded floating island.
 - Collections live inside Favorites, not as a primary app section.
 - No dashboard.
-- No scraping, AI runtime generation, tracking, freight, tax, exchange-rate logic, chat, notifications, realtime, PWA, native app, or marketplace integration in the MVP.
+- No scraping, AI runtime generation, automatic tracking, exchange-rate logic, chat, notifications, realtime, PWA, native app, or marketplace integration in the MVP. The user-approved manual Pacotes e custos extension is the sole exception to the original MVP exclusions for freight/tax values and manual logistics states; its scope is limited to `docs/21_PACKAGES_AND_COSTS_PLAN.md`.
 
 ## Mockup branding note
 

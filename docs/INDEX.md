@@ -26,7 +26,9 @@ This folder is the canonical product and engineering handoff for the Loti MVP.
 | `19_PROFILE_EDITING_PLAN.md` | Profile editing implementation, server rules, sessions, validation and deployment status |
 | `20_PURCHASE_COST_SHARING_PLAN.md` | Phased handoff for equal, percentage and fixed-value sharing of purchase item costs |
 | `21_PACKAGES_AND_COSTS_PLAN.md` | Phased handoff for packages, manual costs, transaction fees, payments and financial closure |
+| `22_PACKAGES_AND_COSTS_UX_REFACTOR_PLAN.md` | Phased refactoring of package costs with progressive disclosure, accurate partial totals and responsive editing |
 | `design/REFERENCES.md` | Figma and palette inspiration URLs |
+| `design/PACKAGES_AND_COSTS_REFERENCES.md` | Approved A/B/C/D visual references, images and acceptance for Pacotes e custos |
 | `design/MOCKUPS.md` | Approved visual references and interpretation notes |
 
 The root `PROMPT_ONE_SHOT.md` is the final implementation prompt.

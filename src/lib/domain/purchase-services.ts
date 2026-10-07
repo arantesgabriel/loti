@@ -8,18 +8,8 @@ import { detectPlatform } from "./urls";
 import { resolveProductCategory } from "./categories";
 import { DomainError } from "./errors";
 import { allocateItemCost, type CostParticipant, type SharingMode } from "./cost-sharing";
-
-// The local libSQL adapter fails fast when two BEGIN IMMEDIATE writers overlap.
-let purchaseTransactionTail: Promise<void> = Promise.resolve();
-
-async function serializePurchaseTransaction<T>(operation: () => Promise<T>): Promise<T> {
-  const previous = purchaseTransactionTail;
-  let release!: () => void;
-  purchaseTransactionTail = new Promise(resolve => { release = resolve; });
-  await previous;
-  try { return await operation(); }
-  finally { release(); }
-}
+import { serializeDomainTransaction } from "./transaction-lock";
+import { initializePurchaseCosts } from "./purchase-cost-initialization";
 
 function isUniqueConstraint(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
@@ -47,7 +37,7 @@ export function purchaseServices(db: AppDatabase, userId: string) {
   type PurchaseTransaction = Parameters<Parameters<AppDatabase["transaction"]>[0]>[0];
 
   async function transact<T>(operation: (tx: PurchaseTransaction) => Promise<T>): Promise<T> {
-    return serializePurchaseTransaction(() => db.transaction(operation));
+    return serializeDomainTransaction(() => db.transaction(operation));
   }
 
   async function savePurchase(input: unknown, id?: string) {
@@ -157,6 +147,7 @@ export function purchaseServices(db: AppDatabase, userId: string) {
       await authorization(tx, userId).requireEditablePurchase(id);
       const finalized = await tx.update(purchases).set({ status: "finalized", finalizedAt: new Date() }).where(and(eq(purchases.id, id), eq(purchases.status, "active"))).returning().get();
       if (!finalized) throw new DomainError("Esta compra foi finalizada e não pode ser alterada.", 409);
+      await initializePurchaseCosts(tx, finalized, userId);
       return finalized;
     });
   }

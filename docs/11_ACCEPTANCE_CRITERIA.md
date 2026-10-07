@@ -105,7 +105,7 @@
 - desktop structure follows Bookmark App-inspired approved mockups;
 - components/interactions reflect Clozy-inspired polish without visual clutter;
 - mobile uses a compact rounded floating navigation island with a full-size animated selection fill; only the active destination shows its label;
-- navigation has only Favorites/Purchase/History primary destinations;
+- navigation has Favorites, Purchase, Pacotes e custos and History; the selected package label is `Pacotes`;
 - cards/list toggle exists;
 - operational item surfaces display no real product photos, listing thumbnails or large 3D product renders;
 - operational item lists/cards, purchase/history and drawers use consistent small functional category markers;
@@ -161,4 +161,14 @@ Exact implementation contract: [17_LOGIN_ORBITAL_MOTION.md](17_LOGIN_ORBITAL_MOT
 - Expired/revoked/replaced/used links cannot grant access.
 - Concurrent acceptance/revocation/issuance cannot produce duplicate accounts, links or memberships.
 - Failed membership creation rolls back account, credential and invitation consumption.
-- Public signup, authorization of existing data and the three primary navigation destinations remain intact.
+- Public signup and authorization of existing data remain intact; the approved four primary navigation destinations are preserved.
+
+## Packages and costs extension
+
+- Finalizing a new purchase atomically creates one open cost follow-up; old final purchases require an explicit, idempotent start action.
+- Effective price and China freight changes affect only the cost follow-up, not purchase/favorite snapshots. Null, zero and no-charge values remain distinct.
+- Product charge uses one method per purchase; Brazil freight uses a method per package; customs never has a transaction fee. Stored fees retain their captured basis points when workspace defaults change.
+- Package allocations cover each physical unit at most once; freight/customs and proportional fees distribute exactly in cents by stable order. Overall units/costs count each product once; personal totals show shares.
+- Payment, value and manual logistics states are separately labeled. Unknown bases cannot be marked paid; no-charge customs resolves without a payment.
+- Only fully allocated follow-ups with resolved product bases and all charges paid/no-charge may close. Closed follow-ups reject every mutation until a confirmed, reasoned reopening. Purchase history remains read-only throughout.
+- Desktop uses the financial table and package list; payment Surfaces preview base + fee + total; mobile uses compact rows and contextual details with no horizontal page overflow.

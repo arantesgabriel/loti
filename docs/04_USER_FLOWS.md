@@ -182,6 +182,12 @@ Reuse current-purchase visual language and small category markers but remove all
 
 `Purchase finalized → Compra atual empty state → Criar próxima compra → cycle restarts`
 
+## 27. Packages and costs
+
+`Finalize purchase → financial follow-up opens automatically → correct effective prices/China freight → allocate units to packages → enter Brazil freight/customs → confirm external charges manually → close financial follow-up`.
+
+Older finalized purchases expose an explicit **Iniciar custos** action. A follow-up may remain open after the next purchase starts. Closing it leaves purchase history immutable; a correction uses **Reabrir custos**, confirmation and a reason. Full states, allocation and payment rules: [Packages and costs plan](21_PACKAGES_AND_COSTS_PLAN.md).
+
 ## Mobile quick-save mental model
 
 `WhatsApp/Reddit/marketplace → copy URL → Loti → + → paste URL → name → save`

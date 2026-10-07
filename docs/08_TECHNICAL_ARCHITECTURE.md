@@ -86,6 +86,7 @@ src/
     (app)/favorites/
     (app)/purchase/
     (app)/history/
+    (app)/packages/
     (app)/profile/
   components/
     ui/
@@ -145,6 +146,15 @@ Prefer small domain-oriented actions/functions:
 - updatePurchaseItem
 - removePurchaseItem
 - togglePurchaseItemCartStatus
+
+### package costs
+
+- initializePurchaseCosts atomically with purchase finalization;
+- startCostTracking idempotently for a prior finalized purchase;
+- read and mutate cost follow-ups only after session/workspace authorization and revision checks;
+- keep money calculations pure and integer-cent based; validate package/item/user relationships inside the transaction.
+
+The complete entity, state, concurrency and endpoint contract is in [the Packages and costs plan](21_PACKAGES_AND_COSTS_PLAN.md). This extension does not alter the finalized purchase, favorites or cost-sharing snapshots and does not add a payment processor or tracking integration.
 
 ## Validation and money
 

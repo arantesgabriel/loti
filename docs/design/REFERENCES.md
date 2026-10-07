@@ -2,6 +2,12 @@
 
 These URLs are inspiration/reference sources, not dependencies. Do not hotlink assets from them and do not copy proprietary/licensed assets blindly. Recreate the approved Loti design system using our own components/tokens.
 
+## Pacotes e custos — approved 7 October 2026
+
+Approved combination: **A + B for the main structure, C for forms, D for mobile**. A is QuickSuite's financial table; B is Sohag Islam's shipment list; C is Monefy's input/financial-preview composition; D is Hamidatun Nisa's compact mobile expense/detail layout. Preserve Loti's current tokens, Geist, category markers, drawers and navigation; these references add no product capabilities.
+
+Source links, images, application boundaries and visual acceptance: [Pacotes e custos — approved references](PACKAGES_AND_COSTS_REFERENCES.md). Implementation contract: [phased plan](../21_PACKAGES_AND_COSTS_PLAN.md#7-experiência-de-uso).
+
 ## Primary structural reference — Bookmark App
 
 Figma Community:

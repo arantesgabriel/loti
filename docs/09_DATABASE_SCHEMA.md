@@ -192,3 +192,9 @@ The application service/action layer must reject mutations targeting a finalized
 `user_preferences.active_workspace_id`: nullable workspace FK selected by successful invitation acceptance. Central authorization still verifies membership before using it; existing rows use their prior membership context until selection occurs. Favorites view mode remains unchanged.
 
 Migrations: `0001_bouncy_inertia.sql` adds invitation/limiter tables; `0002_loose_shocker.sql` adds active workspace preference. Apply both before deploying invitation code.
+
+## Packages and costs extension
+
+The additive extension in [the phased plan](21_PACKAGES_AND_COSTS_PLAN.md) adds `workspace_cost_settings`, `purchase_cost_trackings`, `purchase_item_costs`, `purchase_cost_participants`, `purchase_packages`, `purchase_package_items`, `purchase_cost_charges`, and `purchase_cost_reopenings`. It keeps the original purchase/item rows immutable and stores all money and percentage weights as bounded integers. Only one tracking row exists per purchase; tracking revision and closed/open state guard its mutations. Legacy purchases receive no automatic tracking row from the migration: a member starts one explicitly. New finalizations create their row and initial cost/package snapshots in the finalization transaction.
+
+Cross-row invariants (package quantities, participant membership/weights, payment completeness and closure readiness) are checked in transactional domain services in addition to SQLite row constraints. Migrations remain explicit and must target a disposable local database for local validation; never run them in request code or against production as part of this implementation.

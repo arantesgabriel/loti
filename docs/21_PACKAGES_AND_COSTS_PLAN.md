@@ -4,6 +4,10 @@ Status: planejamento para implementação por outro agente. A criação deste pl
 
 Data: 07/10/2026. Base: auditoria estática do checkout e decisões do usuário nesta conversa. Estimativa: **9–14 dias úteis de desenvolvimento e validação**, supondo a base de rateio estabilizada; não é garantia de prazo.
 
+Decisão visual fechada pelo usuário em 07/10/2026: **A + B na estrutura principal, C nos formulários e D no mobile**. Referências, imagens e limites de aplicação: [Pacotes e custos — referências aprovadas](design/PACKAGES_AND_COSTS_REFERENCES.md). São referências estruturais; nenhuma imagem apresentada é um mockup final do Loti.
+
+Refinamento após auditoria da tela implementada: o [plano 22 de refatoração UX](22_PACKAGES_AND_COSTS_UX_REFACTOR_PLAN.md) orienta a hierarquia do detalhe, com resumo e três seções expansíveis. Usá-lo para a composição e descoberta de informações; este plano continua sendo a base das regras financeiras.
+
 ## 1. Objetivo
 
 Substituir o controle financeiro da antiga planilha: registrar progressivamente preço efetivo, frete até o armazém China, frete Brasil, taxa da Receita e taxa do método de pagamento; organizar os produtos em pacotes e mostrar o custo por produto e pessoa.
@@ -49,6 +53,7 @@ Criar a guia **Pacotes e custos**, acima de Histórico. Finalizar uma compra con
 | Colaboração | Qualquer membro edita; mostrar autor e data da última alteração |
 | Histórico antigo | Iniciar custos explicitamente a partir de compras existentes |
 | Nome | Pacotes e custos, entre Compra atual e Histórico |
+| Direção visual | A: tabela financeira; B: lista de pacotes; C: formulário com composição do total; D: lista e detalhamento mobile. Preservar identidade visual do Loti |
 
 A simplificação posterior sobre pagamentos substitui a resposta anterior que permitia agrupar produtos em pagamentos diferentes. Não implementar pagamento parcial por unidade, parcelamento ou múltiplos métodos para os produtos. O frete Brasil tem uma cobrança por pacote, com método próprio; isso foi mantido na consolidação da auditoria.
 
@@ -170,13 +175,37 @@ Todas as leituras e mutações exigem sessão/membership. Resolver o workspace p
 
 ## 7. Experiência de uso
 
-Lista: acompanhamentos abertos/encerrados, nome da compra, número de pacotes, total conhecido/parcial e pendências. Não adicionar dashboard.
+### 7.1 Direção visual aprovada
 
-Detalhe: visão geral da compra, pagamento dos produtos, lista de produtos/custos, pacotes e resumo por pessoa. No desktop, tabela com produto/variação, quantidade, valor efetivo, frete China, taxa de pagamento, frete Brasil, Receita e total. Método/percentual ficam junto à cobrança e no detalhamento.
+- **A — QuickSuite / Filllo:** alinhamento financeiro, linhas separadas discretamente, filtros com contagem e badges pequenos. Base da tabela de custos por produto e das listas financeiras.
+- **B — Order List Shipment Tracking / Sohag Islam:** linhas de pacotes espaçosas, informação principal/secundária e estado visível. Base da organização dos envios, com acesso ao detalhe de cada pacote.
+- **C — Monefy / Barly Design–Uxerflow:** separar campos editáveis da composição do total. Aplicar nos drawers de valores/pagamentos, com prévia antes de confirmar pago.
+- **D — Smart Split Bill / Hamidatun Nisa:** linhas compactas de produto, quantidade e valor, seguidas da composição financeira; listas de acompanhamentos e identificação dos participantes. Base da adaptação mobile.
 
-No mobile, resumo compacto por produto e formulário/detalhe em drawer; não comprimir todas as colunas da planilha numa tela estreita. Usar os marcadores SVG existentes, labels claros, teclado, erros acessíveis e estados pendentes explícitos. Preservar a ilha arredondada; nome curto mobile pode ser `Pacotes`, com label acessível completo `Pacotes e custos`.
+As quatro referências são complementares, não quatro temas alternativos. A seleção está encerrada: o executor não deve reiniciar a busca nem pedir ao usuário que escolha novamente. Consultar as imagens e os projetos em [referências aprovadas](design/PACKAGES_AND_COSTS_REFERENCES.md).
 
-Pacote: selecionar itens/quantidades, editar frete Brasil, escolher método, registrar Receita e pagamentos, alterar etapa manual. Resumo por pessoa inclui parcelas dos produtos e encargos, com acesso ao detalhamento; não confundir com saldo de dívida ou acerto entre pessoas.
+### 7.2 Estrutura das telas
+
+**Lista de acompanhamentos:** título Pacotes e custos, filtros Abertos/Encerrados com contagem e linhas com nome da compra, número de pacotes, total conhecido/parcial e pendências. Usar hierarquia A/B, sem métricas decorativas ou dashboard.
+
+**Detalhe da compra:** cabeçalho com nome, estado financeiro e ação pertinente; pagamento dos produtos; tabela de produtos/custos; lista de pacotes; resumo por pessoa. Separar esses grupos por títulos e espaço, evitando cartões dentro de cartões.
+
+**Tabela desktop (A):** produto/variação, quantidade, valor efetivo, frete China, taxa de pagamento, frete Brasil, Receita e total. Alinhar valores à direita, usar algarismos tabulares e distinguir valores unitários de totais da linha nos cabeçalhos/detalhes. Quantidade permanece explícita. Taxa de pagamento inclui ambas as etapas, discriminadas ao abrir o detalhe. Preço e frete China unitários são editados no drawer, com subtotal da linha visível. Método/percentual pertencem à cobrança.
+
+**Lista de pacotes (B):** nome, número de unidades, estado manual, frete e pendência financeira prioritária. Exemplo: `Pacote 1 · Roupas — 7 unidades — Frete R$ 550,00 — Enviado — Receita pendente`. Abrir o detalhe permite selecionar itens/quantidades, editar frete Brasil, escolher método, registrar Receita/pagamentos e alterar etapa manual. Exibir situação logística e financeira como dimensões distintas.
+
+**Drawer de cobrança (C):** campos rotulados, método e percentual capturado, bloco de composição com base/taxa/total e ação Marcar como pago após a prévia. Exemplo: `Frete R$ 500,00 + Pix 1% R$ 5,00 = R$ 505,00`. Usar a Surface existente; não criar editor e documento de fatura duplicados lado a lado. Detalhamento somente leitura para acompanhamento encerrado.
+
+**Mobile (D):** linhas compactas com produto, variação, quantidade, total/parcela pertinente e pendência. Mostrar componentes financeiros ao abrir o drawer, com rótulos à esquerda e valores à direita. Adaptar a lista de pacotes da mesma forma. Não espremer as oito colunas na tela nem exigir rolagem horizontal da página. Preservar a ilha arredondada com quatro destinos; rótulo curto `Pacotes`, label acessível `Pacotes e custos`.
+
+**Resumo pessoal:** avatar/iniciais, nome e total/parcela, com acesso aos componentes. Participantes não são unidades físicas adicionais. Não apresentar esses valores como saldo de dívida ou acerto entre pessoas.
+
+### 7.3 Identidade e estados
+
+- Reutilizar Geist, tokens atuais, fundo claro quente, superfícies brancas, laranja nas ações/seleções e bordas discretas. Preservar sidebar, controles, Surface/Confirm e marcadores SVG existentes.
+- Estados de valor (pendente/sem cobrança/informado), pagamento (pendente/pago) e logística (preparação/enviado/recebido) têm rótulos textuais próprios. Cor nunca é a única diferença. Total incompleto chama-se Total parcial.
+- Respeitar foco, teclado, erros acessíveis, contraste e reduced motion. Transições curtas e funcionais conforme `06_DESIGN.md`.
+- As referências não autorizam trocar a paleta, adicionar gráficos, saldo entre pessoas, cartões saturados, gradientes, fotos de produtos, mascotes, rastreamento ou novas funções.
 
 ## 8. Fases de implementação
 
@@ -187,6 +216,7 @@ Pacote: selecionar itens/quantidades, editar frete Brasil, escolher método, reg
 - Ler os documentos e mapear mudanças em andamento. Confirmar a versão estabilizada do rateio e migrações aplicadas em teste.
 - Atualizar `AGENTS.md`, `PROMPT_ONE_SHOT.md` e docs 01–05, 08–09, 11–12 e 15 apenas onde necessário para reconhecer esta extensão. Referenciar o plano, sem duplicar todos os detalhes ou desfazer o escopo anterior de outras funcionalidades.
 - Fixar entradas/leituras, estados, limites financeiros, revisão, cobrança conjunta e desempates. Documentar que parcelas fixas históricas não são reescritas.
+- Ler as quatro referências visuais aprovadas e a seção 7; registrar o mapeamento de cada uma às telas sem reabrir a decisão estética. Ajustar a antiga regra de três destinos para quatro nesta extensão.
 - Executar baseline de lint/typecheck/testes/build. Registrar e resolver impedimentos; não atribuir falhas anteriores à feature.
 
 **Aceite:** contratos e padrões conhecidos; nenhuma dúvida sobre linha versus unidade, custos versus histórico ou pagamento externo versus acerto pessoal.
@@ -199,6 +229,7 @@ Pacote: selecionar itens/quantidades, editar frete Brasil, escolher método, reg
 - Implementar início idempotente em compra antiga e criação atômica na finalização de nova compra.
 - Implementar autorização, revisão, leitura e edição de preço efetivo/frete China por unidade.
 - Criar lista/detalhe básicos e quarta guia; ligar Histórico ao acompanhamento.
+- Aplicar hierarquia A/B à lista, tabela A ao detalhe desktop e lista D no mobile, usando tokens existentes desde o primeiro incremento.
 - Provar isolamento, preservação de snapshot, nulo/zero, quantidade e rateio capturado.
 
 **Aceite:** editar Custos não muda favorito, compra ou preço original; finalizar libera próxima compra; iniciar duas vezes cria um só acompanhamento. App e jornadas anteriores passam.
@@ -211,6 +242,7 @@ Pacote: selecionar itens/quantidades, editar frete Brasil, escolher método, reg
 - Expor configuração em Meu grupo e seleção de método no pagamento conjunto.
 - Implementar cálculo puro por pesos, taxa sobre produtos + frete China, arredondamento e coluna de taxa.
 - Implementar marcação pago com total confirmado e invalidação quando editar valores pagos.
+- Construir o drawer C com composição base/taxa/total e ação de confirmação; no mobile, seguir detalhamento D.
 - Testar preço corrigido, valores fixos convertidos em proporções, taxa pendente, zero e mudança do padrão.
 
 **Aceite:** R$ 1.000 de base no Pix = R$ 10 de taxa e R$ 1.010 a pagar; padrão alterado não muda essa cobrança; todos os subtotais fecham em centavos.
@@ -223,6 +255,7 @@ Pacote: selecionar itens/quantidades, editar frete Brasil, escolher método, reg
 - Criar ação para incluir todos os itens e sugerir quantidades restantes.
 - Implementar frete Brasil/Receita por unidade, taxa própria do frete e ausência de taxa da Receita.
 - Expor estados de valor, pagamento e logística manual; total por produto e pessoa.
+- Aplicar lista de pacote B com estado logístico separado de pendências de cobrança; manter detalhe financeiro A/C e adaptação D.
 - Testar 3 RAMs + 1 camiseta, encargos pendentes/isentos e método próprio do frete.
 
 **Aceite:** frete de R$ 400 para quatro unidades atribui R$ 300 às RAMs e R$ 100 à camiseta; não divide em duas linhas. Receita segue o mesmo critério.
@@ -259,6 +292,7 @@ Pacote: selecionar itens/quantidades, editar frete Brasil, escolher método, reg
 - Executar lint, typecheck, unit/integration, Playwright e build. Conferir migração em banco vazio e banco anterior com compras ativas/finalizadas.
 - Verificar jornada completa com duas pessoas, produto compartilhado, vários pacotes, preço corrigido, mudança de settings e reabertura.
 - Inspecionar 320/390/768/1024/1440px, teclado, drawers, tabelas, estados e ilha de quatro destinos. Não aceitar overflow horizontal na página.
+- Salvar screenshots em 390/1440px de lista de acompanhamentos, tabela/detalhe, pacotes e drawer de pagamento; incluir total parcial, Receita sem cobrança, cobrança paga e acompanhamento encerrado. Comparar com os padrões A/B/C/D e com as telas atuais do Loti, conforme referências aprovadas.
 - Revisar regressões em favoritos, compra/histórico, rateio, Meu grupo/convites e perfil.
 - Atualizar `docs/IMPLEMENTATION_REPORT.md` com checks reais, arquivos e limitações.
 - Preparar backup, ordem de migração explícita/deploy, smoke test e estratégia de recuperação. Não usar rollback destrutivo para descartar dados novos; preferir correção em frente ou restauração coordenada com análise dos registros posteriores ao backup.
@@ -297,6 +331,8 @@ Pacote: selecionar itens/quantidades, editar frete Brasil, escolher método, reg
 | Nome de pessoa/favorito muda | Pesos, parcelas e dados de produto capturados preservados |
 | Valores máximos / overflow | Validação explícita e aritmética segura |
 | Mobile e desktop | Navegação acessível, unidades legíveis, sem imagens grandes ou página larga |
+| Referências A/B/C/D | Tabela financeira A, lista de pacotes B, drawer com prévia C e lista/detalhe mobile D; identidade do Loti preservada |
+| Estados visuais | Total parcial explícito; Receita sem cobrança diferente de pendente; situação logística separada de pagamento |
 
 Não considerar totais da imagem da planilha como fixtures exatas: há divergências visíveis entre alguns componentes e valores finais. Usar as regras e exemplos deste plano como fonte das expectativas financeiras.
 

@@ -112,3 +112,15 @@ One purchase row represents one physical product regardless of how many people s
 ## Profile editing — 6 October 2026
 
 Chosen: one **Nome completo** field stored in Better Auth's existing `user.name`, plus a separate password form. No name-part migration is needed; existing surfaces already resolve identity by user ID. The native Better Auth update/password endpoints remain the only credential-writing path. Path-scoped hooks enforce membership, strict profile payloads and trusted origin; password changes force revocation of other sessions and let Better Auth rotate the current session. No email editing, password recovery, avatar upload or historical identity snapshots are included. Implementation contract: `19_PROFILE_EDITING_PLAN.md`.
+
+## Pacotes e custos visual direction — 7 October 2026
+
+User approved the combination **A + B as the main structure, C for forms and D for mobile** after reviewing the reference images. A: QuickSuite / Filllo financial table. B: Sohag Islam / Saasfactor shipment list. C: Monefy / Barly Design–Uxerflow input and financial-preview composition. D: Hamidatun Nisa mobile expense/detail layout.
+
+Apply these structural references using Loti's existing identity, category markers, Surface drawers and rounded mobile island. Desktop combines financial tables with distinct package lists; forms show base/fee/total before manual payment confirmation; mobile uses compact rows with contextual detail. This extension adds the fourth navigation destination, Pacotes e custos, above History. Do not copy the references' palettes, imagery, charts, debt-settlement features or automated tracking.
+
+The visual choice is closed; no new reference selection is required for implementation. Approved source links, images and acceptance: [reference sheet](design/PACKAGES_AND_COSTS_REFERENCES.md). Phased implementation and confirmed domain rules: [plan](21_PACKAGES_AND_COSTS_PLAN.md).
+
+## Packages and costs — 7 October 2026
+
+Approved manual financial follow-up begins after purchase finalization and closes independently. New finalizations create it atomically; older finalized purchases require an explicit start. Keep the purchase and its cost-sharing composition immutable; capture participant weights in a separate cost snapshot. One product charge per purchase uses one method; each package has one Brazil-freight charge/method and one customs obligation without a fee. Defaults are editable Pix 1% / card 5%, and recorded basis points remain fixed. Package quantities, cents, payment/value/logistics states, revisions and reasoned reopening follow [the approved phased plan](21_PACKAGES_AND_COSTS_PLAN.md). No automation, payment processing, member-to-member settlement, exchange conversion, resale or production migration/publication is included.

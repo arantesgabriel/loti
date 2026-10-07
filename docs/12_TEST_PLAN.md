@@ -181,3 +181,9 @@ Visual QA captures `artifacts/qa/login-{320,390,768,1024,1440}.png` and `login-r
 `tests/integration/profile.test.ts` uses isolated libSQL and real Better Auth HTTP handlers to verify origin/session/membership guards, self-only name updates, unchanged other users, incorrect/reused passwords, current-session rotation, forced other-session revocation and old/new credential behavior.
 
 `tests/e2e/profile.spec.ts` uses a dedicated disposable account created by the isolated E2E server. It covers name persistence and group visibility, password field visibility/cancel/focus, validation and current-password errors, other-session denial, old/new login, and responsive widths from 320 to 1440 pixels.
+
+## Packages and costs extension coverage
+
+Follow the scenario matrix in [the implementation plan](21_PACKAGES_AND_COSTS_PLAN.md#9-matriz-mínima-de-testes). Unit coverage exercises safe-cent fees, proportional largest-remainder allocation, unit distribution, participant weights, pending/zero/no-charge states and incomplete totals. Integration coverage exercises explicit old-purchase start, atomic finalization, idempotency, authorization, revision conflicts, quantity coverage, payment invalidation, close/reopen and migration from the prior schema. Playwright covers the fourth navigation destination, finalized purchase → costs, one and multiple packages, manual payment previews, group defaults, partial values and responsive layouts.
+
+Use only isolated libSQL databases. Do not point local migration checks at `TURSO_DATABASE_URL` from `.env`; supply an explicit disposable `file:` target and never migrate production in this task.

@@ -119,3 +119,13 @@
 5. A password change rejects immediate reuse of the current password, revokes every other session, and rotates the session for the current device.
 6. Profile mutations require a valid session, workspace membership, and a trusted request origin. Request payloads cannot select another user or change email/image.
 7. Historical purchase items remain product snapshots; identity labels continue to resolve from the current member record.
+
+## Packages and costs extension
+
+The finalized purchase remains immutable. A separate workspace-authorized follow-up stores effective unit prices, manual China freight, package allocations, Brazil freight/customs values, captured Pix/card fee rates and manual paid states. One follow-up is created atomically when a new purchase is finalized; older finalized purchases require an explicit idempotent start action. See [the complete rules and invariants](21_PACKAGES_AND_COSTS_PLAN.md).
+
+- One physical purchase line and its original participant composition remain the source; editable cost snapshots never write back to favorites or purchase history.
+- Unit costs are in integer BRL cents. Package allocation quantities are positive integers whose sum cannot exceed the purchased quantity. Fees and package charges are allocated deterministically and close to the cent.
+- Value state (`pending`, `known`, `no_charge`), payment state, and manual logistics state are independent. Unknown is not zero; no-charge obligations require no payment.
+- Product payment is one charge for the whole purchase with one method. Brazil freight is charged once per package with its own method and captured fee; customs has no transaction fee. Fee defaults are 1% Pix and 5% card and changes do not rewrite existing charges.
+- Financial closure requires complete unit coverage, resolved values/compositions, and resolved paid/no-charge obligations. Closed follow-ups are read-only; reopening requires confirmation and a reason. Neither operation changes `purchases.status`.

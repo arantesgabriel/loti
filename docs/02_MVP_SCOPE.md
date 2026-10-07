@@ -93,14 +93,13 @@ Do not implement any of the following in the MVP:
 - real product thumbnails;
 - live marketplace integrations;
 - HubBuy API integration;
-- tracking/shipping status;
-- freight calculation or allocation;
-- weight management;
-- taxes/customs calculations;
+- automated shipment tracking/shipping integrations (manual package stages are in the approved extension);
+- automated freight calculation, freight estimation or weight management;
+- automated tax/customs calculations (manually entered customs charges are in the approved extension);
 - RMB/BRL exchange conversion;
 - inventory/resale management;
-- cost sharing does not record ownership transfers, payments, revenue, profit or stock;
-- payments/Pix between members;
+- purchase cost sharing does not record ownership transfers, transfers between members, revenue, profit or stock;
+- payments/Pix between members or payment processing by Loti;
 - notifications;
 - chat/comments;
 - realtime/websockets;
@@ -131,3 +130,7 @@ The MVP succeeds when the five users can complete the full favorite → shared p
 - New invited users choose their name/password; existing users authenticate before accepting.
 - Public signup stays disabled. Operator tooling remains for bootstrap.
 - No automatic invitation email, member removal, roles or multiple-workspace navigation.
+
+### Approved Packages and costs extension
+
+The original MVP exclusions above are superseded only for the manual, post-finalization cost follow-up in [the phased plan](21_PACKAGES_AND_COSTS_PLAN.md): effective prices, per-item China freight, package-level Brazil freight and customs values, Pix/card transaction fees, package assignments, manual payment states, manual preparation/sent/received stages, and independent financial closure/reopening. It adds no freight automation, tracking codes, exchange rates, payment processing, transfers between members, or resale/accounting features.

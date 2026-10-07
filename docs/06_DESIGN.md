@@ -200,3 +200,11 @@ Use three independent radii/durations, alternating direction and counterrotation
 ## Meu grupo and invitation acceptance
 
 Use operational Loti typography, colors, buttons and compact rows. Group lists are separated by thin borders. Invite generation uses the existing accessible Surface/Confirm components, with a readonly selectable link and copy/share feedback. The acceptance page uses a narrow responsive form with fixed invited email, explicit password help, confirmation, visibility toggle and inline announced errors. It has no editorial assets or third-party requests.
+
+## Pacotes e custos — approved visual extension, 7 October 2026
+
+The approved structure combines A (QuickSuite financial table) and B (shipment list), with C (Monefy input/financial summary) in existing drawers and D (Smart Split Bill compact expense/detail rows) on mobile. This extends the existing product design system: preserve Geist, warm light background, white surfaces, orange functional accent, quiet borders and category SVG markers. The reference screenshots are not Loti mockups or new asset dependencies.
+
+Desktop separates cost-by-product tables from package lists. Drawers place a clear base/fee/total preview before payment confirmation. Mobile uses compact rows and contextual detail, rather than squeezing all cost columns into the viewport. Distinguish financial pending/paid states from manual package stages, and use text alongside color. In this approved extension, the floating navigation island has **four** destinations: Favorites, Purchase, Pacotes e custos and History; use the short selected label `Pacotes` and preserve touch targets and safe areas.
+
+The earlier three-destination rule describes the original MVP; this extension explicitly adds the fourth. Sources/images and boundaries: [approved reference sheet](design/PACKAGES_AND_COSTS_REFERENCES.md). Concrete layout and visual QA: [implementation plan, section 7](21_PACKAGES_AND_COSTS_PLAN.md#7-experiência-de-uso).

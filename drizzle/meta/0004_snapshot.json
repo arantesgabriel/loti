@@ -1,0 +1,2459 @@
+{
+  "version": "6",
+  "dialect": "sqlite",
+  "id": "4863774c-c26f-4f21-b746-d57678e409c1",
+  "prevId": "df05e8c5-a4e8-4dcc-9291-07df01e92111",
+  "tables": {
+    "account": {
+      "name": "account",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "account_id": {
+          "name": "account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "provider_id": {
+          "name": "provider_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "access_token": {
+          "name": "access_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "refresh_token": {
+          "name": "refresh_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "id_token": {
+          "name": "id_token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "access_token_expires_at": {
+          "name": "access_token_expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "refresh_token_expires_at": {
+          "name": "refresh_token_expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "scope": {
+          "name": "scope",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "password": {
+          "name": "password",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "account_user_idx": {
+          "name": "account_user_idx",
+          "columns": [
+            "user_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "account_user_id_user_id_fk": {
+          "name": "account_user_id_user_id_fk",
+          "tableFrom": "account",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "collections": {
+      "name": "collections",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "owner_id": {
+          "name": "owner_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "collections_workspace_idx": {
+          "name": "collections_workspace_idx",
+          "columns": [
+            "workspace_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "collections_workspace_id_workspaces_id_fk": {
+          "name": "collections_workspace_id_workspaces_id_fk",
+          "tableFrom": "collections",
+          "tableTo": "workspaces",
+          "columnsFrom": [
+            "workspace_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "collections_owner_id_user_id_fk": {
+          "name": "collections_owner_id_user_id_fk",
+          "tableFrom": "collections",
+          "tableTo": "user",
+          "columnsFrom": [
+            "owner_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "collection_name": {
+          "name": "collection_name",
+          "value": "length(trim(\"collections\".\"name\")) > 0"
+        }
+      }
+    },
+    "favorites": {
+      "name": "favorites",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "owner_id": {
+          "name": "owner_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "collection_id": {
+          "name": "collection_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "url": {
+          "name": "url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "platform": {
+          "name": "platform",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "canonical_product_key": {
+          "name": "canonical_product_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "price_cents": {
+          "name": "price_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "variant": {
+          "name": "variant",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "qc_status": {
+          "name": "qc_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'not_reviewed'"
+        },
+        "visual_key": {
+          "name": "visual_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'generic'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "favorite_workspace_idx": {
+          "name": "favorite_workspace_idx",
+          "columns": [
+            "workspace_id"
+          ],
+          "isUnique": false
+        },
+        "favorite_owner_idx": {
+          "name": "favorite_owner_idx",
+          "columns": [
+            "owner_id"
+          ],
+          "isUnique": false
+        },
+        "favorite_collection_idx": {
+          "name": "favorite_collection_idx",
+          "columns": [
+            "collection_id"
+          ],
+          "isUnique": false
+        },
+        "favorite_key_idx": {
+          "name": "favorite_key_idx",
+          "columns": [
+            "canonical_product_key"
+          ],
+          "isUnique": false
+        },
+        "favorite_created_idx": {
+          "name": "favorite_created_idx",
+          "columns": [
+            "created_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "favorites_workspace_id_workspaces_id_fk": {
+          "name": "favorites_workspace_id_workspaces_id_fk",
+          "tableFrom": "favorites",
+          "tableTo": "workspaces",
+          "columnsFrom": [
+            "workspace_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "favorites_owner_id_user_id_fk": {
+          "name": "favorites_owner_id_user_id_fk",
+          "tableFrom": "favorites",
+          "tableTo": "user",
+          "columnsFrom": [
+            "owner_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "favorites_collection_id_collections_id_fk": {
+          "name": "favorites_collection_id_collections_id_fk",
+          "tableFrom": "favorites",
+          "tableTo": "collections",
+          "columnsFrom": [
+            "collection_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "favorite_price": {
+          "name": "favorite_price",
+          "value": "\"favorites\".\"price_cents\" IS NULL OR (typeof(\"favorites\".\"price_cents\") = 'integer' AND \"favorites\".\"price_cents\" >= 0)"
+        },
+        "favorite_qc": {
+          "name": "favorite_qc",
+          "value": "\"favorites\".\"qc_status\" IN ('not_reviewed','approved','rejected')"
+        },
+        "favorite_name": {
+          "name": "favorite_name",
+          "value": "length(trim(\"favorites\".\"name\")) > 0"
+        }
+      }
+    },
+    "invitation_limits": {
+      "name": "invitation_limits",
+      "columns": {
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "window": {
+          "name": "window",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "count": {
+          "name": "count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "purchase_cost_charges": {
+      "name": "purchase_cost_charges",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "tracking_id": {
+          "name": "tracking_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "package_id": {
+          "name": "package_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "charge_type": {
+          "name": "charge_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "value_state": {
+          "name": "value_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "amount_cents": {
+          "name": "amount_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "payment_method": {
+          "name": "payment_method",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "fee_bps": {
+          "name": "fee_bps",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "payment_status": {
+          "name": "payment_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pending'"
+        },
+        "paid_by": {
+          "name": "paid_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "paid_at": {
+          "name": "paid_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "cost_charge_products_idx": {
+          "name": "cost_charge_products_idx",
+          "columns": [
+            "tracking_id"
+          ],
+          "isUnique": true,
+          "where": "\"purchase_cost_charges\".\"charge_type\" = 'products'"
+        },
+        "cost_charge_package_type_idx": {
+          "name": "cost_charge_package_type_idx",
+          "columns": [
+            "package_id",
+            "charge_type"
+          ],
+          "isUnique": true,
+          "where": "\"purchase_cost_charges\".\"charge_type\" IN ('brazil_freight','customs')"
+        },
+        "cost_charge_tracking_idx": {
+          "name": "cost_charge_tracking_idx",
+          "columns": [
+            "tracking_id",
+            "charge_type"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "purchase_cost_charges_tracking_id_purchase_cost_trackings_id_fk": {
+          "name": "purchase_cost_charges_tracking_id_purchase_cost_trackings_id_fk",
+          "tableFrom": "purchase_cost_charges",
+          "tableTo": "purchase_cost_trackings",
+          "columnsFrom": [
+            "tracking_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "purchase_cost_charges_package_id_purchase_packages_id_fk": {
+          "name": "purchase_cost_charges_package_id_purchase_packages_id_fk",
+          "tableFrom": "purchase_cost_charges",
+          "tableTo": "purchase_packages",
+          "columnsFrom": [
+            "package_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "purchase_cost_charges_paid_by_user_id_fk": {
+          "name": "purchase_cost_charges_paid_by_user_id_fk",
+          "tableFrom": "purchase_cost_charges",
+          "tableTo": "user",
+          "columnsFrom": [
+            "paid_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "cost_charge_package_scope": {
+          "name": "cost_charge_package_scope",
+          "value": "(\"purchase_cost_charges\".\"charge_type\" = 'products' AND \"purchase_cost_charges\".\"package_id\" IS NULL AND \"purchase_cost_charges\".\"value_state\" IS NULL AND \"purchase_cost_charges\".\"amount_cents\" IS NULL) OR (\"purchase_cost_charges\".\"charge_type\" IN ('brazil_freight','customs') AND \"purchase_cost_charges\".\"package_id\" IS NOT NULL)"
+        },
+        "cost_charge_value_state": {
+          "name": "cost_charge_value_state",
+          "value": "\"purchase_cost_charges\".\"charge_type\" = 'products' OR (\"purchase_cost_charges\".\"value_state\" = 'known' AND typeof(\"purchase_cost_charges\".\"amount_cents\") = 'integer' AND \"purchase_cost_charges\".\"amount_cents\" BETWEEN 0 AND 1000000000000) OR (\"purchase_cost_charges\".\"value_state\" IN ('pending','no_charge') AND \"purchase_cost_charges\".\"amount_cents\" IS NULL)"
+        },
+        "cost_charge_fee": {
+          "name": "cost_charge_fee",
+          "value": "(\"purchase_cost_charges\".\"fee_bps\" IS NULL AND \"purchase_cost_charges\".\"payment_method\" IS NULL) OR (typeof(\"purchase_cost_charges\".\"fee_bps\") = 'integer' AND \"purchase_cost_charges\".\"fee_bps\" BETWEEN 0 AND 10000 AND \"purchase_cost_charges\".\"payment_method\" IN ('pix','card'))"
+        },
+        "cost_charge_customs_fee": {
+          "name": "cost_charge_customs_fee",
+          "value": "\"purchase_cost_charges\".\"charge_type\" != 'customs' OR (\"purchase_cost_charges\".\"fee_bps\" IS NULL AND \"purchase_cost_charges\".\"payment_method\" IS NULL)"
+        },
+        "cost_charge_paid": {
+          "name": "cost_charge_paid",
+          "value": "(\"purchase_cost_charges\".\"payment_status\" = 'pending' AND \"purchase_cost_charges\".\"paid_at\" IS NULL AND \"purchase_cost_charges\".\"paid_by\" IS NULL) OR (\"purchase_cost_charges\".\"payment_status\" = 'paid' AND \"purchase_cost_charges\".\"paid_at\" IS NOT NULL AND \"purchase_cost_charges\".\"paid_by\" IS NOT NULL)"
+        }
+      }
+    },
+    "purchase_cost_participants": {
+      "name": "purchase_cost_participants",
+      "columns": {
+        "cost_item_id": {
+          "name": "cost_item_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "person_id": {
+          "name": "person_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "allocation_order": {
+          "name": "allocation_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "weight_mode": {
+          "name": "weight_mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "weight": {
+          "name": "weight",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "cost_participant_order_idx": {
+          "name": "cost_participant_order_idx",
+          "columns": [
+            "cost_item_id",
+            "allocation_order"
+          ],
+          "isUnique": true
+        },
+        "cost_participant_person_idx": {
+          "name": "cost_participant_person_idx",
+          "columns": [
+            "person_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "purchase_cost_participants_cost_item_id_purchase_item_costs_id_fk": {
+          "name": "purchase_cost_participants_cost_item_id_purchase_item_costs_id_fk",
+          "tableFrom": "purchase_cost_participants",
+          "tableTo": "purchase_item_costs",
+          "columnsFrom": [
+            "cost_item_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "purchase_cost_participants_person_id_user_id_fk": {
+          "name": "purchase_cost_participants_person_id_user_id_fk",
+          "tableFrom": "purchase_cost_participants",
+          "tableTo": "user",
+          "columnsFrom": [
+            "person_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "purchase_cost_participants_cost_item_id_person_id_pk": {
+          "columns": [
+            "cost_item_id",
+            "person_id"
+          ],
+          "name": "purchase_cost_participants_cost_item_id_person_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "cost_participant_order": {
+          "name": "cost_participant_order",
+          "value": "typeof(\"purchase_cost_participants\".\"allocation_order\") = 'integer' AND \"purchase_cost_participants\".\"allocation_order\" >= 0"
+        },
+        "cost_participant_weight": {
+          "name": "cost_participant_weight",
+          "value": "typeof(\"purchase_cost_participants\".\"weight\") = 'integer' AND \"purchase_cost_participants\".\"weight\" BETWEEN 0 AND 1000000000000"
+        },
+        "cost_participant_weight_mode": {
+          "name": "cost_participant_weight_mode",
+          "value": "\"purchase_cost_participants\".\"weight_mode\" IN ('equal','percentage','fixed')"
+        }
+      }
+    },
+    "purchase_cost_reopenings": {
+      "name": "purchase_cost_reopenings",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "tracking_id": {
+          "name": "tracking_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "reopened_by": {
+          "name": "reopened_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "reopened_at": {
+          "name": "reopened_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "cost_reopening_tracking_idx": {
+          "name": "cost_reopening_tracking_idx",
+          "columns": [
+            "tracking_id",
+            "reopened_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "purchase_cost_reopenings_tracking_id_purchase_cost_trackings_id_fk": {
+          "name": "purchase_cost_reopenings_tracking_id_purchase_cost_trackings_id_fk",
+          "tableFrom": "purchase_cost_reopenings",
+          "tableTo": "purchase_cost_trackings",
+          "columnsFrom": [
+            "tracking_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "purchase_cost_reopenings_reopened_by_user_id_fk": {
+          "name": "purchase_cost_reopenings_reopened_by_user_id_fk",
+          "tableFrom": "purchase_cost_reopenings",
+          "tableTo": "user",
+          "columnsFrom": [
+            "reopened_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "cost_reopening_reason": {
+          "name": "cost_reopening_reason",
+          "value": "length(trim(\"purchase_cost_reopenings\".\"reason\")) > 0"
+        }
+      }
+    },
+    "purchase_cost_trackings": {
+      "name": "purchase_cost_trackings",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "purchase_id": {
+          "name": "purchase_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'open'"
+        },
+        "revision": {
+          "name": "revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "closed_by": {
+          "name": "closed_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "closed_at": {
+          "name": "closed_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "cost_tracking_purchase_idx": {
+          "name": "cost_tracking_purchase_idx",
+          "columns": [
+            "purchase_id"
+          ],
+          "isUnique": true
+        },
+        "cost_tracking_workspace_idx": {
+          "name": "cost_tracking_workspace_idx",
+          "columns": [
+            "workspace_id",
+            "status",
+            "updated_at"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "purchase_cost_trackings_purchase_id_purchases_id_fk": {
+          "name": "purchase_cost_trackings_purchase_id_purchases_id_fk",
+          "tableFrom": "purchase_cost_trackings",
+          "tableTo": "purchases",
+          "columnsFrom": [
+            "purchase_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "purchase_cost_trackings_workspace_id_workspaces_id_fk": {
+          "name": "purchase_cost_trackings_workspace_id_workspaces_id_fk",
+          "tableFrom": "purchase_cost_trackings",
+          "tableTo": "workspaces",
+          "columnsFrom": [
+            "workspace_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "purchase_cost_trackings_created_by_user_id_fk": {
+          "name": "purchase_cost_trackings_created_by_user_id_fk",
+          "tableFrom": "purchase_cost_trackings",
+          "tableTo": "user",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "purchase_cost_trackings_updated_by_user_id_fk": {
+          "name": "purchase_cost_trackings_updated_by_user_id_fk",
+          "tableFrom": "purchase_cost_trackings",
+          "tableTo": "user",
+          "columnsFrom": [
+            "updated_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "purchase_cost_trackings_closed_by_user_id_fk": {
+          "name": "purchase_cost_trackings_closed_by_user_id_fk",
+          "tableFrom": "purchase_cost_trackings",
+          "tableTo": "user",
+          "columnsFrom": [
+            "closed_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "cost_tracking_state": {
+          "name": "cost_tracking_state",
+          "value": "(\"purchase_cost_trackings\".\"status\" = 'open' AND \"purchase_cost_trackings\".\"closed_at\" IS NULL AND \"purchase_cost_trackings\".\"closed_by\" IS NULL) OR (\"purchase_cost_trackings\".\"status\" = 'closed' AND \"purchase_cost_trackings\".\"closed_at\" IS NOT NULL AND \"purchase_cost_trackings\".\"closed_by\" IS NOT NULL)"
+        },
+        "cost_tracking_revision": {
+          "name": "cost_tracking_revision",
+          "value": "typeof(\"purchase_cost_trackings\".\"revision\") = 'integer' AND \"purchase_cost_trackings\".\"revision\" >= 0"
+        }
+      }
+    },
+    "purchase_item_costs": {
+      "name": "purchase_item_costs",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "tracking_id": {
+          "name": "tracking_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "purchase_item_id": {
+          "name": "purchase_item_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "item_order": {
+          "name": "item_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "effective_price_state": {
+          "name": "effective_price_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "effective_price_unit_cents": {
+          "name": "effective_price_unit_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "china_freight_state": {
+          "name": "china_freight_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pending'"
+        },
+        "china_freight_unit_cents": {
+          "name": "china_freight_unit_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "cost_item_tracking_item_idx": {
+          "name": "cost_item_tracking_item_idx",
+          "columns": [
+            "tracking_id",
+            "purchase_item_id"
+          ],
+          "isUnique": true
+        },
+        "cost_item_tracking_order_idx": {
+          "name": "cost_item_tracking_order_idx",
+          "columns": [
+            "tracking_id",
+            "item_order"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "purchase_item_costs_tracking_id_purchase_cost_trackings_id_fk": {
+          "name": "purchase_item_costs_tracking_id_purchase_cost_trackings_id_fk",
+          "tableFrom": "purchase_item_costs",
+          "tableTo": "purchase_cost_trackings",
+          "columnsFrom": [
+            "tracking_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "purchase_item_costs_purchase_item_id_purchase_items_id_fk": {
+          "name": "purchase_item_costs_purchase_item_id_purchase_items_id_fk",
+          "tableFrom": "purchase_item_costs",
+          "tableTo": "purchase_items",
+          "columnsFrom": [
+            "purchase_item_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "cost_item_order": {
+          "name": "cost_item_order",
+          "value": "typeof(\"purchase_item_costs\".\"item_order\") = 'integer' AND \"purchase_item_costs\".\"item_order\" >= 0"
+        },
+        "cost_item_effective_price_state": {
+          "name": "cost_item_effective_price_state",
+          "value": "(\"purchase_item_costs\".\"effective_price_state\" = 'known' AND typeof(\"purchase_item_costs\".\"effective_price_unit_cents\") = 'integer' AND \"purchase_item_costs\".\"effective_price_unit_cents\" BETWEEN 0 AND 1000000000000) OR (\"purchase_item_costs\".\"effective_price_state\" IN ('pending','no_charge') AND \"purchase_item_costs\".\"effective_price_unit_cents\" IS NULL)"
+        },
+        "cost_item_china_freight_state": {
+          "name": "cost_item_china_freight_state",
+          "value": "(\"purchase_item_costs\".\"china_freight_state\" = 'known' AND typeof(\"purchase_item_costs\".\"china_freight_unit_cents\") = 'integer' AND \"purchase_item_costs\".\"china_freight_unit_cents\" BETWEEN 0 AND 1000000000000) OR (\"purchase_item_costs\".\"china_freight_state\" IN ('pending','no_charge') AND \"purchase_item_costs\".\"china_freight_unit_cents\" IS NULL)"
+        }
+      }
+    },
+    "purchase_item_participants": {
+      "name": "purchase_item_participants",
+      "columns": {
+        "purchase_item_id": {
+          "name": "purchase_item_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "person_id": {
+          "name": "person_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "allocation_order": {
+          "name": "allocation_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "percentage_bps": {
+          "name": "percentage_bps",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "amount_cents": {
+          "name": "amount_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "item_participant_order_idx": {
+          "name": "item_participant_order_idx",
+          "columns": [
+            "purchase_item_id",
+            "allocation_order"
+          ],
+          "isUnique": true
+        },
+        "item_participant_person_idx": {
+          "name": "item_participant_person_idx",
+          "columns": [
+            "person_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "purchase_item_participants_purchase_item_id_purchase_items_id_fk": {
+          "name": "purchase_item_participants_purchase_item_id_purchase_items_id_fk",
+          "tableFrom": "purchase_item_participants",
+          "tableTo": "purchase_items",
+          "columnsFrom": [
+            "purchase_item_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "purchase_item_participants_person_id_user_id_fk": {
+          "name": "purchase_item_participants_person_id_user_id_fk",
+          "tableFrom": "purchase_item_participants",
+          "tableTo": "user",
+          "columnsFrom": [
+            "person_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "purchase_item_participants_purchase_item_id_person_id_pk": {
+          "columns": [
+            "purchase_item_id",
+            "person_id"
+          ],
+          "name": "purchase_item_participants_purchase_item_id_person_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "item_participant_order": {
+          "name": "item_participant_order",
+          "value": "typeof(\"purchase_item_participants\".\"allocation_order\") = 'integer' AND \"purchase_item_participants\".\"allocation_order\" >= 0"
+        },
+        "item_participant_percentage": {
+          "name": "item_participant_percentage",
+          "value": "\"purchase_item_participants\".\"percentage_bps\" IS NULL OR (typeof(\"purchase_item_participants\".\"percentage_bps\") = 'integer' AND \"purchase_item_participants\".\"percentage_bps\" BETWEEN 0 AND 10000)"
+        },
+        "item_participant_amount": {
+          "name": "item_participant_amount",
+          "value": "\"purchase_item_participants\".\"amount_cents\" IS NULL OR (typeof(\"purchase_item_participants\".\"amount_cents\") = 'integer' AND \"purchase_item_participants\".\"amount_cents\" BETWEEN 0 AND 1000000000000)"
+        },
+        "item_participant_one_value": {
+          "name": "item_participant_one_value",
+          "value": "\"purchase_item_participants\".\"percentage_bps\" IS NULL OR \"purchase_item_participants\".\"amount_cents\" IS NULL"
+        }
+      }
+    },
+    "purchase_items": {
+      "name": "purchase_items",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "purchase_id": {
+          "name": "purchase_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "source_favorite_id": {
+          "name": "source_favorite_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "person_id": {
+          "name": "person_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "url": {
+          "name": "url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "platform": {
+          "name": "platform",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "visual_key": {
+          "name": "visual_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "variant": {
+          "name": "variant",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "quantity": {
+          "name": "quantity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "unit_price_cents": {
+          "name": "unit_price_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "sharing_mode": {
+          "name": "sharing_mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'equal'"
+        },
+        "cart_status": {
+          "name": "cart_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'pending'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "item_purchase_idx": {
+          "name": "item_purchase_idx",
+          "columns": [
+            "purchase_id"
+          ],
+          "isUnique": false
+        },
+        "item_person_idx": {
+          "name": "item_person_idx",
+          "columns": [
+            "person_id"
+          ],
+          "isUnique": false
+        },
+        "item_cart_idx": {
+          "name": "item_cart_idx",
+          "columns": [
+            "cart_status"
+          ],
+          "isUnique": false
+        },
+        "item_source_idx": {
+          "name": "item_source_idx",
+          "columns": [
+            "source_favorite_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "purchase_items_purchase_id_purchases_id_fk": {
+          "name": "purchase_items_purchase_id_purchases_id_fk",
+          "tableFrom": "purchase_items",
+          "tableTo": "purchases",
+          "columnsFrom": [
+            "purchase_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "purchase_items_source_favorite_id_favorites_id_fk": {
+          "name": "purchase_items_source_favorite_id_favorites_id_fk",
+          "tableFrom": "purchase_items",
+          "tableTo": "favorites",
+          "columnsFrom": [
+            "source_favorite_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "purchase_items_person_id_user_id_fk": {
+          "name": "purchase_items_person_id_user_id_fk",
+          "tableFrom": "purchase_items",
+          "tableTo": "user",
+          "columnsFrom": [
+            "person_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "purchase_items_created_by_user_id_fk": {
+          "name": "purchase_items_created_by_user_id_fk",
+          "tableFrom": "purchase_items",
+          "tableTo": "user",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "item_quantity": {
+          "name": "item_quantity",
+          "value": "typeof(\"purchase_items\".\"quantity\") = 'integer' AND \"purchase_items\".\"quantity\" >= 1"
+        },
+        "item_price": {
+          "name": "item_price",
+          "value": "\"purchase_items\".\"unit_price_cents\" IS NULL OR (typeof(\"purchase_items\".\"unit_price_cents\") = 'integer' AND \"purchase_items\".\"unit_price_cents\" >= 0)"
+        },
+        "item_status": {
+          "name": "item_status",
+          "value": "\"purchase_items\".\"cart_status\" IN ('pending','added')"
+        },
+        "item_sharing_mode": {
+          "name": "item_sharing_mode",
+          "value": "\"purchase_items\".\"sharing_mode\" IN ('equal','percentage','fixed')"
+        }
+      }
+    },
+    "purchase_package_items": {
+      "name": "purchase_package_items",
+      "columns": {
+        "package_id": {
+          "name": "package_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "cost_item_id": {
+          "name": "cost_item_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "quantity": {
+          "name": "quantity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "allocation_order": {
+          "name": "allocation_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "package_item_order_idx": {
+          "name": "package_item_order_idx",
+          "columns": [
+            "package_id",
+            "allocation_order"
+          ],
+          "isUnique": true
+        },
+        "package_item_cost_item_idx": {
+          "name": "package_item_cost_item_idx",
+          "columns": [
+            "cost_item_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "purchase_package_items_package_id_purchase_packages_id_fk": {
+          "name": "purchase_package_items_package_id_purchase_packages_id_fk",
+          "tableFrom": "purchase_package_items",
+          "tableTo": "purchase_packages",
+          "columnsFrom": [
+            "package_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "purchase_package_items_cost_item_id_purchase_item_costs_id_fk": {
+          "name": "purchase_package_items_cost_item_id_purchase_item_costs_id_fk",
+          "tableFrom": "purchase_package_items",
+          "tableTo": "purchase_item_costs",
+          "columnsFrom": [
+            "cost_item_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "purchase_package_items_package_id_cost_item_id_pk": {
+          "columns": [
+            "package_id",
+            "cost_item_id"
+          ],
+          "name": "purchase_package_items_package_id_cost_item_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "package_item_quantity": {
+          "name": "package_item_quantity",
+          "value": "typeof(\"purchase_package_items\".\"quantity\") = 'integer' AND \"purchase_package_items\".\"quantity\" >= 1"
+        },
+        "package_item_order": {
+          "name": "package_item_order",
+          "value": "typeof(\"purchase_package_items\".\"allocation_order\") = 'integer' AND \"purchase_package_items\".\"allocation_order\" >= 0"
+        }
+      }
+    },
+    "purchase_packages": {
+      "name": "purchase_packages",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "tracking_id": {
+          "name": "tracking_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "package_order": {
+          "name": "package_order",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "logistics_status": {
+          "name": "logistics_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'preparing'"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "cost_package_tracking_idx": {
+          "name": "cost_package_tracking_idx",
+          "columns": [
+            "tracking_id",
+            "package_order"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "purchase_packages_tracking_id_purchase_cost_trackings_id_fk": {
+          "name": "purchase_packages_tracking_id_purchase_cost_trackings_id_fk",
+          "tableFrom": "purchase_packages",
+          "tableTo": "purchase_cost_trackings",
+          "columnsFrom": [
+            "tracking_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "cost_package_name": {
+          "name": "cost_package_name",
+          "value": "length(trim(\"purchase_packages\".\"name\")) > 0"
+        },
+        "cost_package_order": {
+          "name": "cost_package_order",
+          "value": "typeof(\"purchase_packages\".\"package_order\") = 'integer' AND \"purchase_packages\".\"package_order\" >= 0"
+        },
+        "cost_package_logistics": {
+          "name": "cost_package_logistics",
+          "value": "\"purchase_packages\".\"logistics_status\" IN ('preparing','sent','received')"
+        }
+      }
+    },
+    "purchases": {
+      "name": "purchases",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "hubbuy_account": {
+          "name": "hubbuy_account",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'active'"
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "finalized_at": {
+          "name": "finalized_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "one_active_purchase_per_workspace": {
+          "name": "one_active_purchase_per_workspace",
+          "columns": [
+            "workspace_id"
+          ],
+          "isUnique": true,
+          "where": "\"purchases\".\"status\" = 'active'"
+        }
+      },
+      "foreignKeys": {
+        "purchases_workspace_id_workspaces_id_fk": {
+          "name": "purchases_workspace_id_workspaces_id_fk",
+          "tableFrom": "purchases",
+          "tableTo": "workspaces",
+          "columnsFrom": [
+            "workspace_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "purchases_created_by_user_id_fk": {
+          "name": "purchases_created_by_user_id_fk",
+          "tableFrom": "purchases",
+          "tableTo": "user",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "purchase_status": {
+          "name": "purchase_status",
+          "value": "\"purchases\".\"status\" IN ('active','finalized')"
+        },
+        "purchase_finalized_date": {
+          "name": "purchase_finalized_date",
+          "value": "(\"purchases\".\"status\" = 'active' AND \"purchases\".\"finalized_at\" IS NULL) OR (\"purchases\".\"status\" = 'finalized' AND \"purchases\".\"finalized_at\" IS NOT NULL)"
+        }
+      }
+    },
+    "session": {
+      "name": "session",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "token": {
+          "name": "token",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ip_address": {
+          "name": "ip_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "user_agent": {
+          "name": "user_agent",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "session_token_unique": {
+          "name": "session_token_unique",
+          "columns": [
+            "token"
+          ],
+          "isUnique": true
+        },
+        "session_user_idx": {
+          "name": "session_user_idx",
+          "columns": [
+            "user_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "session_user_id_user_id_fk": {
+          "name": "session_user_id_user_id_fk",
+          "tableFrom": "session",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "user": {
+      "name": "user",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "email_verified": {
+          "name": "email_verified",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "image": {
+          "name": "image",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "user_email_unique": {
+          "name": "user_email_unique",
+          "columns": [
+            "email"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "user_preferences": {
+      "name": "user_preferences",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "favorites_view": {
+          "name": "favorites_view",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'list'"
+        },
+        "active_workspace_id": {
+          "name": "active_workspace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "user_preferences_user_id_user_id_fk": {
+          "name": "user_preferences_user_id_user_id_fk",
+          "tableFrom": "user_preferences",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "user_preferences_active_workspace_id_workspaces_id_fk": {
+          "name": "user_preferences_active_workspace_id_workspaces_id_fk",
+          "tableFrom": "user_preferences",
+          "tableTo": "workspaces",
+          "columnsFrom": [
+            "active_workspace_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "preference_view": {
+          "name": "preference_view",
+          "value": "\"user_preferences\".\"favorites_view\" IN ('list','cards')"
+        }
+      }
+    },
+    "verification": {
+      "name": "verification",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "identifier": {
+          "name": "identifier",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "value": {
+          "name": "value",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "verification_identifier_idx": {
+          "name": "verification_identifier_idx",
+          "columns": [
+            "identifier"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "workspace_cost_settings": {
+      "name": "workspace_cost_settings",
+      "columns": {
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "pix_bps": {
+          "name": "pix_bps",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 100
+        },
+        "card_bps": {
+          "name": "card_bps",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 500
+        },
+        "updated_by": {
+          "name": "updated_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "workspace_cost_settings_workspace_id_workspaces_id_fk": {
+          "name": "workspace_cost_settings_workspace_id_workspaces_id_fk",
+          "tableFrom": "workspace_cost_settings",
+          "tableTo": "workspaces",
+          "columnsFrom": [
+            "workspace_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "workspace_cost_settings_updated_by_user_id_fk": {
+          "name": "workspace_cost_settings_updated_by_user_id_fk",
+          "tableFrom": "workspace_cost_settings",
+          "tableTo": "user",
+          "columnsFrom": [
+            "updated_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "cost_settings_pix_bps": {
+          "name": "cost_settings_pix_bps",
+          "value": "typeof(\"workspace_cost_settings\".\"pix_bps\") = 'integer' AND \"workspace_cost_settings\".\"pix_bps\" BETWEEN 0 AND 10000"
+        },
+        "cost_settings_card_bps": {
+          "name": "cost_settings_card_bps",
+          "value": "typeof(\"workspace_cost_settings\".\"card_bps\") = 'integer' AND \"workspace_cost_settings\".\"card_bps\" BETWEEN 0 AND 10000"
+        }
+      }
+    },
+    "workspace_invitations": {
+      "name": "workspace_invitations",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "accepted_at": {
+          "name": "accepted_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "accepted_by": {
+          "name": "accepted_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "revoked_at": {
+          "name": "revoked_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "revoked_by": {
+          "name": "revoked_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "workspace_invitations_token_hash_unique": {
+          "name": "workspace_invitations_token_hash_unique",
+          "columns": [
+            "token_hash"
+          ],
+          "isUnique": true
+        },
+        "invitation_workspace_idx": {
+          "name": "invitation_workspace_idx",
+          "columns": [
+            "workspace_id"
+          ],
+          "isUnique": false
+        },
+        "invitation_open_email_idx": {
+          "name": "invitation_open_email_idx",
+          "columns": [
+            "workspace_id",
+            "email"
+          ],
+          "isUnique": true,
+          "where": "\"workspace_invitations\".\"accepted_at\" IS NULL AND \"workspace_invitations\".\"revoked_at\" IS NULL"
+        }
+      },
+      "foreignKeys": {
+        "workspace_invitations_workspace_id_workspaces_id_fk": {
+          "name": "workspace_invitations_workspace_id_workspaces_id_fk",
+          "tableFrom": "workspace_invitations",
+          "tableTo": "workspaces",
+          "columnsFrom": [
+            "workspace_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "workspace_invitations_created_by_user_id_fk": {
+          "name": "workspace_invitations_created_by_user_id_fk",
+          "tableFrom": "workspace_invitations",
+          "tableTo": "user",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "workspace_invitations_accepted_by_user_id_fk": {
+          "name": "workspace_invitations_accepted_by_user_id_fk",
+          "tableFrom": "workspace_invitations",
+          "tableTo": "user",
+          "columnsFrom": [
+            "accepted_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "workspace_invitations_revoked_by_user_id_fk": {
+          "name": "workspace_invitations_revoked_by_user_id_fk",
+          "tableFrom": "workspace_invitations",
+          "tableTo": "user",
+          "columnsFrom": [
+            "revoked_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {
+        "invitation_terminal_state": {
+          "name": "invitation_terminal_state",
+          "value": "\"workspace_invitations\".\"accepted_at\" IS NULL OR \"workspace_invitations\".\"revoked_at\" IS NULL"
+        }
+      }
+    },
+    "workspace_members": {
+      "name": "workspace_members",
+      "columns": {
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "workspace_members_workspace_id_workspaces_id_fk": {
+          "name": "workspace_members_workspace_id_workspaces_id_fk",
+          "tableFrom": "workspace_members",
+          "tableTo": "workspaces",
+          "columnsFrom": [
+            "workspace_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "workspace_members_user_id_user_id_fk": {
+          "name": "workspace_members_user_id_user_id_fk",
+          "tableFrom": "workspace_members",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "workspace_members_workspace_id_user_id_pk": {
+          "columns": [
+            "workspace_id",
+            "user_id"
+          ],
+          "name": "workspace_members_workspace_id_user_id_pk"
+        }
+      },
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    },
+    "workspaces": {
+      "name": "workspaces",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "checkConstraints": {}
+    }
+  },
+  "views": {},
+  "enums": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  },
+  "internal": {
+    "indexes": {}
+  }
+}

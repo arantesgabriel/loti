@@ -133,3 +133,48 @@ Depois de criar itens compartilhados, uma versão antiga da aplicação lê apen
 ### Reparo do banco local após validação de runtime
 
 Em 7 de outubro, a rota `/purchase` retornou 500 porque o `data/loti.sqlite` local ainda tinha o esquema anterior: `purchase_items` não possuía `sharing_mode` e a tabela `purchase_item_participants` não existia. Confirmei que esse era o alvo local configurado pelo app e apliquei nele, explicitamente, `TURSO_DATABASE_URL=file:./data/loti.sqlite npm run db:migrate`. `npm run db:verify` passou com 12 tabelas. A chamada de domínio `getData()` que aparecia na stack passou para os cinco membros; os oito itens retornaram com participações. Nenhum banco remoto foi consultado ou alterado.
+
+## Pacotes e custos — 7 de outubro de 2026
+
+Implementada a extensão aprovada no [plano de pacotes e custos](21_PACKAGES_AND_COSTS_PLAN.md), para substituir o controle da planilha após a finalização. A finalização cria um acompanhamento aberto na mesma transação, copiando os itens, valores sugeridos e pesos de participantes sem alterar snapshots; compras antigas podem iniciar esse acompanhamento explicitamente e com segurança idempotente.
+
+O acompanhamento permite editar preço efetivo e frete China por unidade, definir percentuais Pix/cartão em Meu grupo, capturar a taxa aplicada na cobrança, dividir quantidades entre pacotes, informar frete Brasil e Receita, manter pagamentos e logística manuais, ver custos por item/pessoa e encerrar ou reabrir com motivo auditável. Uma edição que altere uma cobrança paga exige confirmação e a deixa pendente novamente. A quarta guia **Pacotes e custos** fica entre Compra atual e Histórico; a tela mantém tabela financeira no desktop e linhas compactas no mobile. Os dados financeiros ficam separados da compra finalizada.
+
+O cálculo usa centavos e pesos inteiros, `BigInt`, arredondamento metade para cima e maior resto com desempate estável. A migração `0004_milky_wither.sql` adiciona as oito tabelas do acompanhamento. Não houve migração em produção, alteração remota nem deploy. A especificação e o handoff operacional constam em `docs/21_PACKAGES_AND_COSTS_PLAN.md` e abaixo.
+
+### Verificações desta implementação
+
+| Verificação | Resultado |
+| --- | --- |
+| `npm run check` | Passou: typecheck, lint sem avisos, testes e build |
+| `npm test` | **139 testes passaram**, 16 arquivos |
+| `npm run test:e2e` | **23 cenários Chromium passaram**, incluindo fechamento/reabertura e layout de 320 px |
+| Migração em `file:/private/tmp/loti-packages-costs-20261007-a1b3.sqlite` | Aplicada em banco temporário isolado; banco local existente preservado |
+| Mesmo alvo com `npm run db:verify` | Passou; 20 tabelas acessíveis |
+
+### Handoff de migração e publicação
+
+Antes de publicar esta versão, gere snapshot/backup do banco Turso aprovado, aplique a migração ao alvo explicitamente autorizado e só então publique o código. Substitua os placeholders localmente; não use a URL incidental de `.env` nem registre tokens no terminal, Git ou relatório:
+
+```sh
+TURSO_DATABASE_URL="$APPROVED_TURSO_DATABASE_URL" TURSO_AUTH_TOKEN="$APPROVED_TURSO_AUTH_TOKEN" npm run db:migrate
+TURSO_DATABASE_URL="$APPROVED_TURSO_DATABASE_URL" TURSO_AUTH_TOKEN="$APPROVED_TURSO_AUTH_TOKEN" npm run db:verify
+```
+
+Depois do deploy, faça smoke test autenticado de finalização, edição de preço/frete, taxa de pagamento, alocação em pacote, encerramento e reabertura. A migração ainda não foi aplicada em produção; este relatório não declara a feature publicada.
+
+## Refatoração UX de Pacotes e custos — 7 de outubro de 2026
+
+Executado o [plano de descoberta progressiva](22_PACKAGES_AND_COSTS_UX_REFACTOR_PLAN.md). A tela agora abre com resumo parcial/final, pendências e próxima tarefa, seguidos por Produtos e pagamento, Pacotes e Divisão por pessoa recolhidos. A ação contextual abre e focaliza o ponto de edição; a expansão se preserva durante mutações.
+
+O cálculo agrega parcelas conhecidas por componente e mantém separado o total final pendente. Valores sem proporção definida aparecem como não distribuídos. Pacotes mostram conteúdo e cobranças em leitura até que a pessoa escolha uma ação; editores de metadados, conteúdo, preço/frete e cobrança oferecem cancelar/salvar explícitos. A tabela financeira usa lista compacta em viewports até 1199px, e valores da tabela desktop ficam alinhados à direita. Percentuais são apresentados em pt-BR sem alterar o formato dos campos numéricos.
+
+### Verificações desta refatoração
+
+| Verificação | Resultado |
+| --- | --- |
+| `npm run check` | Passou: TypeScript, ESLint, **148 testes unitários/integrados** e build |
+| `npm run test:e2e` | **23 cenários Chromium passaram** |
+| Jornada E2E de Pacotes e custos após o ajuste final | 1 cenário passou; inclui checagem de overflow em 320, 390, 768, 1024 e 1440px |
+| Capturas desktop/mobile | Inspecionadas em `artifacts/qa/packages-costs-ux/` (9 PNGs) |
+| Schema/migração/deploy | Sem alteração da refatoração UX; nenhuma migração de produção ou publicação feita |

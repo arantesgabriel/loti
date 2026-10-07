@@ -73,3 +73,129 @@ export const workspaceInvitations = sqliteTable("workspace_invitations", {
 export const invitationLimits = sqliteTable("invitation_limits", {
   key: text("key").primaryKey(), window: integer("window").notNull(), count: integer("count").notNull(),
 });
+
+export const workspaceCostSettings = sqliteTable("workspace_cost_settings", {
+  workspaceId: text("workspace_id").primaryKey().references(() => workspaces.id),
+  pixBps: integer("pix_bps").notNull().default(100),
+  cardBps: integer("card_bps").notNull().default(500),
+  updatedBy: text("updated_by").notNull().references(() => user.id),
+  updatedAt: timestamp("updated_at"),
+}, t => [
+  check("cost_settings_pix_bps", sql`typeof(${t.pixBps}) = 'integer' AND ${t.pixBps} BETWEEN 0 AND 10000`),
+  check("cost_settings_card_bps", sql`typeof(${t.cardBps}) = 'integer' AND ${t.cardBps} BETWEEN 0 AND 10000`),
+]);
+
+export const purchaseCostTrackings = sqliteTable("purchase_cost_trackings", {
+  id: text("id").primaryKey(),
+  purchaseId: text("purchase_id").notNull().references(() => purchases.id),
+  workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+  status: text("status", { enum: ["open", "closed"] }).notNull().default("open"),
+  revision: integer("revision").notNull().default(0),
+  createdBy: text("created_by").notNull().references(() => user.id),
+  createdAt: timestamp("created_at"),
+  updatedBy: text("updated_by").notNull().references(() => user.id),
+  updatedAt: timestamp("updated_at"),
+  closedBy: text("closed_by").references(() => user.id),
+  closedAt: integer("closed_at", { mode: "timestamp_ms" }),
+}, t => [
+  uniqueIndex("cost_tracking_purchase_idx").on(t.purchaseId),
+  index("cost_tracking_workspace_idx").on(t.workspaceId, t.status, t.updatedAt),
+  check("cost_tracking_state", sql`(${t.status} = 'open' AND ${t.closedAt} IS NULL AND ${t.closedBy} IS NULL) OR (${t.status} = 'closed' AND ${t.closedAt} IS NOT NULL AND ${t.closedBy} IS NOT NULL)`),
+  check("cost_tracking_revision", sql`typeof(${t.revision}) = 'integer' AND ${t.revision} >= 0`),
+]);
+
+export const purchaseItemCosts = sqliteTable("purchase_item_costs", {
+  id: text("id").primaryKey(),
+  trackingId: text("tracking_id").notNull().references(() => purchaseCostTrackings.id),
+  purchaseItemId: text("purchase_item_id").notNull().references(() => purchaseItems.id),
+  itemOrder: integer("item_order").notNull(),
+  effectivePriceState: text("effective_price_state", { enum: ["pending", "known", "no_charge"] }).notNull(),
+  effectivePriceUnitCents: integer("effective_price_unit_cents"),
+  chinaFreightState: text("china_freight_state", { enum: ["pending", "known", "no_charge"] }).notNull().default("pending"),
+  chinaFreightUnitCents: integer("china_freight_unit_cents"),
+}, t => [
+  uniqueIndex("cost_item_tracking_item_idx").on(t.trackingId, t.purchaseItemId),
+  index("cost_item_tracking_order_idx").on(t.trackingId, t.itemOrder),
+  check("cost_item_order", sql`typeof(${t.itemOrder}) = 'integer' AND ${t.itemOrder} >= 0`),
+  check("cost_item_effective_price_state", sql`(${t.effectivePriceState} = 'known' AND typeof(${t.effectivePriceUnitCents}) = 'integer' AND ${t.effectivePriceUnitCents} BETWEEN 0 AND 1000000000000) OR (${t.effectivePriceState} IN ('pending','no_charge') AND ${t.effectivePriceUnitCents} IS NULL)`),
+  check("cost_item_china_freight_state", sql`(${t.chinaFreightState} = 'known' AND typeof(${t.chinaFreightUnitCents}) = 'integer' AND ${t.chinaFreightUnitCents} BETWEEN 0 AND 1000000000000) OR (${t.chinaFreightState} IN ('pending','no_charge') AND ${t.chinaFreightUnitCents} IS NULL)`),
+]);
+
+export const purchaseCostParticipants = sqliteTable("purchase_cost_participants", {
+  costItemId: text("cost_item_id").notNull().references(() => purchaseItemCosts.id),
+  personId: text("person_id").notNull().references(() => user.id),
+  allocationOrder: integer("allocation_order").notNull(),
+  weightMode: text("weight_mode", { enum: ["equal", "percentage", "fixed"] }).notNull(),
+  weight: integer("weight").notNull(),
+}, t => [
+  primaryKey({ columns: [t.costItemId, t.personId] }),
+  uniqueIndex("cost_participant_order_idx").on(t.costItemId, t.allocationOrder),
+  index("cost_participant_person_idx").on(t.personId),
+  check("cost_participant_order", sql`typeof(${t.allocationOrder}) = 'integer' AND ${t.allocationOrder} >= 0`),
+  check("cost_participant_weight", sql`typeof(${t.weight}) = 'integer' AND ${t.weight} BETWEEN 0 AND 1000000000000`),
+  check("cost_participant_weight_mode", sql`${t.weightMode} IN ('equal','percentage','fixed')`),
+]);
+
+export const purchasePackages = sqliteTable("purchase_packages", {
+  id: text("id").primaryKey(),
+  trackingId: text("tracking_id").notNull().references(() => purchaseCostTrackings.id),
+  name: text("name").notNull(),
+  packageOrder: integer("package_order").notNull(),
+  logisticsStatus: text("logistics_status", { enum: ["preparing", "sent", "received"] }).notNull().default("preparing"),
+  createdAt: timestamp("created_at"),
+  updatedAt: timestamp("updated_at"),
+}, t => [
+  index("cost_package_tracking_idx").on(t.trackingId, t.packageOrder),
+  check("cost_package_name", sql`length(trim(${t.name})) > 0`),
+  check("cost_package_order", sql`typeof(${t.packageOrder}) = 'integer' AND ${t.packageOrder} >= 0`),
+  check("cost_package_logistics", sql`${t.logisticsStatus} IN ('preparing','sent','received')`),
+]);
+
+export const purchasePackageItems = sqliteTable("purchase_package_items", {
+  packageId: text("package_id").notNull().references(() => purchasePackages.id),
+  costItemId: text("cost_item_id").notNull().references(() => purchaseItemCosts.id),
+  quantity: integer("quantity").notNull(),
+  allocationOrder: integer("allocation_order").notNull(),
+}, t => [
+  primaryKey({ columns: [t.packageId, t.costItemId] }),
+  uniqueIndex("package_item_order_idx").on(t.packageId, t.allocationOrder),
+  index("package_item_cost_item_idx").on(t.costItemId),
+  check("package_item_quantity", sql`typeof(${t.quantity}) = 'integer' AND ${t.quantity} >= 1`),
+  check("package_item_order", sql`typeof(${t.allocationOrder}) = 'integer' AND ${t.allocationOrder} >= 0`),
+]);
+
+export const purchaseCostCharges = sqliteTable("purchase_cost_charges", {
+  id: text("id").primaryKey(),
+  trackingId: text("tracking_id").notNull().references(() => purchaseCostTrackings.id),
+  packageId: text("package_id").references(() => purchasePackages.id),
+  chargeType: text("charge_type", { enum: ["products", "brazil_freight", "customs"] }).notNull(),
+  valueState: text("value_state", { enum: ["pending", "known", "no_charge"] }),
+  amountCents: integer("amount_cents"),
+  paymentMethod: text("payment_method", { enum: ["pix", "card"] }),
+  feeBps: integer("fee_bps"),
+  paymentStatus: text("payment_status", { enum: ["pending", "paid"] }).notNull().default("pending"),
+  paidBy: text("paid_by").references(() => user.id),
+  paidAt: integer("paid_at", { mode: "timestamp_ms" }),
+  createdAt: timestamp("created_at"),
+  updatedAt: timestamp("updated_at"),
+}, t => [
+  uniqueIndex("cost_charge_products_idx").on(t.trackingId).where(sql`${t.chargeType} = 'products'`),
+  uniqueIndex("cost_charge_package_type_idx").on(t.packageId, t.chargeType).where(sql`${t.chargeType} IN ('brazil_freight','customs')`),
+  index("cost_charge_tracking_idx").on(t.trackingId, t.chargeType),
+  check("cost_charge_package_scope", sql`(${t.chargeType} = 'products' AND ${t.packageId} IS NULL AND ${t.valueState} IS NULL AND ${t.amountCents} IS NULL) OR (${t.chargeType} IN ('brazil_freight','customs') AND ${t.packageId} IS NOT NULL)`),
+  check("cost_charge_value_state", sql`${t.chargeType} = 'products' OR (${t.valueState} = 'known' AND typeof(${t.amountCents}) = 'integer' AND ${t.amountCents} BETWEEN 0 AND 1000000000000) OR (${t.valueState} IN ('pending','no_charge') AND ${t.amountCents} IS NULL)`),
+  check("cost_charge_fee", sql`(${t.feeBps} IS NULL AND ${t.paymentMethod} IS NULL) OR (typeof(${t.feeBps}) = 'integer' AND ${t.feeBps} BETWEEN 0 AND 10000 AND ${t.paymentMethod} IN ('pix','card'))`),
+  check("cost_charge_customs_fee", sql`${t.chargeType} != 'customs' OR (${t.feeBps} IS NULL AND ${t.paymentMethod} IS NULL)`),
+  check("cost_charge_paid", sql`(${t.paymentStatus} = 'pending' AND ${t.paidAt} IS NULL AND ${t.paidBy} IS NULL) OR (${t.paymentStatus} = 'paid' AND ${t.paidAt} IS NOT NULL AND ${t.paidBy} IS NOT NULL)`),
+]);
+
+export const purchaseCostReopenings = sqliteTable("purchase_cost_reopenings", {
+  id: text("id").primaryKey(),
+  trackingId: text("tracking_id").notNull().references(() => purchaseCostTrackings.id),
+  reopenedBy: text("reopened_by").notNull().references(() => user.id),
+  reopenedAt: timestamp("reopened_at"),
+  reason: text("reason").notNull(),
+}, t => [
+  index("cost_reopening_tracking_idx").on(t.trackingId, t.reopenedAt),
+  check("cost_reopening_reason", sql`length(trim(${t.reason})) > 0`),
+]);

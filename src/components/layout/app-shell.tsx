@@ -2,10 +2,10 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useLayoutEffect, useRef, useState } from "react";
-import { Bookmark, ShoppingCart, History, Folder, Plus, ChevronDown } from "lucide-react";
+import { Bookmark, ShoppingCart, History, Folder, Plus, ChevronDown, Package } from "lucide-react";
 import { Avatar } from "../shared";
 import { useWorkspace } from "../workspace-provider";
-const nav = [{ href: "/favorites", label: "Favoritos", short: "Favoritos", icon: Bookmark }, { href: "/purchase", label: "Compra atual", short: "Compra", icon: ShoppingCart }, { href: "/history", label: "Histórico", short: "Histórico", icon: History }];
+const nav = [{ href: "/favorites", label: "Favoritos", short: "Favoritos", icon: Bookmark }, { href: "/purchase", label: "Compra atual", short: "Compra", icon: ShoppingCart }, { href: "/packages", label: "Pacotes e custos", short: "Pacotes", icon: Package }, { href: "/history", label: "Histórico", short: "Histórico", icon: History }];
 export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname(), params = useSearchParams(), { data } = useWorkspace();
   const mobileNavRef = useRef<HTMLElement>(null), mobileNavItems = useRef(new Map<string, HTMLAnchorElement>());
