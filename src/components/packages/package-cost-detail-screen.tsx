@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ChevronDown, CircleDollarSign, LockKeyhole, Package, Plus, RotateCcw } from "lucide-react";
+import { ArrowLeft, ChevronDown, CircleCheck, CircleDollarSign, Clock3, Hash, LockKeyhole, Package, Plus, RotateCcw, UsersRound } from "lucide-react";
 import { toast } from "sonner";
 import { Avatar, EmptyState, ProductCategoryMarker } from "@/components/shared";
 import { Button } from "@/components/ui/button";
@@ -183,6 +183,7 @@ export function PackageCostDetailScreen({ trackingId }: { trackingId: string }) 
   const products = detail.calculation.productsCharge;
   const productsCharge = detail.productsCharge;
   const productsRate = products.feeCents === null ? null : products.feeCents;
+  const productsPaid = productsCharge?.paymentStatus === "paid";
   const lastEdited = detail.tracking.updatedAt ? new Date(detail.tracking.updatedAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "";
 
   return <>
@@ -197,23 +198,26 @@ export function PackageCostDetailScreen({ trackingId }: { trackingId: string }) 
     </div>
 
     <ProgressiveSection id="products" title="Produtos e pagamento" summary={presentation.productsSummary} open={openSections.products} onToggle={() => setOpenSections(current => ({ ...current, products: !current.products }))}>
+    <div className="cost-section-content" aria-labelledby="product-payment-title">
+      <div className="cost-section-heading"><div><h2 id="product-payment-title"><CircleDollarSign size={19}/>Pagamento dos produtos</h2><p className="muted">Uma cobrança para o preço efetivo e o frete China de toda a compra.</p></div></div>
+      <div className="cost-product-payment">
+        {products.baseCents === null && <p className="cost-payment-requirement">Para configurar e confirmar esta cobrança, informe os campos pendentes: {detail.items.flatMap(item => [item.effectivePriceState === "pending" ? `${item.original.name} · preço efetivo` : null, item.chinaFreightState === "pending" ? `${item.original.name} · frete China` : null].filter((value): value is string => value !== null)).join("; ") || "a composição dos produtos"}.</p>}
+        <div className="cost-product-payment-summary" role="group" aria-label="Resumo da cobrança dos produtos">
+          <div className="cost-product-payment-metric"><span className="cost-detail-label">Base dos produtos</span><strong>{money(products.baseCents)}</strong></div>
+          <div className="cost-product-payment-metric"><span className="cost-detail-label">Taxa {productsCharge?.feeBps === null || productsCharge?.feeBps === undefined ? "pendente" : `${percentFromBasisPoints(productsCharge.feeBps)}%`}</span><strong>{money(productsRate)}</strong></div>
+          <div className="cost-product-payment-metric total"><span className="cost-detail-label">Total a pagar</span><div className="cost-product-payment-total"><strong>{money(products.totalCents)}</strong><span className={`cost-products-payment-status ${productsPaid ? "paid" : "pending"}`} role="status" aria-label={productsPaid ? "Pagamento pago" : "Pagamento a pagar"}>{productsPaid ? <CircleCheck size={13} aria-hidden="true"/> : <Clock3 size={13} aria-hidden="true"/>}{productsPaid ? "Pago" : "A pagar"}</span></div></div>
+        </div>
+        <div className={`cost-product-payment-controls ${locked ? "locked" : ""}`} role="group" aria-label="Ações do pagamento dos produtos">
+          <label>Método<select data-cost-target="products-method" disabled={!!locked || busy || products.baseCents === null} value={productsCharge?.paymentMethod ?? ""} onChange={event => void saveProductMethod(event.target.value)}><option value="">Escolher método</option><option value="pix">Pix · padrão {percentFromBasisPoints(detail.settings.pixBps)}%</option><option value="card">Cartão · padrão {percentFromBasisPoints(detail.settings.cardBps)}%</option></select></label>
+          {!locked && productsCharge && <Button className="cost-payment-edit" variant="outline" disabled={busy || products.baseCents === null} onClick={() => setChargeEditor({ id: productsCharge.id, type: "products", name: "Pagamento dos produtos" })}>Editar taxa</Button>}
+          {!locked && productsCharge && <Button className="cost-payment-confirm" data-cost-target="products-paid" variant={productsCharge.paymentStatus === "paid" ? "outline" : "default"} disabled={busy || productsCharge.paymentStatus === "paid" || products.totalCents === null || (products.baseCents ?? 0) > 0 && !productsCharge.paymentMethod} onClick={() => void markPaid(productsCharge.id)}>{productsCharge.paymentStatus === "paid" ? "Pagamento confirmado" : "Marcar como pago"}</Button>}
+        </div>
+      </div>
+      <p className="muted cost-hint">O percentual fica registrado nesta cobrança mesmo se o padrão do grupo mudar.</p>
+    </div>
     <div className="cost-section-content" aria-labelledby="items-title">
       <div className="cost-section-heading"><div><h2 id="items-title">Custos por produto</h2><p className="muted">Valores unitários de preço e frete China; os demais encargos são rateados pelas unidades.</p></div><strong>{detail.calculation.summary.totalCents === null ? "Total parcial " : "Total final "}{detail.calculation.summary.hasKnownAmount ? formatMoney(detail.calculation.summary.totalCents ?? detail.calculation.summary.partialCents) : "Por informar"}</strong></div>
       <ProductCostsList detail={detail} locked={!!locked} onDetails={setItemDetailId} onEdit={item => setItemEditor({ id: item.id, name: item.original.name })}/>
-    </div>
-    <div className="cost-section-content" aria-labelledby="product-payment-title">
-      <div className="cost-section-heading"><div><h2 id="product-payment-title"><CircleDollarSign size={19}/>Pagamento dos produtos</h2><p className="muted">Uma cobrança para o preço efetivo e o frete China de toda a compra.</p></div></div>
-      {products.baseCents === null && <p className="cost-payment-requirement">Para configurar e confirmar esta cobrança, informe os campos pendentes: {detail.items.flatMap(item => [item.effectivePriceState === "pending" ? `${item.original.name} · preço efetivo` : null, item.chinaFreightState === "pending" ? `${item.original.name} · frete China` : null].filter((value): value is string => value !== null)).join("; ") || "a composição dos produtos"}.</p>}
-      <div className="cost-product-payment">
-        <div><span className="cost-detail-label">Base dos produtos</span><strong>{money(products.baseCents)}</strong></div>
-        <div><span className="cost-detail-label">Taxa {productsCharge?.feeBps === null || productsCharge?.feeBps === undefined ? "pendente" : `${percentFromBasisPoints(productsCharge.feeBps)}%`}</span><strong>{money(productsRate)}</strong></div>
-        <div><span className="cost-detail-label">Total a pagar</span><strong>{money(products.totalCents)}</strong></div>
-        <label>Método<select data-cost-target="products-method" disabled={!!locked || busy || products.baseCents === null} value={productsCharge?.paymentMethod ?? ""} onChange={event => void saveProductMethod(event.target.value)}><option value="">Escolher método</option><option value="pix">Pix · padrão {percentFromBasisPoints(detail.settings.pixBps)}%</option><option value="card">Cartão · padrão {percentFromBasisPoints(detail.settings.cardBps)}%</option></select></label>
-        <span className={`cost-payment-state ${productsCharge?.paymentStatus === "paid" ? "paid" : "pending"}`}>{productsCharge?.paymentStatus === "paid" ? "Pago" : "A pagar"}</span>
-        {!locked && productsCharge && <Button variant="outline" disabled={busy || products.baseCents === null} onClick={() => setChargeEditor({ id: productsCharge.id, type: "products", name: "Pagamento dos produtos" })}>Editar taxa</Button>}
-        {!locked && productsCharge && <Button data-cost-target="products-paid" variant={productsCharge.paymentStatus === "paid" ? "outline" : "default"} disabled={busy || productsCharge.paymentStatus === "paid" || products.totalCents === null || (products.baseCents ?? 0) > 0 && !productsCharge.paymentMethod} onClick={() => void markPaid(productsCharge.id)}>{productsCharge.paymentStatus === "paid" ? "Pagamento confirmado" : "Marcar como pago"}</Button>}
-      </div>
-      <p className="muted cost-hint">O percentual fica registrado nesta cobrança mesmo se o padrão do grupo mudar.</p>
     </div>
     </ProgressiveSection>
 
@@ -268,14 +272,14 @@ function ProductCostsList({ detail, locked, onDetails, onEdit }: { detail: Detai
     <div className="cost-table-wrap">
       <table className="cost-table"><thead><tr><th>Produto</th><th>Qtd.</th><th>Preço efetivo / un.</th><th>Frete China / un.</th><th>Taxa de pagamento</th><th>Frete Brasil</th><th>Receita</th><th>Total</th><th><span className="sr-only">Ações</span></th></tr></thead><tbody>
         {detail.items.map(item => <tr key={item.id}>
-          <td data-label="Produto"><div className="cost-product-name"><ProductCategoryMarker visualKey={item.original.visualKey}/><span><strong>{item.original.name}</strong><small>{item.original.variant || "Sem variação"}</small><small>{item.participants.map(person => person.name).join(" · ")}</small></span></div></td>
-          <td data-label="Quantidade">{item.original.quantity}</td>
+          <td data-label="Produto"><div className="cost-product-name"><ProductCategoryMarker visualKey={item.original.visualKey}/><span><strong>{item.original.name}</strong><small>{item.original.variant || "Sem variação"}</small>{item.participants.length > 0 && <small className="cost-product-participants"><UsersRound size={12} aria-hidden="true"/><span>{item.participants.map(person => person.name).join(" · ")}</span></small>}</span></div></td>
+          <td data-label="Quantidade"><span className="cost-quantity"><Hash size={12} aria-hidden="true"/>{item.original.quantity}</span></td>
           <td data-label="Preço efetivo / un.">{displayedValue(item.effectivePriceState, item.effectivePriceUnitCents)}</td>
           <td data-label="Frete China / un.">{displayedValue(item.chinaFreightState, item.chinaFreightUnitCents)}</td>
           <td data-label="Taxa de pagamento">{money(sumComponents(item, "Taxa"))}</td>
           <td data-label="Frete Brasil">{money(sumComponents(item, "Frete Brasil"))}</td>
           <td data-label="Receita">{money(sumComponents(item, "Receita"))}</td>
-          <td data-label="Total">{item.calculation?.totalCents === null && <small className="cost-cell-pending">Parcial</small>}<strong>{calculatedTotal(item.calculation?.totalCents, item.calculation?.partialCents, item.calculation?.hasKnownAmount)}</strong>{pendingDetails(item).length > 0 && <small className="cost-cell-pending">Por informar: {pendingDetails(item).join(", ")}</small>}</td>
+          <td data-label="Total">{item.calculation?.totalCents === null && <small className="cost-cell-pending">Parcial</small>}<strong>{calculatedTotal(item.calculation?.totalCents, item.calculation?.partialCents, item.calculation?.hasKnownAmount)}</strong></td>
           <td data-label="Ações"><div className="cost-row-actions"><Button variant="ghost" size="sm" onClick={() => onDetails(item.id)}>Ver composição</Button>{!locked && <Button data-cost-target={`item-cost-${item.id}`} variant="outline" size="sm" onClick={() => onEdit(item)}>Editar valores</Button>}</div></td>
         </tr>)}
       </tbody></table>
@@ -284,7 +288,7 @@ function ProductCostsList({ detail, locked, onDetails, onEdit }: { detail: Detai
       {detail.items.map(item => {
         const pending = pendingDetails(item);
         return <article className="cost-product-mobile-card" key={item.id}>
-          <div className="cost-product-mobile-title"><ProductCategoryMarker visualKey={item.original.visualKey}/><span><strong>{item.original.name}</strong><small>{item.original.variant || "Sem variação"}</small><small>{item.participants.map(person => person.name).join(" · ")}</small></span></div>
+          <div className="cost-product-mobile-title"><ProductCategoryMarker visualKey={item.original.visualKey}/><span><strong>{item.original.name}</strong><small>{item.original.variant || "Sem variação"}</small>{item.participants.length > 0 && <small className="cost-product-participants"><UsersRound size={12} aria-hidden="true"/><span>{item.participants.map(person => person.name).join(" · ")}</span></small>}</span></div>
           <dl className="cost-product-mobile-values">
             <div><dt>Quantidade</dt><dd>{unitsLabel(item.original.quantity)}</dd></div>
             <div><dt>Preço efetivo / un.</dt><dd>{displayedValue(item.effectivePriceState, item.effectivePriceUnitCents)}</dd></div>
