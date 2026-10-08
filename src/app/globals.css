@@ -3261,8 +3261,54 @@ details .details-fields {
 }
 
 .cost-detail-heading {
+    align-items: flex-start;
+    margin-bottom: 24px;
+}
+
+.cost-detail-title {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.cost-detail-title h1 {
+    margin: 0;
+}
+
+.cost-detail-facts {
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    margin-bottom: 6px;
+    gap: 7px 10px;
+    margin-top: 7px;
+}
+
+.cost-detail-fact {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.cost-detail-fact svg,
+.cost-last-edited svg {
+    flex: none;
+    color: var(--muted);
+}
+
+.cost-detail-fact-separator,
+.cost-detail-meta-separator {
+    color: var(--border);
+    font-size: 12px;
+}
+
+.cost-detail-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px 12px;
+    margin-top: 6px;
 }
 
 .cost-heading-actions {
@@ -3272,9 +3318,42 @@ details .details-fields {
     flex-shrink: 0;
 }
 
-.cost-last-edited {
-    margin: 0 0 25px;
+.cost-account {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 7px;
+    min-width: 0;
+    margin: 0;
+    color: var(--foreground);
     font-size: 12px;
+    line-height: 1.4;
+}
+
+.cost-account-label {
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 550;
+}
+
+.cost-account strong {
+    overflow-wrap: anywhere;
+    font-weight: 550;
+}
+
+.cost-last-edited {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    margin: 0;
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+.cost-last-edited strong {
+    color: var(--foreground);
+    font-weight: 500;
 }
 
 .cost-section {
@@ -4514,6 +4593,16 @@ details .details-fields {
         flex-direction: column;
         align-items: stretch;
         gap: 9px;
+    }
+
+    .cost-detail-meta {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .cost-detail-meta-separator {
+        display: none;
     }
 
     .cost-heading-actions {

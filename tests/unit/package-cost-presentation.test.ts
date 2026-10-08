@@ -27,7 +27,7 @@ describe("package cost progressive presentation", () => {
     const presentation = packageCostPresentation(detail);
     expect(presentation.nextAction).toEqual({ label: "Informar frete China de Tênis", section: "products", target: "item-cost-shoe" });
     expect(presentation).toMatchObject({ isPartial: true, hasKnownAmount: true, totalCents: 12_000 });
-    expect(presentation.productsSummary).toContain("1 frete China por informar");
+    expect(presentation.productsSummary).toContain("Falta informar 1 frete China");
   });
 
   it("prioritizes a resolved products payment before package allocation", () => {

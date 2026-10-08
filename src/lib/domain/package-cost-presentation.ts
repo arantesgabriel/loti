@@ -11,6 +11,10 @@ function packageLabel(name: string) {
   return name.toLocaleLowerCase("pt-BR").startsWith("pacote") ? name : `Pacote ${name}`;
 }
 
+function missingValueLabel(count: number, singular: string, plural: string) {
+  return `Falta informar ${count} ${count === 1 ? singular : plural}`;
+}
+
 function nextAction(detail: CostTrackingView): CostNextAction | null {
   if (detail.tracking.status === "closed") return null;
 
@@ -83,14 +87,14 @@ export function packageCostPresentation(detail: CostTrackingView) {
     productsSummary: [
       `${detail.items.length} ${detail.items.length === 1 ? "produto" : "produtos"}`,
       unitsLabel(unitCount),
-      ...(pricePending ? [`${pricePending} ${pricePending === 1 ? "preço efetivo por informar" : "preços efetivos por informar"}`] : []),
-      ...(chinaPending ? [`${chinaPending} ${chinaPending === 1 ? "frete China por informar" : "fretes China por informar"}`] : []),
+      ...(pricePending ? [missingValueLabel(pricePending, "preço efetivo", "preços efetivos")] : []),
+      ...(chinaPending ? [missingValueLabel(chinaPending, "frete China", "fretes China")] : []),
       pendingProductPayment(detail),
     ].join(" · "),
     packagesSummary: [
       `${packageCount} ${packageCount === 1 ? "pacote" : "pacotes"}`,
       `${assignedUnits}/${unitCount} unidades distribuídas`,
-      ...(pendingPackageValues ? [`${pendingPackageValues} ${pendingPackageValues === 1 ? "valor por informar" : "valores por informar"}`] : []),
+      ...(pendingPackageValues ? [missingValueLabel(pendingPackageValues, "valor", "valores")] : []),
       ...(pendingPackagePayments ? [`${pendingPackagePayments} ${pendingPackagePayments === 1 ? "pagamento pendente" : "pagamentos pendentes"}`] : []),
     ].join(" · "),
     peopleSummary: [

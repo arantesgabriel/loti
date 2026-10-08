@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ChevronDown, CircleCheck, CircleDollarSign, Clock3, Hash, LockKeyhole, Package, Plus, RotateCcw, UsersRound } from "lucide-react";
+import { ArrowLeft, CalendarDays, ChevronDown, CircleCheck, CircleDollarSign, Clock3, Hash, LockKeyhole, Package, Plus, RotateCcw, UserRound, UsersRound } from "lucide-react";
 import { toast } from "sonner";
 import { Avatar, EmptyState, ProductCategoryMarker } from "@/components/shared";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,7 @@ type ChargeEditor = { id: string; type: ChargeType; name: string };
 type ItemEditor = { id: string; name: string };
 type PaymentReset = { operation: string; rest: Record<string, unknown> };
 
-const money = (amount: number | null | undefined) => amount === null || amount === undefined ? "Por informar" : formatMoney(amount);
+const money = (amount: number | null | undefined) => amount === null || amount === undefined ? "Falta informar" : formatMoney(amount);
 const logisticName = (status: string) => status === "received" ? "Recebido" : status === "sent" ? "Enviado" : "Em preparação";
 const unitsLabel = (count: number) => `${count} ${count === 1 ? "unidade" : "unidades"}`;
 function sumComponents(item: DetailItem, startsWith: string) {
@@ -36,7 +36,7 @@ function sumComponents(item: DetailItem, startsWith: string) {
 }
 function calculatedTotal(total: number | null | undefined, partial: number | null | undefined, hasKnownAmount: boolean | undefined) {
   if (total !== null && total !== undefined) return formatMoney(total);
-  return hasKnownAmount ? formatMoney(partial ?? 0) : "Por informar";
+  return hasKnownAmount ? formatMoney(partial ?? 0) : "Falta informar";
 }
 function amountInput(value: number | null) { return value === null ? "" : (value / 100).toFixed(2); }
 function centsInput(value: string) {
@@ -185,15 +185,30 @@ export function PackageCostDetailScreen({ trackingId }: { trackingId: string }) 
   const productsRate = products.feeCents === null ? null : products.feeCents;
   const productsPaid = productsCharge?.paymentStatus === "paid";
   const lastEdited = detail.tracking.updatedAt ? new Date(detail.tracking.updatedAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "";
+  const updatedByName = detail.members.find(person => person.id === detail.tracking.updatedBy)?.name ?? "membro";
+  const finalizedDate = detail.purchase.finalizedAt ? new Date(detail.purchase.finalizedAt).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "—";
 
   return <>
     <Link className="cost-back" href="/packages"><ArrowLeft size={16}/>Pacotes e custos</Link>
-    <div className="page-heading cost-detail-heading"><div><h1>{detail.purchase.name}</h1><p className="muted">Finalizada em {detail.purchase.finalizedAt ? new Date(detail.purchase.finalizedAt).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "—"} · {unitsLabel(totalUnits)}</p></div><div className="cost-heading-actions"><span className="cost-status">Compra finalizada</span><span className={`cost-status ${locked ? "closed" : "open"}`}>{locked ? <><LockKeyhole size={13}/> Custos encerrados</> : "Custos abertos"}</span>{locked && <Button aria-label="Reabrir acompanhamento" variant="outline" onClick={() => setReopenOpen(true)}><RotateCcw size={16}/><span className="desktop-label">Reabrir</span></Button>}</div></div>
-    {detail.purchase.hubbuyAccount && <p className="cost-account muted">Conta HubBuy: {detail.purchase.hubbuyAccount}</p>}
-    <p className="cost-last-edited muted">Atualizado por {detail.members.find(person => person.id === detail.tracking.updatedBy)?.name ?? "membro"}{lastEdited && ` · ${lastEdited}`}</p>
+    <div className="page-heading cost-detail-heading">
+      <div className="cost-detail-title">
+        <h1>{detail.purchase.name}</h1>
+        <div className="cost-detail-facts">
+          <span className="cost-detail-fact"><CalendarDays size={13} aria-hidden="true"/><span>Finalizada em {finalizedDate}</span></span>
+          <span className="cost-detail-fact-separator" aria-hidden="true">·</span>
+          <span className="cost-detail-fact"><Package size={13} aria-hidden="true"/><span>{unitsLabel(totalUnits)}</span></span>
+        </div>
+        <div className="cost-detail-meta">
+          {detail.purchase.hubbuyAccount && <p className="cost-account"><span className="cost-account-label">Conta HubBuy:</span>{" "}<strong>{detail.purchase.hubbuyAccount}</strong></p>}
+          {detail.purchase.hubbuyAccount && lastEdited && <span className="cost-detail-meta-separator" aria-hidden="true">·</span>}
+          <p className="cost-last-edited muted"><UserRound size={13} aria-hidden="true"/><span>Atualizado por <strong>{updatedByName}</strong>{lastEdited && <> · <time dateTime={new Date(detail.tracking.updatedAt).toISOString()}>{lastEdited}</time></>}</span></p>
+        </div>
+      </div>
+      <div className="cost-heading-actions"><span className="cost-status">Compra finalizada</span><span className={`cost-status ${locked ? "closed" : "open"}`}>{locked ? <><LockKeyhole size={13}/> Custos encerrados</> : "Custos abertos"}</span>{locked && <Button aria-label="Reabrir acompanhamento" variant="outline" onClick={() => setReopenOpen(true)}><RotateCcw size={16}/><span className="desktop-label">Reabrir</span></Button>}</div>
+    </div>
 
     <div className="cost-summary-card">
-      <div className="cost-summary-total"><span>{presentation.isPartial ? "Total parcial" : "Total final"}</span><strong>{presentation.hasKnownAmount ? formatMoney(presentation.totalCents) : "Por informar"}</strong></div>
+      <div className="cost-summary-total"><span>{presentation.isPartial ? "Total parcial" : "Total final"}</span><strong>{presentation.hasKnownAmount ? formatMoney(presentation.totalCents) : "Falta informar"}</strong></div>
       {nextAction && <div className="cost-next-action"><span>Próxima tarefa</span><Button variant={nextAction.target === "close-costs" ? "default" : "outline"} data-cost-target="next-action" onClick={openNextAction}>{nextAction.label}</Button></div>}
     </div>
 
@@ -216,7 +231,7 @@ export function PackageCostDetailScreen({ trackingId }: { trackingId: string }) 
       <p className="muted cost-hint">O percentual fica registrado nesta cobrança mesmo se o padrão do grupo mudar.</p>
     </div>
     <div className="cost-section-content" aria-labelledby="items-title">
-      <div className="cost-section-heading"><div><h2 id="items-title">Custos por produto</h2><p className="muted">Valores unitários de preço e frete China; os demais encargos são rateados pelas unidades.</p></div><strong>{detail.calculation.summary.totalCents === null ? "Total parcial " : "Total final "}{detail.calculation.summary.hasKnownAmount ? formatMoney(detail.calculation.summary.totalCents ?? detail.calculation.summary.partialCents) : "Por informar"}</strong></div>
+      <div className="cost-section-heading"><div><h2 id="items-title">Custos por produto</h2><p className="muted">Valores unitários de preço e frete China; os demais encargos são rateados pelas unidades.</p></div><strong>{detail.calculation.summary.totalCents === null ? "Total parcial " : "Total final "}{detail.calculation.summary.hasKnownAmount ? formatMoney(detail.calculation.summary.totalCents ?? detail.calculation.summary.partialCents) : "Falta informar"}</strong></div>
       <ProductCostsList detail={detail} locked={!!locked} onDetails={setItemDetailId} onEdit={item => setItemEditor({ id: item.id, name: item.original.name })}/>
     </div>
     </ProgressiveSection>
@@ -232,7 +247,7 @@ export function PackageCostDetailScreen({ trackingId }: { trackingId: string }) 
     <div className="cost-section-content" aria-labelledby="people-totals-title">
       <div className="cost-section-heading"><div><h2 id="people-totals-title">Divisão por pessoa</h2><p className="muted">Parcelas dos produtos compartilhados e seus encargos.</p></div></div>
       {detail.calculation.summary.undistributedCents > 0 && <p className="cost-undistributed" role="status">Há {formatMoney(detail.calculation.summary.undistributedCents)} em valores conhecidos sem divisão definida. Os totais pessoais exibem apenas as parcelas que já podem ser calculadas.</p>}
-      <ul className="cost-people-list">{detail.memberTotals.map(person => <li key={person.personId}><Avatar name={person.name}/><span><strong>{person.name}</strong><small>{person.personalUnits} {person.personalUnits === 1 ? "unidade pessoal" : "unidades pessoais"}{person.sharedItems ? ` · ${person.sharedItems} compartilhado(s)` : ""}</small></span><strong>{person.pending ? person.hasKnownAmount ? `Parcial ${formatMoney(person.totalCents)}` : "Por informar" : formatMoney(person.totalCents)}</strong></li>)}</ul>
+      <ul className="cost-people-list">{detail.memberTotals.map(person => <li key={person.personId}><Avatar name={person.name}/><span><strong>{person.name}</strong><small>{person.personalUnits} {person.personalUnits === 1 ? "unidade pessoal" : "unidades pessoais"}{person.sharedItems ? ` · ${person.sharedItems} compartilhado(s)` : ""}</small></span><strong>{person.pending ? person.hasKnownAmount ? `Parcial ${formatMoney(person.totalCents)}` : "Falta informar" : formatMoney(person.totalCents)}</strong></li>)}</ul>
     </div>
     </ProgressiveSection>
 
@@ -258,7 +273,7 @@ function ProgressiveSection({ id, title, summary, open, onToggle, children }: { 
 
 function displayedValue(state: string, cents: number | null | undefined) {
   if (state === "no_charge") return "Sem cobrança";
-  if (state !== "known" || cents === null || cents === undefined) return "Por informar";
+  if (state !== "known" || cents === null || cents === undefined) return "Falta informar";
   return formatMoney(cents);
 }
 
@@ -295,7 +310,7 @@ function ProductCostsList({ detail, locked, onDetails, onEdit }: { detail: Detai
             <div><dt>Frete China / un.</dt><dd>{displayedValue(item.chinaFreightState, item.chinaFreightUnitCents)}</dd></div>
             <div className="total"><dt>{item.calculation?.totalCents === null ? "Total parcial" : "Total final"}</dt><dd>{calculatedTotal(item.calculation?.totalCents, item.calculation?.partialCents, item.calculation?.hasKnownAmount)}</dd></div>
           </dl>
-          {pending.length > 0 && <p className="cost-mobile-pending">Por informar: {pending.join(", ")}</p>}
+          {pending.length > 0 && <p className="cost-mobile-pending">Falta informar: {pending.join(", ")}</p>}
           <div className="cost-row-actions"><Button variant="ghost" size="sm" onClick={() => onDetails(item.id)}>Ver composição</Button>{!locked && <Button data-cost-target={`item-cost-${item.id}`} variant="outline" size="sm" onClick={() => onEdit(item)}>Editar valores</Button>}</div>
         </article>;
       })}
@@ -312,7 +327,7 @@ function ItemBreakdownSurface({ detail, itemId, onClose }: { detail: Detail; ite
       <h3>Valores por componente</h3>
       {calculation?.components.map(component => <div key={component.name}><span>{component.name}</span><strong>{money(component.amountCents)}</strong></div>)}
       <div className="cost-breakdown-total"><span>{calculation?.totalCents === null ? "Total parcial" : "Total final"}</span><strong>{calculatedTotal(calculation?.totalCents, calculation?.partialCents, calculation?.hasKnownAmount)}</strong></div>
-      {calculation?.pendingComponents.length ? <p className="cost-mobile-pending">Por informar: {calculation.pendingComponents.join(", ")}</p> : null}
+      {calculation?.pendingComponents.length ? <p className="cost-mobile-pending">Falta informar: {calculation.pendingComponents.join(", ")}</p> : null}
       {calculation && calculation.undistributedCents > 0 && <p className="cost-undistributed">Há {formatMoney(calculation.undistributedCents)} em valores conhecidos sem proporção suficiente para dividir.</p>}
       <h3>Divisão por pessoa</h3>
       {item.participants.map(participant => <div key={participant.personId}><span>{participant.name}</span><strong>{participant.shareCents === null ? participant.partialShareCents === null ? "Parcela não determinável" : `Parcial ${formatMoney(participant.partialShareCents)}` : formatMoney(participant.shareCents)}</strong></div>)}
@@ -332,9 +347,9 @@ function PackageCard({ pkg, detail, expanded, onExpandedChange, locked, busy, sa
   const freight = pkg.brazilFreightCharge, customs = pkg.customsCharge;
   const assigned = pkg.calculation?.unitCount ?? 0;
   const pendingText = [
-    freight?.valueState === "pending" ? "Frete Brasil por informar" : null,
+    freight?.valueState === "pending" ? "Falta informar frete Brasil" : null,
     freight?.valueState === "known" && freight.paymentStatus === "pending" ? "Frete Brasil a pagar" : null,
-    customs?.valueState === "pending" ? "Receita por informar" : null,
+    customs?.valueState === "pending" ? "Falta informar receita" : null,
     customs?.valueState === "known" && customs.paymentStatus === "pending" ? "Receita a pagar" : null,
   ].filter((value): value is string => value !== null);
   const headingId = `cost-package-${pkg.id}-content`;
@@ -424,7 +439,7 @@ function ChargeSummary({ label, target, paidTarget, charge, base, fee, total, fe
   const valueIsPaid = charge.paymentStatus === "paid";
   const noCharge = charge.valueState === "no_charge";
   const pending = charge.valueState === "pending";
-  const status = noCharge ? "Sem cobrança" : valueIsPaid ? "Pago" : pending ? "Por informar" : "A pagar";
+  const status = noCharge ? "Sem cobrança" : valueIsPaid ? "Pago" : pending ? "Falta informar" : "A pagar";
   return <div className="cost-charge-summary">
     <div className="cost-charge-top"><span><strong>{label}</strong><small>{status}</small></span></div>
     <div className="cost-charge-breakdown">
@@ -471,8 +486,8 @@ function ItemCostSurface({ detail, editor, busy, onClose, onSave }: { detail: De
   const canSave = (priceState !== "known" || priceCents !== null) && (chinaState !== "known" || chinaCents !== null) && compositionValid;
   return <Surface sheet open title={`Custos · ${editor.name}`} description="O preço e o frete China são valores por unidade. O histórico da compra permanece intacto." onOpenChange={value => { if (!value && !busy) onClose(); }}>
     <form onSubmit={event => { event.preventDefault(); void onSave({ expectedRevision: detail.tracking.revision, itemId: item.id, effectivePriceState: priceState, effectivePriceUnitCents: priceState === "known" ? priceCents : null, chinaFreightState: chinaState, chinaFreightUnitCents: chinaState === "known" ? chinaCents : null, ...(compositionChanged ? { composition: { mode: compositionMode, participants: item.participants.map(person => ({ personId: person.personId, weight: compositionMode === "equal" ? 1 : Number(weights[person.personId]) || 0 })) } } : {}) }); }}>
-      <div className="form-row"><label>Preço efetivo por unidade<select value={priceState} onChange={event => setPriceState(event.target.value as typeof priceState)}><option value="pending">Por informar</option><option value="known">Informado</option><option value="no_charge">Sem cobrança</option></select></label>{priceState === "known" && <label>Valor em R$<input required inputMode="decimal" value={price} onChange={event => setPrice(event.target.value)} placeholder="0,00"/></label>}</div>
-      <div className="form-row"><label>Frete China por unidade<select value={chinaState} onChange={event => setChinaState(event.target.value as typeof chinaState)}><option value="pending">Por informar</option><option value="known">Informado</option><option value="no_charge">Sem cobrança</option></select></label>{chinaState === "known" && <label>Valor em R$<input required inputMode="decimal" value={china} onChange={event => setChina(event.target.value)} placeholder="0,00"/></label>}</div>
+      <div className="form-row"><label>Preço efetivo por unidade<select value={priceState} onChange={event => setPriceState(event.target.value as typeof priceState)}><option value="pending">Falta informar</option><option value="known">Informado</option><option value="no_charge">Sem cobrança</option></select></label>{priceState === "known" && <label>Valor em R$<input required inputMode="decimal" value={price} onChange={event => setPrice(event.target.value)} placeholder="0,00"/></label>}</div>
+      <div className="form-row"><label>Frete China por unidade<select value={chinaState} onChange={event => setChinaState(event.target.value as typeof chinaState)}><option value="pending">Falta informar</option><option value="known">Informado</option><option value="no_charge">Sem cobrança</option></select></label>{chinaState === "known" && <label>Valor em R$<input required inputMode="decimal" value={china} onChange={event => setChina(event.target.value)} placeholder="0,00"/></label>}</div>
       <div className="cost-composition">
         <label>Divisão entre pessoas<select value={compositionMode} onChange={event => changeCompositionMode(event.target.value)}><option value="equal">Divisão igual</option><option value="percentage">Percentuais</option>{mode === "fixed" && <option value="fixed">Proporção original</option>}</select></label>
         {compositionMode === "percentage" && <p className="muted">Distribua os percentuais. A soma precisa fechar em 100%.</p>}
@@ -520,7 +535,7 @@ function ChargeSurface({ detail, editor, busy, onClose, onSave }: { detail: Deta
 
   return <Surface sheet open title={editor.name} description="Confira a composição antes de registrar o valor. A confirmação de pagamento é manual." onOpenChange={value => { if (!value && !busy) onClose(); }}>
     <form onSubmit={save}>
-      {editor.type !== "products" && <label>Estado do valor<select value={state} onChange={event => setState(event.target.value as typeof state)}><option value="pending">Por informar</option><option value="known">Informado</option><option value="no_charge">Sem cobrança</option></select></label>}
+      {editor.type !== "products" && <label>Estado do valor<select value={state} onChange={event => setState(event.target.value as typeof state)}><option value="pending">Falta informar</option><option value="known">Informado</option><option value="no_charge">Sem cobrança</option></select></label>}
       {editor.type !== "products" && state === "known" && <label>Valor em R$<input required inputMode="decimal" value={amount} onChange={event => setAmount(event.target.value)} placeholder="0,00"/></label>}
       {editor.type !== "customs" && <div className="form-row"><label>Método de pagamento<select value={method} disabled={editor.type === "brazil_freight" && state !== "known"} onChange={event => { const value = event.target.value; setMethod(value); setFeePercent(value === "pix" ? percentInputFromBasisPoints(detail.settings.pixBps) : value === "card" ? percentInputFromBasisPoints(detail.settings.cardBps) : ""); }}><option value="">Escolher método</option><option value="pix">Pix</option><option value="card">Cartão</option></select></label><label>Taxa (%)<input type="number" min="0" max="100" step="0.01" disabled={!method} value={feePercent} onChange={event => setFeePercent(event.target.value)}/></label></div>}
       <div className="cost-editor-preview"><span>Base <strong>{money(base)}</strong></span>{editor.type !== "customs" && <span>Taxa {feeBps === null ? "pendente" : `${percentFromBasisPoints(feeBps)}%`} <strong>{money(fee)}</strong></span>}<span>Total a pagar <strong>{money(total)}</strong></span></div>
