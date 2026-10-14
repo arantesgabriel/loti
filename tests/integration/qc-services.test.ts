@@ -11,6 +11,9 @@ import { fixture, type Fixture } from "./helpers";
 const sourceUrl = "https://scm.hubbuy.app/qc/synthetic.png";
 const rawPhoto = Buffer.from("synthetic-image-bytes");
 const external = { code: 0, data: { count: 1, list: [{ orderNo: "ORDER-1", goodsList: [{ orderGoodsId: "GOODS-1", orderGoodsNo: "ALT-1", offerUrl: "https://weidian.com/item.html?itemID=123", skuInfo: "Black / 42", goodsName: "Tênis", quantity: 1, freePhotos: [sourceUrl] }] }] } };
+function photoImport(count: number, skuInfo = "Black / 42", orderGoodsId = "GOODS-MULTI") {
+  return { code: 0, data: { count: 1, list: [{ orderNo: "ORDER-MULTI", goodsList: [{ orderGoodsId, offerUrl: "https://weidian.com/item.html?itemID=123", skuInfo, goodsName: "Tênis", quantity: 1, freePhotos: Array.from({ length: count }, (_, index) => `https://scm.hubbuy.app/qc/photo-${index}.png`) }] }] } };
+}
 
 function mockStorage(options: { holdPut?: { started: () => void; release: Promise<void> }; deleteFails?: boolean } = {}) {
   const objects = new Map<string, { bytes: Buffer; sha256: string }>();
@@ -27,6 +30,15 @@ async function seedFinalizedPurchase(f: Fixture, id = "qc-purchase") {
 
 function services(f: Fixture, storage: QcStorage, who = "alice", managerId = "alice") {
   return qcServices(f.db, who, { managerId, storage, download: async () => rawPhoto, validate: async bytes => ({ bytes, sha256: createHash("sha256").update(bytes).digest("hex"), mimeType: "image/png", extension: "png", width: 2, height: 2 }) });
+}
+
+function distinctPhotoServices(f: Fixture, storage: QcStorage) {
+  return qcServices(f.db, "alice", {
+    managerId: "alice",
+    storage,
+    download: async url => Buffer.from(new URL(url).pathname),
+    validate: async bytes => ({ bytes, sha256: createHash("sha256").update(bytes).digest("hex"), mimeType: "image/png", extension: "png", width: 2, height: 2 }),
+  });
 }
 
 describe("HubBuy QC persistence and permissions", () => {
@@ -61,7 +73,7 @@ describe("HubBuy QC persistence and permissions", () => {
     const fake = mockStorage(), alice = services(f, fake.storage), bob = services(f, fake.storage, "bob");
     const before = await f.db.select().from(purchaseItems).where(eq(purchaseItems.id, "qc-purchase-item")).get();
     const prepared = await alice.prepare("qc-purchase", external);
-    expect(prepared.rows[0]?.match).toMatchObject({ status: "linked", targetItemId: "qc-purchase-item" });
+    expect(prepared.rows[0]?.match).toMatchObject({ status: "MATCHED", targetItemId: "qc-purchase-item" });
     const confirmed = await alice.confirmImport(prepared.importId, prepared.revision, []);
     expect(confirmed).toMatchObject({ revision: 1, linked: 1, sources: 1 });
     const batch = await alice.runImportBatch(prepared.importId, 1);
@@ -79,13 +91,134 @@ describe("HubBuy QC persistence and permissions", () => {
     const repeated = await alice.prepare("qc-purchase", external);
     await alice.confirmImport(repeated.importId, repeated.revision, []);
     const resumed = await alice.runImportBatch(repeated.importId, 1);
-    expect(resumed).toMatchObject({ processed: 1, deleted: 1, imported: 0 });
+    expect(resumed).toMatchObject({ processed: 0, deleted: 0, imported: 0, complete: true });
+    const recoveredDelete = await alice.runBatch("qc-purchase");
+    expect(recoveredDelete).toMatchObject({ processed: 1, deleted: 1, imported: 0, complete: true });
     expect(fake.calls.put).toHaveBeenCalledTimes(1);
     const after = await f.db.select().from(purchaseItems).where(eq(purchaseItems.id, "qc-purchase-item")).get();
     expect(after).toEqual(before);
     expect(await f.db.select().from(hubbuyExternalItems).all()).toHaveLength(1);
     expect((await f.db.select().from(qcImageSources).all())[0]?.state).toBe("deleted");
-    expect(await f.db.select().from(qcEvents).all()).toHaveLength(9);
+    expect(await f.db.select().from(qcEvents).all()).toHaveLength(10);
+  });
+
+  it("automatically supports importing every distinct photo and reimport remains idempotent", async () => {
+    const fake = mockStorage(), alice = distinctPhotoServices(f, fake.storage), payload = photoImport(4);
+    const preview = await alice.prepare("qc-purchase", payload);
+    expect(preview.rows[0]?.match).toMatchObject({ status: "MATCHED", targetItemId: "qc-purchase-item" });
+    const confirmed = await alice.confirmImport(preview.importId, preview.revision, []);
+    expect(confirmed).toMatchObject({ linked: 1, ignored: 0, sources: 4, eligibleSources: 4 });
+
+    let revision = confirmed.revision, finalBatch;
+    for (let index = 0; index < 4; index++) {
+      finalBatch = await alice.runImportBatch(preview.importId, revision);
+      expect(finalBatch).toMatchObject({ processed: 1, imported: 1, failed: 0, pending: 0 });
+      expect(finalBatch.remaining).toBe(3 - index);
+      expect(finalBatch.complete).toBe(index === 3);
+      revision = finalBatch.revision!;
+    }
+    expect((await alice.getGallery("qc-purchase", "qc-purchase-item")).images).toHaveLength(4);
+    expect(await alice.getQcSummary("qc-purchase")).toMatchObject({ pendingMatching: 0, pendingTransfers: 0, pendingDeletes: 0 });
+
+    const repeated = await alice.prepare("qc-purchase", payload);
+    const repeatedConfirmation = await alice.confirmImport(repeated.importId, repeated.revision, []);
+    expect(repeatedConfirmation).toMatchObject({ linked: 1, sources: 0, eligibleSources: 0 });
+    expect(await alice.runImportBatch(repeated.importId, repeatedConfirmation.revision)).toMatchObject({ processed: 0, complete: true, remaining: 0 });
+    expect(await f.db.select().from(hubbuyExternalItems).all()).toHaveLength(1);
+    expect(await f.db.select().from(qcImageSources).all()).toHaveLength(4);
+    expect(await f.db.select().from(qcImages).all()).toHaveLength(4);
+    expect(fake.calls.put).toHaveBeenCalledTimes(4);
+  });
+
+  it("ignores a photo-bearing occurrence with no matching listing and creates no QC rows", async () => {
+    const fake = mockStorage(), alice = services(f, fake.storage);
+    const irrelevant = { code: 0, data: { list: [{ orderNo: "ORDER-OTHER", goodsList: [{ orderGoodsId: "GOODS-OTHER", offerUrl: "https://weidian.com/item.html?itemID=999", skuInfo: "Navy / L", goodsName: "Outro produto", quantity: 1, freePhotos: [sourceUrl] }] }] } };
+    const preview = await alice.prepare("qc-purchase", irrelevant);
+    expect(preview.rows[0]?.match).toMatchObject({ status: "IGNORED", targetItemId: null, candidates: [] });
+    const confirmed = await alice.confirmImport(preview.importId, preview.revision, []);
+    expect(confirmed).toMatchObject({ linked: 0, pendingMatching: 0, ignored: 1, sources: 0, eligibleSources: 0 });
+    expect(await f.db.select().from(hubbuyExternalItems).all()).toHaveLength(0);
+    expect(await f.db.select().from(qcImageSources).all()).toHaveLength(0);
+    expect(await f.db.select().from(qcImages).all()).toHaveLength(0);
+    expect(fake.calls.put).not.toHaveBeenCalled();
+    expect(await alice.getQcSummary("qc-purchase")).toMatchObject({ pendingMatching: 0, pendingTransfers: 0 });
+  });
+
+  it("does not surface legacy null-linked sources without a plausible purchase-item candidate", async () => {
+    const now = new Date(), externalItemId = "legacy-irrelevant-occurrence";
+    await f.db.insert(hubbuyExternalItems).values({ id: externalItemId, workspaceId: "workspace", purchaseId: "qc-purchase", purchaseItemId: null, orderGoodsId: "LEGACY-IRRELEVANT", orderGoodsNo: null, orderNo: "LEGACY-ORDER", offerId: null, channel: null, offerUrl: "https://weidian.com/item.html?itemID=999", skuInfo: "Navy / L", title: "Produto ausente", quantity: 1, revision: 0, confirmedBy: null, confirmedAt: null, createdAt: now, updatedAt: now }).run();
+    await f.db.insert(qcImageSources).values({ id: "legacy-irrelevant-source", importId: null, externalItemId, imageId: null, sourceUrl: "https://scm.hubbuy.app/qc/legacy-irrelevant.png", sourceUrlHash: "legacy-irrelevant-hash", ordinal: 0, state: "pending", attempts: 0, bytesReserved: 0, bytesConsumed: 0, errorCode: null, createdAt: now, updatedAt: now }).run();
+    const summary = await services(f, mockStorage().storage).getQcSummary("qc-purchase");
+    expect(summary).toMatchObject({ pendingMatching: 0, pendingRows: [], pendingTransfers: 0, pendingDeletes: 0 });
+    expect((await services(f, mockStorage().storage).runBatch("qc-purchase")).processed).toBe(0);
+  });
+
+  it("counts ambiguous photos as one pending match and transfers all photos only after selection", async () => {
+    const now = new Date("2026-10-14T12:00:00.000Z");
+    await f.db.insert(purchaseItems).values({ id: "qc-purchase-second-item", purchaseId: "qc-purchase", sourceFavoriteId: null, personId: "alice", createdBy: "alice", name: "Tênis azul", url: "https://weidian.com/item.html?itemID=123", platform: "weidian", visualKey: "shoe", variant: "Blue / 42", notes: null, quantity: 1, unitPriceCents: 12000, cartStatus: "added", sharingMode: "equal", createdAt: now, updatedAt: now }).run();
+    const fake = mockStorage(), alice = distinctPhotoServices(f, fake.storage), payload = photoImport(4, "Navy / L");
+    const preview = await alice.prepare("qc-purchase", payload);
+    expect(preview.rows[0]?.match).toMatchObject({ status: "PENDING", targetItemId: null, candidates: [{ itemId: "qc-purchase-item" }, { itemId: "qc-purchase-second-item" }] });
+    const confirmed = await alice.confirmImport(preview.importId, preview.revision, []);
+    expect(confirmed).toMatchObject({ linked: 0, pendingMatching: 1, ignored: 0, sources: 4, eligibleSources: 0 });
+    const summary = await alice.getQcSummary("qc-purchase");
+    expect(summary.pendingMatching).toBe(1);
+    expect(summary.pendingRows).toHaveLength(1);
+    expect(summary.pendingRows?.[0]).toMatchObject({ photoCount: 4, candidates: [{ itemId: "qc-purchase-item" }, { itemId: "qc-purchase-second-item" }] });
+    expect(summary.pendingTransfers).toBe(0);
+    const occurrence = (await f.db.select().from(hubbuyExternalItems).all())[0]!;
+    expect(occurrence.purchaseItemId).toBeNull();
+    expect(await f.db.select().from(qcImages).all()).toHaveLength(0);
+
+    const resolved = await alice.resolvePendingOccurrence("qc-purchase", occurrence.id, occurrence.revision, "qc-purchase-second-item");
+    expect(resolved).toMatchObject({ purchaseItemId: "qc-purchase-second-item", revision: 1, pendingSources: 4 });
+    await expect(alice.resolvePendingOccurrence("qc-purchase", occurrence.id, occurrence.revision, "qc-purchase-item")).rejects.toMatchObject({ status: 409, code: "QC_REVISION_CONFLICT" });
+    let lastBatch;
+    for (let index = 0; index < 4; index++) {
+      lastBatch = await alice.runBatch("qc-purchase", undefined, undefined, occurrence.id);
+      expect(lastBatch).toMatchObject({ processed: 1, imported: 1, failed: 0, pending: 0 });
+      expect(lastBatch.remaining).toBe(3 - index);
+      expect(lastBatch.complete).toBe(index === 3);
+    }
+    expect((await alice.getGallery("qc-purchase", "qc-purchase-second-item")).images).toHaveLength(4);
+    expect(await alice.getQcSummary("qc-purchase")).toMatchObject({ pendingMatching: 0, pendingTransfers: 0 });
+    expect(await f.db.select().from(qcEvents).all()).toEqual(expect.arrayContaining([expect.objectContaining({ resultCode: "RESOLVED" })]));
+  });
+
+  it("normalizes legacy manifests and does not let empty manual matches become pending", async () => {
+    const fake = mockStorage(), alice = services(f, fake.storage);
+    const linked = await alice.prepare("qc-purchase", external);
+    const linkedRow = await f.db.select().from(qcImports).where(eq(qcImports.id, linked.importId)).get();
+    const linkedManifest = JSON.parse(linkedRow!.manifestJson);
+    linkedManifest.rows[0].match = { status: "linked", targetItemId: "qc-purchase-item", candidates: [] };
+    await f.db.update(qcImports).set({ manifestJson: JSON.stringify(linkedManifest) }).where(eq(qcImports.id, linked.importId)).run();
+    expect((await alice.getImport(linked.importId)).rows[0]?.match).toMatchObject({ status: "MATCHED", targetItemId: "qc-purchase-item" });
+    expect(await alice.confirmImport(linked.importId, linked.revision, [])).toMatchObject({ linked: 1, sources: 1, eligibleSources: 1 });
+
+    const manual = await alice.prepare("qc-purchase", { code: 0, data: { list: [{ orderNo: "ORDER-MANUAL", goodsList: [{ orderGoodsId: "GOODS-MANUAL", offerUrl: "https://weidian.com/item.html?itemID=999", goodsName: "Sem candidato", freePhotos: ["https://scm.hubbuy.app/qc/irrelevant.png"] }] }] } });
+    const manualRow = await f.db.select().from(qcImports).where(eq(qcImports.id, manual.importId)).get();
+    const manualManifest = JSON.parse(manualRow!.manifestJson);
+    manualManifest.rows[0].match = { status: "manual", targetItemId: null, candidates: [] };
+    await f.db.update(qcImports).set({ manifestJson: JSON.stringify(manualManifest) }).where(eq(qcImports.id, manual.importId)).run();
+    expect((await alice.getImport(manual.importId)).rows[0]?.match).toMatchObject({ status: "IGNORED", targetItemId: null, candidates: [] });
+    expect(await alice.confirmImport(manual.importId, manual.revision, [])).toMatchObject({ ignored: 1, pendingMatching: 0, sources: 0, eligibleSources: 0 });
+    expect(await f.db.select().from(hubbuyExternalItems).all()).toHaveLength(1);
+    expect(await f.db.select().from(qcImageSources).all()).toHaveLength(1);
+  });
+
+  it("reports remaining work after a failed photo and allows a later explicit resume", async () => {
+    const fake = mockStorage();
+    let failFirst = true;
+    const service = qcServices(f.db, "alice", { managerId: "alice", storage: fake.storage, download: async url => { if (failFirst && url.endsWith("photo-0.png")) throw new Error("source unavailable"); return Buffer.from(new URL(url).pathname); }, validate: async bytes => ({ bytes, sha256: createHash("sha256").update(bytes).digest("hex"), mimeType: "image/png", extension: "png", width: 2, height: 2 }) });
+    const preview = await service.prepare("qc-purchase", photoImport(2));
+    const confirmed = await service.confirmImport(preview.importId, preview.revision, []);
+    const failed = await service.runImportBatch(preview.importId, confirmed.revision);
+    expect(failed).toMatchObject({ failed: 1, processed: 1, remaining: 2, hasMore: true, complete: false, partial: true, revision: 2 });
+    expect(failed.results[0]).toMatchObject({ status: "failed" });
+    expect((await service.getQcSummary("qc-purchase")).pendingTransfers).toBe(2);
+    failFirst = false;
+    const resumed = await service.runImportBatch(preview.importId, failed.revision!);
+    expect(resumed).toMatchObject({ imported: 1, failed: 0, processed: 1, remaining: 1, hasMore: true, complete: false, partial: true, revision: 3 });
   });
 
   it("recovers a confirmed R2 object before using HubBuy or charging another byte", async () => {
@@ -195,7 +328,7 @@ describe("HubBuy QC persistence and permissions", () => {
     expect((await f.db.select().from(qcImports).where(eq(qcImports.id, first.importId)).get())?.bytesConsumed).toBe(QC_LIMITS.importBytes);
   });
 
-  it("rotates past failed sources and cleans tombstones while photo work remains", async () => {
+  it("keeps import transfers scoped to their photos and leaves tombstone cleanup to reconciliation", async () => {
     const fake = mockStorage();
     const manifest = { code: 0, data: { list: [{ orderNo: "ORDER-1", goodsList: [{ orderGoodsId: "GOODS-1", offerUrl: "https://weidian.com/item.html?itemID=123", goodsName: "Tênis", quantity: 1, freePhotos: ["https://scm.hubbuy.app/broken-1.png", "https://scm.hubbuy.app/broken-2.png", "https://scm.hubbuy.app/good.png"] }] }] } };
     const preview = await services(f, fake.storage).prepare("qc-purchase", manifest);
@@ -210,18 +343,21 @@ describe("HubBuy QC persistence and permissions", () => {
     const downloadedUrls: string[] = [];
     const alice = qcServices(f.db, "alice", { managerId: "alice", storage: fake.storage, download: async url => { downloadedUrls.push(url); if (url.includes("broken")) throw new Error("source removed"); return rawPhoto; }, validate: async bytes => ({ bytes, sha256: createHash("sha256").update(bytes).digest("hex"), mimeType: "image/png", extension: "png", width: 2, height: 2 }) });
 
-    let revision = 1, sawDelete = false, sawImport = false;
-    for (let attempt = 0; attempt < 6 && !(sawDelete && sawImport); attempt++) {
+    let revision = 1, sawImport = false;
+    for (let attempt = 0; attempt < 3; attempt++) {
       const result = await alice.runImportBatch(preview.importId, revision++);
       expect(result.processed).toBeLessThanOrEqual(2);
-      sawDelete ||= result.deleted > 0;
+      expect(result.deleted).toBe(0);
       sawImport ||= result.imported > 0;
     }
-    expect(sawDelete).toBe(true);
     expect(sawImport).toBe(true);
-    expect(fake.objects.has(tombstoneKey)).toBe(false);
+    expect(fake.objects.has(tombstoneKey)).toBe(true);
     expect(downloadedUrls).toContain("https://scm.hubbuy.app/good.png");
     expect((await f.db.select().from(qcImageSources).all()).map(row => row.state)).toEqual(expect.arrayContaining(["failed", "failed", "ready"]));
+    let sawDelete = false;
+    for (let attempt = 0; attempt < 8 && !sawDelete; attempt++) sawDelete = (await alice.runBatch("qc-purchase")).deleted > 0;
+    expect(sawDelete).toBe(true);
+    expect(fake.objects.has(tombstoneKey)).toBe(false);
   });
 
   it("keeps an uncertain PUT tombstoned until its writer finishes and compensates it", async () => {
@@ -241,7 +377,7 @@ describe("HubBuy QC persistence and permissions", () => {
       expect(await alice.deleteImage(image.id)).toMatchObject({ status: "pending" });
       expect((await f.db.select().from(qcImages).where(eq(qcImages.id, image.id)).get())).toMatchObject({ status: "deleted", deleteState: "pending", errorCode: "QC_PUT_IN_FLIGHT" });
       release();
-      await expect(batch).resolves.toMatchObject({ pending: 1 });
+      await expect(batch).resolves.toMatchObject({ pending: 1, partial: true, complete: false });
       let tombstone = (await f.db.select().from(qcImages).where(eq(qcImages.id, image.id)).get())!;
       expect(tombstone).toMatchObject({ status: "deleted", deleteState: "pending", errorCode: "QC_DELETE_PENDING", claimToken: null });
       expect(fake.objects.has(tombstone.r2Key)).toBe(true);
@@ -264,7 +400,7 @@ describe("HubBuy QC persistence and permissions", () => {
 
   it("rejects a stale preview when a concurrent confirmation inserted an occurrence without orderNo", async () => {
     const alice = services(f, mockStorage().storage);
-    const noOrderNo = { code: 0, data: { list: [{ goodsList: [{ orderGoodsNo: "ALT-NO-ORDER", goodsName: "Product without orderNo", freePhotos: [] }] }] } };
+    const noOrderNo = { code: 0, data: { list: [{ goodsList: [{ orderGoodsNo: "ALT-NO-ORDER", offerUrl: "https://weidian.com/item.html?itemID=123", skuInfo: "Purple / 99", goodsName: "Product without orderNo", quantity: 1, freePhotos: [] }] }] } };
     const first = await alice.prepare("qc-purchase", noOrderNo);
     const stale = await alice.prepare("qc-purchase", noOrderNo);
     await alice.confirmImport(first.importId, first.revision, []);

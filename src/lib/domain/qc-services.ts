@@ -4,7 +4,7 @@ import type { AppDatabase } from "../db/connection";
 import { hubbuyExternalItems, purchaseItems, qcEvents, qcImageSources, qcImages, qcImports, qcRateLimits, qcTransferLocks } from "../db/schema";
 import { authorization } from "./authorization";
 import { DomainError } from "./errors";
-import { suggestQcMatch, type QcMatch } from "./qc-matching";
+import { normalizeQcMatch, suggestQcMatch, type QcMatch } from "./qc-matching";
 import { QC_LIMITS, QC_RATE_LIMITS, type QcRateOperation } from "./qc-limits";
 import { parseHubBuyImport, type ParsedQcImport, type QcOccurrenceInput } from "./qc-validation";
 import { assertQcStorageConfigured, r2QcStorage, type QcStorage } from "../qc/storage";
@@ -16,6 +16,22 @@ type ManagerConfig = { managerId?: string | null; storage?: QcStorage; download?
 type PreviewOccurrence = { occurrence: QcOccurrenceInput; match: QcMatch; existingId: string | null; existingRevision: number | null; existingItemId: string | null; conflict?: string };
 type ImportManifest = ParsedQcImport & { rows: PreviewOccurrence[] };
 type RequestBudget = { deadline: number };
+
+function occurrenceFromExternal(row: typeof hubbuyExternalItems.$inferSelect): QcOccurrenceInput {
+  return {
+    externalKey: `${row.orderNo ?? "order?"}:${row.orderGoodsId ? `id:${row.orderGoodsId}` : `no:${row.orderGoodsNo ?? row.id}`}`,
+    orderGoodsId: row.orderGoodsId,
+    orderGoodsNo: row.orderGoodsNo,
+    orderNo: row.orderNo,
+    offerId: row.offerId,
+    channel: row.channel,
+    offerUrl: row.offerUrl,
+    skuInfo: row.skuInfo,
+    title: row.title,
+    quantity: row.quantity,
+    photos: [],
+  };
+}
 
 const nowDate = (fn: () => number) => new Date(fn());
 const internalError = (error: unknown) => error instanceof DomainError ? error : new DomainError("Não foi possível concluir a operação QC.", 500, "QC_INTERNAL");
@@ -76,7 +92,7 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
     const [external, images, sources, pendingDeletes] = await Promise.all([
       db.select().from(hubbuyExternalItems).where(eq(hubbuyExternalItems.purchaseId, purchaseId)).all(),
       db.select({ externalItemId: qcImages.externalItemId, status: qcImages.status, deleteState: qcImages.deleteState }).from(qcImages).innerJoin(hubbuyExternalItems, eq(qcImages.externalItemId, hubbuyExternalItems.id)).where(eq(hubbuyExternalItems.purchaseId, purchaseId)).all(),
-      manage ? db.select({ state: qcImageSources.state }).from(qcImageSources).innerJoin(hubbuyExternalItems, eq(qcImageSources.externalItemId, hubbuyExternalItems.id)).where(eq(hubbuyExternalItems.purchaseId, purchaseId)).all() : Promise.resolve([]),
+      manage ? db.select({ externalItemId: qcImageSources.externalItemId, state: qcImageSources.state }).from(qcImageSources).innerJoin(hubbuyExternalItems, eq(qcImageSources.externalItemId, hubbuyExternalItems.id)).where(eq(hubbuyExternalItems.purchaseId, purchaseId)).all() : Promise.resolve([]),
       manage ? db.select({ id: qcImages.id }).from(qcImages).innerJoin(hubbuyExternalItems, eq(qcImages.externalItemId, hubbuyExternalItems.id)).where(and(eq(hubbuyExternalItems.purchaseId, purchaseId), eq(qcImages.status, "deleted"), eq(qcImages.deleteState, "pending"))).all() : Promise.resolve([]),
     ]);
     const counts = new Map<string, number>();
@@ -84,7 +100,27 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
       const itemId = external.find(row => row.id === image.externalItemId)?.purchaseItemId;
       if (itemId) counts.set(itemId, (counts.get(itemId) ?? 0) + 1);
     }
-    return { purchaseId, canManage: manage, counts: [...counts].map(([itemId, count]) => ({ itemId, count })), ...(manage ? { pending: sources.filter(row => row.state === "pending" || row.state === "failed").length, pendingDeletes: pendingDeletes.length } : {}) };
+    let pendingRows: { externalItemId: string; revision: number; orderNo: string | null; orderGoodsId: string | null; orderGoodsNo: string | null; skuInfo: string | null; title: string | null; quantity: number | null; photoCount: number; candidates: QcMatch["candidates"] }[] = [];
+    let pendingTransfers = 0;
+    if (manage) {
+      const targets = await getTargets(purchaseId);
+      const targetIds = new Set(targets.map(target => target.id));
+      pendingRows = external.flatMap(row => {
+        if (row.purchaseItemId !== null) return [];
+        const match = suggestQcMatch(occurrenceFromExternal(row), targets);
+        if (match.status !== "PENDING" || match.candidates.length === 0) return [];
+        const candidates = match.candidates.filter(candidate => targetIds.has(candidate.itemId));
+        return candidates.length ? [{ externalItemId: row.id, revision: row.revision, orderNo: row.orderNo, orderGoodsId: row.orderGoodsId, orderGoodsNo: row.orderGoodsNo, skuInfo: row.skuInfo, title: row.title, quantity: row.quantity, photoCount: sources.filter(source => source.externalItemId === row.id).length, candidates }] : [];
+      });
+      const linkedExternalIds = new Set(external.filter(row => row.purchaseItemId !== null).map(row => row.id));
+      pendingTransfers = sources.filter(row => linkedExternalIds.has(row.externalItemId) && (row.state === "pending" || row.state === "failed")).length;
+    }
+    return {
+      purchaseId,
+      canManage: manage,
+      counts: [...counts].map(([itemId, count]) => ({ itemId, count })),
+      ...(manage ? { pendingMatching: pendingRows.length, pendingRows, pendingTransfers, pendingDeletes: pendingDeletes.length } : {}),
+    };
   }
 
   async function getGallery(purchaseId: string, itemId: string, limit = 50, offset = 0) {
@@ -112,10 +148,9 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
       const alternate = occurrence.orderGoodsNo ? existing.filter(row => row.orderNo === occurrence.orderNo && row.orderGoodsNo === occurrence.orderGoodsNo) : [];
       const combined = [...new Map([...main, ...alternate].map(row => [row.id, row])).values()];
       const conflicting = combined.length > 1 || main.some(row => row.orderGoodsNo && occurrence.orderGoodsNo && row.orderGoodsNo !== occurrence.orderGoodsNo) || alternate.some(row => row.orderGoodsId && occurrence.orderGoodsId && row.orderGoodsId !== occurrence.orderGoodsId);
-      if (conflicting) return { occurrence, match: { status: "manual", targetItemId: null, candidates: [] }, existingId: null, existingRevision: null, existingItemId: null, conflict: "IDs HubBuy conflitantes" };
+      if (conflicting) return { occurrence, match: { status: "IGNORED", targetItemId: null, candidates: [] }, existingId: null, existingRevision: null, existingItemId: null, conflict: "IDs HubBuy conflitantes" };
       const found = combined[0];
       const match = suggestQcMatch(occurrence, targets, found?.purchaseItemId);
-      if (found && !found.purchaseItemId && match.status === "manual") return { occurrence, match: { ...match, status: "manual" as const }, existingId: found.id, existingRevision: found.revision, existingItemId: null };
       return { occurrence, match, existingId: found?.id ?? null, existingRevision: found?.revision ?? null, existingItemId: found?.purchaseItemId ?? null };
     });
     const manifest: ImportManifest = { ...parsed, rows };
@@ -134,7 +169,8 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
     if (!row) throw new DomainError("Importação QC não encontrada.", 404, "QC_IMPORT_NOT_FOUND");
     await authorizedPurchase(row.purchaseId, true);
     const manifest = JSON.parse(row.manifestJson) as ImportManifest;
-    return { importId: row.id, purchaseId: row.purchaseId, revision: row.revision, status: row.status, expiresAt: row.expiresAt, bytesReserved: row.bytesReserved, bytesConsumed: row.bytesConsumed, rows: manifest.rows.map(entry => ({ externalKey: entry.occurrence.externalKey, skuInfo: entry.occurrence.skuInfo, title: entry.occurrence.title, photoCount: entry.occurrence.photos.length, match: entry.match, conflict: entry.conflict ?? null })) };
+    manifest.rows = manifest.rows.map(entry => ({ ...entry, match: normalizeQcMatch(entry.match) }));
+    return { importId: row.id, purchaseId: row.purchaseId, revision: row.revision, status: row.status, expiresAt: row.expiresAt, bytesReserved: row.bytesReserved, bytesConsumed: row.bytesConsumed, rows: manifest.rows.map(entry => ({ externalKey: entry.occurrence.externalKey, skuInfo: entry.occurrence.skuInfo, title: entry.occurrence.title, photoCount: entry.occurrence.photos.length, match: normalizeQcMatch(entry.match), conflict: entry.conflict ?? null })) };
   }
 
   async function confirmImport(importId: string, expectedRevision: number, choices: Array<{ externalKey: string; purchaseItemId: string | null; correctExisting?: boolean; expectedItemId?: string | null }>) {
@@ -145,13 +181,14 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
     if (row.status !== "prepared" || !row.expiresAt || row.expiresAt.getTime() <= now()) throw new DomainError("A prévia expirou ou já foi confirmada. Prepare o JSON novamente.", 409, "QC_IMPORT_EXPIRED");
     if (row.revision !== expectedRevision) throw new DomainError("A prévia ficou desatualizada. Atualize e revise novamente.", 409, "QC_REVISION_CONFLICT");
     const manifest = JSON.parse(row.manifestJson) as ImportManifest;
+    manifest.rows = manifest.rows.map(entry => ({ ...entry, match: normalizeQcMatch(entry.match) }));
     if (choices.length > manifest.rows.length || new Set(choices.map(choice => choice.externalKey)).size !== choices.length || choices.some(choice => !manifest.rows.some(entry => entry.occurrence.externalKey === choice.externalKey))) throw new DomainError("Escolhas QC duplicadas ou excessivas.", 400, "QC_MATCH_INVALID");
     const choicesByKey = new Map(choices.map(choice => [choice.externalKey, choice]));
     const targets = await db.select({ id: purchaseItems.id }).from(purchaseItems).where(eq(purchaseItems.purchaseId, row.purchaseId)).all();
     const allowedTargetIds = new Set(targets.map(target => target.id));
     const destinationIds = choices.map(choice => choice.purchaseItemId).filter((id): id is string => id !== null);
     if (destinationIds.some(id => !allowedTargetIds.has(id))) throw new DomainError("O produto selecionado não pertence a esta compra.", 403, "QC_ITEM_CROSS_PURCHASE");
-    const result = { linked: 0, ignored: 0, sources: 0, corrected: 0 };
+    const result = { linked: 0, pendingMatching: 0, ignored: 0, sources: 0, eligibleSources: 0, corrected: 0 };
     const lock = await acquireLock(purchase.workspaceId);
     try { await db.transaction(async tx => {
       const activeLock = await tx.select().from(qcTransferLocks).where(eq(qcTransferLocks.scope, lock.scope)).get();
@@ -161,7 +198,8 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
       await authorization(tx, userId).requirePurchase(row.purchaseId);
       for (const entry of manifest.rows) {
         const choice = choicesByKey.get(entry.occurrence.externalKey);
-        const destinationId = choice ? choice.purchaseItemId : entry.match.targetItemId;
+        const match = normalizeQcMatch(entry.match);
+        const destinationId = choice ? choice.purchaseItemId : match.targetItemId;
         if (entry.conflict) {
           if (!choice) throw new DomainError("Confirme explicitamente o descarte da ocorrência conflitante.", 409, "QC_EXTERNAL_CONFLICT");
           if (destinationId) throw new DomainError("Resolva o conflito de identificadores HubBuy antes de associar.", 409, "QC_EXTERNAL_CONFLICT");
@@ -182,6 +220,21 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
             result.corrected++;
           }
         }
+        if (match.status === "IGNORED") {
+          if (destinationId) throw new DomainError("Esta ocorrência não possui candidatos seguros para associação.", 422, "QC_MATCH_INVALID");
+          // A legacy ignored row can already have an unlinked occurrence and
+          // source records. Leave those tombstone/history records intact, but
+          // never add new irrelevant rows or let them become transfer work.
+          result.ignored++;
+          continue;
+        }
+        if (match.status === "PENDING" && destinationId && !match.candidates.some(candidate => candidate.itemId === destinationId)) throw new DomainError("Escolha um dos produtos candidatos desta ocorrência.", 422, "QC_MATCH_INVALID");
+        const pendingMatch = match.status === "PENDING" && match.candidates.length > 0;
+        const explicitUnlink = currentExternal?.purchaseItemId !== null && currentExternal?.purchaseItemId !== undefined && destinationId === null && !!choice?.correctExisting;
+        if (!destinationId && !pendingMatch && !explicitUnlink) {
+          result.ignored++;
+          continue;
+        }
         let externalId = entry.existingId;
         const externalValues = { orderGoodsId: entry.occurrence.orderGoodsId ?? currentExternal?.orderGoodsId ?? null, orderGoodsNo: entry.occurrence.orderGoodsNo ?? currentExternal?.orderGoodsNo ?? null, orderNo: entry.occurrence.orderNo, offerId: entry.occurrence.offerId ?? currentExternal?.offerId ?? null, channel: entry.occurrence.channel ?? currentExternal?.channel ?? null, offerUrl: entry.occurrence.offerUrl ?? currentExternal?.offerUrl ?? null, skuInfo: entry.occurrence.skuInfo ?? currentExternal?.skuInfo ?? null, title: entry.occurrence.title ?? currentExternal?.title ?? null, quantity: entry.occurrence.quantity ?? currentExternal?.quantity ?? null, purchaseItemId: destinationId, confirmedBy: destinationId ? userId : null, confirmedAt: destinationId ? current : null, updatedAt: current };
         if (externalId) {
@@ -192,12 +245,17 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
           try { await tx.insert(hubbuyExternalItems).values({ id: externalId, workspaceId: purchase.workspaceId, purchaseId: row.purchaseId, ...externalValues, revision: 0, createdAt: current }).run(); }
           catch (error) { if (uniqueError(error)) throw new DomainError("Esta ocorrência HubBuy já foi importada com identificadores diferentes.", 409, "QC_EXTERNAL_CONFLICT"); throw error; }
         }
-        if (destinationId) result.linked++; else result.ignored++;
-        if (entry.existingItemId !== destinationId) await tx.insert(qcEvents).values({ id: randomUUID(), workspaceId: purchase.workspaceId, purchaseId: row.purchaseId, actorId: userId, eventType: "QC_MATCH", resultCode: entry.existingItemId ? "CORRECTED" : destinationId ? "LINKED" : "IGNORED", contextJson: JSON.stringify({ externalItemId: externalId, fromItemId: entry.existingItemId, toItemId: destinationId }), createdAt: current }).run();
+        if (destinationId) result.linked++; else if (pendingMatch) result.pendingMatching++; else result.ignored++;
+        if (entry.existingItemId !== destinationId || !entry.existingId) await tx.insert(qcEvents).values({ id: randomUUID(), workspaceId: purchase.workspaceId, purchaseId: row.purchaseId, actorId: userId, eventType: "QC_MATCH", resultCode: entry.existingItemId ? "CORRECTED" : destinationId ? "LINKED" : pendingMatch ? "PENDING" : "IGNORED", contextJson: JSON.stringify({ externalItemId: externalId, fromItemId: entry.existingItemId, toItemId: destinationId }), createdAt: current }).run();
+        if (!destinationId && !pendingMatch) continue;
         for (const photo of entry.occurrence.photos) {
           const prior = await tx.select().from(qcImageSources).where(and(eq(qcImageSources.externalItemId, externalId), eq(qcImageSources.sourceUrlHash, photo.urlHash))).get();
           if (prior) {
-            if (prior.state === "ready" || prior.state === "deleted" || prior.importId === importId) continue;
+            if (prior.state === "ready" || prior.state === "deleted") continue;
+            if (prior.importId === importId) {
+              if (destinationId && (prior.state === "pending" || prior.state === "failed")) result.eligibleSources++;
+              continue;
+            }
             const priorImage = prior.imageId ? await tx.select().from(qcImages).where(eq(qcImages.id, prior.imageId)).get() : null;
             if (priorImage?.status === "deleted") {
               await tx.update(qcImageSources).set({ state: "deleted", updatedAt: current }).where(eq(qcImageSources.id, prior.id)).run();
@@ -215,10 +273,12 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
             }
             await tx.update(qcImageSources).set({ importId, state: "pending", bytesReserved: 0, bytesConsumed: 0, errorCode: null, updatedAt: current }).where(eq(qcImageSources.id, prior.id)).run();
             result.sources++;
+            if (destinationId) result.eligibleSources++;
             continue;
           }
           await tx.insert(qcImageSources).values({ id: randomUUID(), importId, externalItemId: externalId, imageId: null, sourceUrl: photo.url, sourceUrlHash: photo.urlHash, ordinal: photo.ordinal, state: "pending", attempts: 0, bytesReserved: 0, bytesConsumed: 0, errorCode: null, createdAt: current, updatedAt: current }).run();
           result.sources++;
+          if (destinationId) result.eligibleSources++;
         }
       }
       const updated = await tx.update(qcImports).set({ status: "confirmed", revision: expectedRevision + 1, updatedAt: current }).where(and(eq(qcImports.id, importId), eq(qcImports.revision, expectedRevision))).returning({ id: qcImports.id }).get();
@@ -226,6 +286,33 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
       await tx.insert(qcEvents).values({ id: randomUUID(), workspaceId: purchase.workspaceId, purchaseId: row.purchaseId, actorId: userId, eventType: "QC_IMPORT", resultCode: "CONFIRMED", contextJson: JSON.stringify({ importId, linked: result.linked, ignored: result.ignored, sources: result.sources }), createdAt: current }).run();
     }); } finally { await releaseLock(lock); }
     return { importId, revision: expectedRevision + 1, ...result, partial: manifest.partial };
+  }
+
+  async function resolvePendingOccurrence(purchaseId: string, externalItemId: string, expectedRevision: number, purchaseItemId: string) {
+    const purchase = await rate(purchaseId, "match");
+    const lock = await acquireLock(purchase.workspaceId);
+    try {
+      return await db.transaction(async tx => {
+        const activeLock = await tx.select().from(qcTransferLocks).where(eq(qcTransferLocks.scope, lock.scope)).get();
+        if (activeLock?.ownerId !== lock.ownerId || activeLock.version !== lock.version || activeLock.leaseUntil <= now()) throw new DomainError("A operação QC perdeu sua concessão antes de confirmar o vínculo.", 409, "QC_TRANSFER_LEASE_LOST");
+        await authorization(tx, userId).requirePurchase(purchaseId);
+        const external = await tx.select().from(hubbuyExternalItems).where(and(eq(hubbuyExternalItems.id, externalItemId), eq(hubbuyExternalItems.purchaseId, purchaseId))).get();
+        if (!external) throw new DomainError("Ocorrência HubBuy não encontrada nesta compra.", 404, "QC_EXTERNAL_NOT_FOUND");
+        if (external.revision !== expectedRevision || external.purchaseItemId !== null) throw new DomainError("A ocorrência mudou desde que as pendências foram carregadas.", 409, "QC_REVISION_CONFLICT");
+        const target = await tx.select({ id: purchaseItems.id }).from(purchaseItems).where(and(eq(purchaseItems.id, purchaseItemId), eq(purchaseItems.purchaseId, purchaseId))).get();
+        if (!target) throw new DomainError("O produto selecionado não pertence a esta compra.", 403, "QC_ITEM_CROSS_PURCHASE");
+        const targets = await tx.select().from(purchaseItems).where(eq(purchaseItems.purchaseId, purchaseId)).orderBy(asc(purchaseItems.createdAt)).all();
+        const match = suggestQcMatch(occurrenceFromExternal(external), targets.map(item => ({ id: item.id, name: item.name, url: item.url, variant: item.variant, quantity: item.quantity })));
+        if (match.status !== "PENDING" || match.candidates.length === 0) throw new DomainError("Esta ocorrência já não possui candidatos de associação pendentes.", 409, "QC_MATCH_NOT_PENDING");
+        if (!match.candidates.some(candidate => candidate.itemId === purchaseItemId)) throw new DomainError("Escolha um dos produtos candidatos desta ocorrência.", 422, "QC_MATCH_INVALID");
+        const stamp = nowDate(now);
+        const updated = await tx.update(hubbuyExternalItems).set({ purchaseItemId, confirmedBy: userId, confirmedAt: stamp, revision: expectedRevision + 1, updatedAt: stamp }).where(and(eq(hubbuyExternalItems.id, externalItemId), eq(hubbuyExternalItems.purchaseId, purchaseId), eq(hubbuyExternalItems.revision, expectedRevision), isNull(hubbuyExternalItems.purchaseItemId))).returning({ id: hubbuyExternalItems.id, revision: hubbuyExternalItems.revision }).get();
+        if (!updated) throw new DomainError("A ocorrência mudou em outra solicitação.", 409, "QC_REVISION_CONFLICT");
+        await tx.insert(qcEvents).values({ id: randomUUID(), workspaceId: purchase.workspaceId, purchaseId, actorId: userId, eventType: "QC_MATCH", resultCode: "RESOLVED", contextJson: JSON.stringify({ externalItemId, fromItemId: null, toItemId: purchaseItemId }), createdAt: stamp }).run();
+        const pendingSources = await tx.select({ id: qcImageSources.id }).from(qcImageSources).where(and(eq(qcImageSources.externalItemId, externalItemId), inArray(qcImageSources.state, ["pending", "failed"]))).all();
+        return { externalItemId, purchaseItemId, revision: updated.revision, pendingSources: pendingSources.length };
+      });
+    } finally { await releaseLock(lock); }
   }
 
   async function acquireLock(workspaceId: string) {
@@ -522,10 +609,14 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
     }
   }
 
-  async function runBatch(purchaseId: string, importId?: string, expectedRevision?: number) {
+  async function runBatch(purchaseId: string, importId?: string, expectedRevision?: number, externalItemId?: string) {
     const budget = { deadline: now() + QC_LIMITS.requestMs };
     const purchase = await rate(purchaseId, "batch");
     if (!managerId || managerId !== userId) throw new DomainError("Você não pode administrar QC.", 403, "QC_FORBIDDEN");
+    if (externalItemId) {
+      const external = await db.select({ id: hubbuyExternalItems.id }).from(hubbuyExternalItems).where(and(eq(hubbuyExternalItems.id, externalItemId), eq(hubbuyExternalItems.purchaseId, purchaseId), sql`${hubbuyExternalItems.purchaseItemId} IS NOT NULL`)).get();
+      if (!external) throw new DomainError("Ocorrência QC não encontrada ou ainda não associada.", 404, "QC_EXTERNAL_NOT_FOUND");
+    }
     if (importId) {
       const manifest = await db.select().from(qcImports).where(and(eq(qcImports.id, importId), eq(qcImports.purchaseId, purchaseId))).get();
       if (!manifest) throw new DomainError("Importação QC não encontrada nesta compra.", 404, "QC_IMPORT_NOT_FOUND");
@@ -538,8 +629,9 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
       // even on the known-object recovery path (which may perform an extra HEAD).
       // Selection is recency-fair across calls; DB work stays sequential for
       // compatibility with the single-connection libSQL adapter.
-      const eligible = await db.select({ id: qcImageSources.id, updatedAt: qcImageSources.updatedAt }).from(qcImageSources).innerJoin(hubbuyExternalItems, eq(qcImageSources.externalItemId, hubbuyExternalItems.id)).where(and(eq(hubbuyExternalItems.purchaseId, purchaseId), inArray(qcImageSources.state, ["pending", "failed"]), ...(importId ? [eq(qcImageSources.importId, importId)] : []), sql`${hubbuyExternalItems.purchaseItemId} IS NOT NULL`)).orderBy(asc(qcImageSources.updatedAt), asc(qcImageSources.createdAt), asc(qcImageSources.ordinal)).limit(1).all();
-      const pendingDeletes = await db.select({ id: qcImages.id, updatedAt: qcImages.updatedAt }).from(qcImages).innerJoin(hubbuyExternalItems, eq(qcImages.externalItemId, hubbuyExternalItems.id)).where(and(eq(hubbuyExternalItems.purchaseId, purchaseId), eq(qcImages.status, "deleted"))).orderBy(asc(qcImages.updatedAt)).limit(1).all();
+      const eligibleWhere = and(eq(hubbuyExternalItems.purchaseId, purchaseId), inArray(qcImageSources.state, ["pending", "failed"]), ...(importId ? [eq(qcImageSources.importId, importId)] : []), ...(externalItemId ? [eq(qcImageSources.externalItemId, externalItemId)] : []), sql`${hubbuyExternalItems.purchaseItemId} IS NOT NULL`);
+      const eligible = await db.select({ id: qcImageSources.id, updatedAt: qcImageSources.updatedAt }).from(qcImageSources).innerJoin(hubbuyExternalItems, eq(qcImageSources.externalItemId, hubbuyExternalItems.id)).where(eligibleWhere).orderBy(asc(qcImageSources.updatedAt), asc(qcImageSources.createdAt), asc(qcImageSources.ordinal)).limit(1).all();
+      const pendingDeletes = importId || externalItemId ? [] : await db.select({ id: qcImages.id, updatedAt: qcImages.updatedAt }).from(qcImages).innerJoin(hubbuyExternalItems, eq(qcImages.externalItemId, hubbuyExternalItems.id)).where(and(eq(hubbuyExternalItems.purchaseId, purchaseId), eq(qcImages.status, "deleted"))).orderBy(asc(qcImages.updatedAt)).limit(1).all();
       const deleteFirst = !!pendingDeletes[0] && (!eligible[0] || (pendingDeletes[0].updatedAt?.getTime() ?? 0) <= (eligible[0].updatedAt?.getTime() ?? 0));
       const selectedImage = !deleteFirst ? eligible[0] : undefined;
       const selectedDelete = deleteFirst ? pendingDeletes[0] : undefined;
@@ -552,7 +644,12 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
         results.push(await processSource(selectedImage.id, lock, budget));
       }
       const counts = { imported: results.filter(row => row.status === "imported").length, existing: results.filter(row => row.status === "existing").length, deleted: results.filter(row => row.status === "deleted").length, failed: results.filter(row => row.status === "failed").length, pending: results.filter(row => row.status === "pending").length };
-      await addEvent(purchaseId, purchase.workspaceId, "QC_IMPORT", counts.failed || counts.pending ? "PARTIAL" : "BATCH_COMPLETE", { importId: importId ?? null, ...counts, processed: results.length });
+      const remainingSources = await db.select({ count: sql<number>`count(*)` }).from(qcImageSources).innerJoin(hubbuyExternalItems, eq(qcImageSources.externalItemId, hubbuyExternalItems.id)).where(eligibleWhere).get();
+      const remainingDeletes = importId || externalItemId ? { count: 0 } : await db.select({ count: sql<number>`count(*)` }).from(qcImages).innerJoin(hubbuyExternalItems, eq(qcImages.externalItemId, hubbuyExternalItems.id)).where(and(eq(hubbuyExternalItems.purchaseId, purchaseId), eq(qcImages.status, "deleted"), eq(qcImages.deleteState, "pending"))).get();
+      const remaining = Number(remainingSources?.count ?? 0) + Number(remainingDeletes?.count ?? 0);
+      const hasMore = remaining > 0;
+      const complete = !hasMore && counts.failed === 0 && counts.pending === 0;
+      await addEvent(purchaseId, purchase.workspaceId, "QC_IMPORT", counts.failed || counts.pending || hasMore ? "PARTIAL" : "BATCH_COMPLETE", { importId: importId ?? null, externalItemId: externalItemId ?? null, ...counts, processed: results.length, remaining });
       let revision: number | undefined;
       if (importId && expectedRevision !== undefined) {
         const updated = await db.update(qcImports).set({ revision: expectedRevision + 1, updatedAt: nowDate(now) }).where(and(eq(qcImports.id, importId), eq(qcImports.revision, expectedRevision))).returning({ revision: qcImports.revision }).get();
@@ -560,7 +657,7 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
         revision = updated.revision;
       }
       if (!importId) await db.update(qcImports).set({ status: "expired", updatedAt: nowDate(now) }).where(and(eq(qcImports.purchaseId, purchaseId), inArray(qcImports.status, ["prepared", "confirmed"]), lte(qcImports.expiresAt, nowDate(now)))).run();
-      return { ...counts, processed: results.length, partial: counts.failed + counts.pending > 0, results, ...(revision === undefined ? {} : { revision }) };
+      return { ...counts, processed: results.length, remaining, hasMore, complete, partial: !complete, results, ...(revision === undefined ? {} : { revision }) };
     } finally { await releaseLock(lock); }
   }
 
@@ -602,5 +699,5 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
     return runBatch(row.purchaseId, importId, expectedRevision);
   }
 
-  return { authorizedPurchase, rate, addEvent, getTargets, getQcSummary, getGallery, prepare, getImport, confirmImport, runBatch, runImportBatch, deleteImage, fallback, managerId, storage, download, validate, now };
+  return { authorizedPurchase, rate, addEvent, getTargets, getQcSummary, getGallery, prepare, getImport, confirmImport, resolvePendingOccurrence, runBatch, runImportBatch, deleteImage, fallback, managerId, storage, download, validate, now };
 }

@@ -13,6 +13,8 @@ export const maxDuration = 120;
 type RouteContext = { params: Promise<{ purchaseId: string }> };
 const postSchema = z.discriminatedUnion("operation", [
   z.object({ operation: z.literal("prepare"), data: z.unknown() }).strict(),
+  z.object({ operation: z.literal("resolve"), externalItemId: z.string().min(1).max(200), expectedRevision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER), purchaseItemId: z.string().min(1).max(200) }).strict(),
+  z.object({ operation: z.literal("batch"), externalItemId: z.string().min(1).max(200).optional() }).strict(),
   z.object({ operation: z.literal("reconcile") }).strict(),
 ]);
 
@@ -32,7 +34,11 @@ export async function POST(request: Request, context: RouteContext) {
     requireQcOrigin(request);
     const user = await requireUser(), { purchaseId } = await context.params, service = qcServices(db, user.id);
     const body = postSchema.parse(await readBoundedJson(request));
-    const data = body.operation === "prepare" ? await service.prepare(purchaseId, body.data) : await service.runBatch(purchaseId);
+    const data = body.operation === "prepare"
+      ? await service.prepare(purchaseId, body.data)
+      : body.operation === "resolve"
+        ? await service.resolvePendingOccurrence(purchaseId, body.externalItemId, body.expectedRevision, body.purchaseItemId)
+        : await service.runBatch(purchaseId, undefined, undefined, body.operation === "batch" ? body.externalItemId : undefined);
     return NextResponse.json({ data }, { headers: qcPrivateHeaders });
   } catch (error) { return qcFailure(error); }
 }

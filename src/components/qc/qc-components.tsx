@@ -1,17 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ImagePlus, RefreshCw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Confirm, Surface } from "@/components/ui/surface";
 
 type QcImage = { id: string; sourceUrl: string; width: number | null; height: number | null; occurrence: string };
-type QcSummary = { canManage: boolean; counts: { itemId: string; count: number }[]; pending?: number; pendingDeletes?: number };
+type QcPendingMatch = { externalItemId: string; revision: number; orderNo: string | null; orderGoodsId: string | null; orderGoodsNo: string | null; skuInfo: string | null; title: string | null; quantity: number | null; photoCount: number; candidates: { itemId: string; name: string; reasons: string[] }[] };
+type QcSummary = { canManage: boolean; counts: { itemId: string; count: number }[]; pendingMatching?: number; pendingRows?: QcPendingMatch[]; pendingTransfers?: number; pendingDeletes?: number };
 type QcPreview = { externalKey: string; orderNo: string | null; orderGoodsId: string | null; orderGoodsNo: string | null; offerId: string | null; skuInfo: string | null; title: string | null; quantity: number | null; photoCount: number; match: { status: string; targetItemId: string | null; candidates: { itemId: string; name: string; reasons: string[] }[] }; existingItemId: string | null; conflict: string | null };
 type QcPrepared = { importId: string; revision: number; partial: boolean; orderCount: number; photoCount: number; rows: QcPreview[] };
 type QcTarget = { id: string; name: string; variant: string | null; quantity: number };
 
 const summaryCache = new Map<string, Promise<QcSummary>>();
+const summaryListeners = new Map<string, Set<() => void>>();
+function subscribeSummary(purchaseId: string, listener: () => void) {
+  const listeners = summaryListeners.get(purchaseId) ?? new Set<() => void>();
+  listeners.add(listener); summaryListeners.set(purchaseId, listeners);
+  return () => { listeners.delete(listener); if (!listeners.size) summaryListeners.delete(purchaseId); };
+}
 function summaryFor(purchaseId: string) {
   let cached = summaryCache.get(purchaseId);
   if (!cached) {
@@ -25,7 +32,20 @@ function summaryFor(purchaseId: string) {
   }
   return cached;
 }
-function invalidateSummary(purchaseId: string) { summaryCache.delete(purchaseId); }
+function invalidateSummary(purchaseId: string) {
+  summaryCache.delete(purchaseId);
+  for (const listener of summaryListeners.get(purchaseId) ?? []) listener();
+}
+function useQcSummary(purchaseId: string) {
+  const [summary, setSummary] = useState<QcSummary | null>(null), [version, setVersion] = useState(0);
+  useEffect(() => subscribeSummary(purchaseId, () => setVersion(current => current + 1)), [purchaseId]);
+  useEffect(() => {
+    let active = true;
+    void summaryFor(purchaseId).then(value => { if (active) setSummary(value); }).catch(() => { if (active) setSummary(null); });
+    return () => { active = false; };
+  }, [purchaseId, version]);
+  return { summary };
+}
 async function qcRequest<T>(url: string, body?: unknown, method = "POST") {
   const response = await fetch(url, { method, credentials: "same-origin", cache: "no-store", ...(body === undefined ? {} : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }) });
   const result = await response.json();
@@ -34,10 +54,10 @@ async function qcRequest<T>(url: string, body?: unknown, method = "POST") {
 }
 
 export function QcImportPanel({ purchaseId, targets }: { purchaseId: string; targets: QcTarget[] }) {
-  const [summary, setSummary] = useState<QcSummary | null>(null), [open, setOpen] = useState(false), [raw, setRaw] = useState(""), [prepared, setPrepared] = useState<QcPrepared | null>(null);
-  const [selections, setSelections] = useState<Record<string, string>>({}), [busy, setBusy] = useState(false), [error, setError] = useState(""), [confirmed, setConfirmed] = useState(false), [revision, setRevision] = useState(0), [batchInfo, setBatchInfo] = useState("");
-  const [confirmCorrections, setConfirmCorrections] = useState(false), [confirmReconcile, setConfirmReconcile] = useState(false);
-  useEffect(() => { let active = true; void summaryFor(purchaseId).then(value => { if (active) setSummary(value); }).catch(() => {}); return () => { active = false; }; }, [purchaseId]);
+  const { summary } = useQcSummary(purchaseId);
+  const [open, setOpen] = useState(false), [matchingOpen, setMatchingOpen] = useState(false), [raw, setRaw] = useState(""), [prepared, setPrepared] = useState<QcPrepared | null>(null);
+  const [selections, setSelections] = useState<Record<string, string>>({}), [busy, setBusy] = useState(false), [error, setError] = useState(""), [confirmed, setConfirmed] = useState(false), [transferComplete, setTransferComplete] = useState(false), [revision, setRevision] = useState(0), [pendingMatchingCount, setPendingMatchingCount] = useState(0), [batchInfo, setBatchInfo] = useState("");
+  const [pendingSelections, setPendingSelections] = useState<Record<string, string>>({}), [confirmCorrections, setConfirmCorrections] = useState(false), [confirmReconcile, setConfirmReconcile] = useState(false);
   if (!summary?.canManage) return null;
 
   async function prepare() {
@@ -46,7 +66,7 @@ export function QcImportPanel({ purchaseId, targets }: { purchaseId: string; tar
       if (new TextEncoder().encode(raw).byteLength > 1024 * 1024) throw new Error("O JSON excede 1 MiB.");
       const data = JSON.parse(raw);
       const result = await qcRequest<QcPrepared>(`/api/purchases/${encodeURIComponent(purchaseId)}/qc`, { operation: "prepare", data });
-      setPrepared(result); setConfirmed(false); setSelections(Object.fromEntries(result.rows.map(row => [row.externalKey, row.match.targetItemId ?? ""])));
+      setPrepared(result); setConfirmed(false); setTransferComplete(false); setSelections(Object.fromEntries(result.rows.map(row => [row.externalKey, row.match.targetItemId ?? ""])));
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Confira o JSON HubBuy."); }
     finally { setBusy(false); }
   }
@@ -59,33 +79,72 @@ export function QcImportPanel({ purchaseId, targets }: { purchaseId: string; tar
         const correction = !!row.existingItemId && row.existingItemId !== targetId;
         return { externalKey: row.externalKey, purchaseItemId: targetId, ...(correction ? { correctExisting: true, expectedItemId: row.existingItemId } : {}) };
       });
-      const result = await qcRequest<{ revision: number; linked: number; ignored: number; sources: number }>(`/api/qc/imports/${encodeURIComponent(prepared.importId)}`, { operation: "confirm", expectedRevision: prepared.revision, choices });
-      setRevision(result.revision); setConfirmed(true); setBatchInfo(`${result.linked} associada(s), ${result.ignored} ignorada(s), ${result.sources} fonte(s) de foto.`); invalidateSummary(purchaseId);
+      const result = await qcRequest<{ revision: number; linked: number; ignored: number; pendingMatching: number; sources: number; eligibleSources: number }>(`/api/qc/imports/${encodeURIComponent(prepared.importId)}`, { operation: "confirm", expectedRevision: prepared.revision, choices });
+      setRevision(result.revision); setConfirmed(true); setPendingMatchingCount(result.pendingMatching); invalidateSummary(purchaseId);
+      const matchingNote = result.pendingMatching ? ` ${result.pendingMatching} ocorrência(s) aguardam vínculo manual.` : "";
+      if (result.eligibleSources > 0) { setBatchInfo("Importando as fotos associadas…"); await drainImport(prepared.importId, result.revision, result.pendingMatching, matchingNote); }
+      else { setTransferComplete(true); setBatchInfo(`${result.linked} ocorrência(s) associada(s), ${result.ignored} ignorada(s), ${result.sources} foto(s) registrada(s).${matchingNote}`); }
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível confirmar os vínculos."); }
-    finally { setBusy(false); }
+    finally { setBusy(false); invalidateSummary(purchaseId); }
+  }
+  async function drainImport(importId: string, initialRevision: number, pendingMatching = 0, matchingNote = "") {
+    let nextRevision = initialRevision, imported = 0, existing = 0, failed = 0, pending = 0, remaining = 0, complete = false;
+    for (let call = 0; call < 12; call++) {
+      const result = await qcRequest<{ processed: number; imported: number; existing: number; failed: number; pending: number; remaining: number; complete: boolean; revision: number }>(`/api/qc/imports/${encodeURIComponent(importId)}`, { operation: "batch", expectedRevision: nextRevision });
+      nextRevision = result.revision; imported += result.imported; existing += result.existing; failed += result.failed; pending += result.pending; remaining = result.remaining; complete = result.complete;
+      setRevision(nextRevision);
+      setBatchInfo(`${imported} foto(s) importada(s), ${existing} já existente(s), ${failed} falha(s), ${pending} pendente(s); ${remaining} foto(s) ainda aguardam transferência.${matchingNote}`);
+      if (failed || pending || complete) break;
+    }
+    if (!complete && !failed && !pending) setBatchInfo(`${imported} foto(s) importada(s), ${existing} já existente(s). Importação parcial: ${remaining} foto(s) ainda aguardam transferência.${matchingNote}`);
+    setTransferComplete(complete);
+    if (complete && !pendingMatching) setBatchInfo(`${imported} foto(s) importada(s), ${existing} já existente(s), ${failed} falha(s), ${pending} pendente(s). Importação concluída.${matchingNote}`);
+    else if (complete && pendingMatching) setBatchInfo(`${imported} foto(s) importada(s), ${existing} já existente(s). Transferências concluídas; ${pendingMatching} ocorrência(s) ainda aguardam vínculo manual.`);
+    invalidateSummary(purchaseId);
+  }
+  async function drainOccurrence(externalItemId: string) {
+    let imported = 0, existing = 0, failed = 0, pending = 0, remaining = 0, complete = false;
+    for (let call = 0; call < 12; call++) {
+      const result = await qcRequest<{ imported: number; existing: number; failed: number; pending: number; remaining: number; complete: boolean }>(`/api/purchases/${encodeURIComponent(purchaseId)}/qc`, { operation: "batch", externalItemId });
+      imported += result.imported; existing += result.existing; failed += result.failed; pending += result.pending; remaining = result.remaining; complete = result.complete;
+      setBatchInfo(`${imported} foto(s) importada(s), ${existing} já existente(s), ${failed} falha(s), ${pending} pendente(s); ${remaining} foto(s) ainda aguardam transferência.`);
+      if (failed || pending || complete) break;
+    }
+    if (!complete && !failed && !pending) setBatchInfo(`${imported} foto(s) importada(s), ${existing} já existente(s). Ainda há ${remaining} foto(s) para transferir; continue a importação.`);
+    if (complete && !pending) setBatchInfo(`${imported} foto(s) importada(s), ${existing} já existente(s), ${failed} falha(s), ${pending} pendente(s). Transferência concluída.`);
+    invalidateSummary(purchaseId);
   }
   async function runBatch() {
     if (!prepared) return;
     setError(""); setBusy(true);
+    try { await drainImport(prepared.importId, revision, pendingMatchingCount, pendingMatchingCount ? ` ${pendingMatchingCount} ocorrência(s) ainda aguardam vínculo manual.` : ""); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "O lote QC falhou."); invalidateSummary(purchaseId); }
+    finally { setBusy(false); invalidateSummary(purchaseId); }
+  }
+  async function resolvePending(row: QcPendingMatch) {
+    const purchaseItemId = pendingSelections[row.externalItemId];
+    if (!purchaseItemId) return;
+    setError(""); setBusy(true);
     try {
-      const result = await qcRequest<{ processed: number; imported: number; existing: number; failed: number; pending: number; partial: boolean; revision: number }>(`/api/qc/imports/${encodeURIComponent(prepared.importId)}`, { operation: "batch", expectedRevision: revision });
-      setRevision(result.revision); setBatchInfo(`${result.imported} enviada(s), ${result.existing} já existente(s), ${result.failed} falha(s), ${result.pending} pendente(s) neste lote.`); invalidateSummary(purchaseId);
-      const next = await summaryFor(purchaseId); setSummary(next);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "O lote QC falhou."); }
-    finally { setBusy(false); }
+      const result = await qcRequest<{ externalItemId: string; revision: number; pendingSources: number }>(`/api/purchases/${encodeURIComponent(purchaseId)}/qc`, { operation: "resolve", externalItemId: row.externalItemId, expectedRevision: row.revision, purchaseItemId });
+      setBatchInfo("Vínculo salvo. Iniciando a transferência das fotos desta ocorrência."); invalidateSummary(purchaseId);
+      if (result.pendingSources > 0) await drainOccurrence(result.externalItemId);
+      else setBatchInfo("Vínculo salvo. Esta ocorrência não tem fotos pendentes.");
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível resolver o vínculo."); }
+    finally { setBusy(false); invalidateSummary(purchaseId); }
   }
   async function reconcile() {
     setError(""); setBusy(true);
     try {
-      const result = await qcRequest<{ processed: number; partial: boolean }>(`/api/purchases/${encodeURIComponent(purchaseId)}/qc`, { operation: "reconcile" });
-      setBatchInfo(`${result.processed} pendência(s) reconciliada(s).`); invalidateSummary(purchaseId); setSummary(await summaryFor(purchaseId));
+      await qcRequest<{ processed: number; partial: boolean }>(`/api/purchases/${encodeURIComponent(purchaseId)}/qc`, { operation: "reconcile" });
+      setBatchInfo("A tentativa de transferência ou remoção foi concluída.");
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível reconciliar QC."); }
-    finally { setBusy(false); setConfirmReconcile(false); }
+    finally { setBusy(false); setConfirmReconcile(false); invalidateSummary(purchaseId); }
   }
   const hasCorrections = !!prepared?.rows.some(row => row.existingItemId && row.existingItemId !== (selections[row.externalKey] || null));
-  const openPanel = () => { setOpen(true); setPrepared(null); setConfirmed(false); setError(""); setBatchInfo(""); };
+  const openPanel = () => { setOpen(true); setPrepared(null); setConfirmed(false); setTransferComplete(false); setError(""); setBatchInfo(""); };
   return <>
-    <div className="qc-manager-actions"><Button variant="outline" size="sm" onClick={openPanel}><ImagePlus size={15}/>Importar QC</Button><Button variant="ghost" size="sm" onClick={() => setConfirmReconcile(true)}><RefreshCw size={15}/>Verificar pendências QC{((summary.pending ?? 0) + (summary.pendingDeletes ?? 0) > 0) ? ` (${(summary.pending ?? 0) + (summary.pendingDeletes ?? 0)})` : ""}</Button></div>
+    <div className="qc-manager-actions"><Button variant="outline" size="sm" onClick={openPanel}><ImagePlus size={15}/>Importar QC</Button><Button variant="ghost" size="sm" onClick={() => setMatchingOpen(true)}>Verificar vínculos pendentes{(summary.pendingMatching ?? 0) ? ` (${summary.pendingMatching})` : ""}</Button><Button variant="ghost" size="sm" onClick={() => setConfirmReconcile(true)}><RefreshCw size={15}/>Repetir pendências QC{((summary.pendingTransfers ?? 0) + (summary.pendingDeletes ?? 0) > 0) ? ` (${(summary.pendingTransfers ?? 0) + (summary.pendingDeletes ?? 0)})` : ""}</Button></div>
     <Surface open={open} onOpenChange={value => { if (!busy) setOpen(value); }} title="Importar QC do HubBuy" description="Cole uma resposta HubBuy. Somente freePhotos são processadas; os vínculos serão confirmados antes de qualquer transferência." sheet>
       {!prepared && <>
         <label className="qc-import-label">JSON HubBuy<textarea aria-label="JSON HubBuy" value={raw} onChange={event => setRaw(event.target.value)} rows={10} spellCheck={false} placeholder="Cole o JSON exportado do HubBuy" /></label>
@@ -94,38 +153,52 @@ export function QcImportPanel({ purchaseId, targets }: { purchaseId: string; tar
       {prepared && !confirmed && <>
         <p className="muted">{prepared.orderCount} pedido(s), {prepared.rows.length} ocorrência(s), {prepared.photoCount} foto(s). {prepared.partial ? "O HubBuy indica mais pedidos; esta prévia cobre apenas o JSON colado." : ""}</p>
         <div className="qc-preview-list">{prepared.rows.map(row => <label className="qc-preview-row" key={row.externalKey}>
-          <span><strong>{row.title || row.skuInfo || row.orderGoodsId || row.orderGoodsNo}</strong><small>{row.skuInfo || "Sem variação"} · {row.photoCount} foto(s) · {row.conflict || row.match.candidates[0]?.reasons.join(" · ") || (row.match.status === "linked" ? "Correspondência inequívoca" : "Seleção manual")}</small></span>
-          <select aria-label={`Associar ${row.title || row.skuInfo || row.externalKey}`} value={selections[row.externalKey] ?? ""} onChange={event => setSelections(current => ({ ...current, [row.externalKey]: event.target.value }))}>
-            <option value="">Ignorar / revisar depois</option>
-            {targets.map(target => <option key={target.id} value={target.id}>{target.name}{target.variant ? ` · ${target.variant}` : ""}</option>)}
-          </select>
+          <span><strong>{row.title || row.skuInfo || row.orderGoodsId || row.orderGoodsNo}</strong><small>{row.skuInfo || "Sem variação"} · {row.photoCount} foto(s) · {row.conflict || row.match.candidates[0]?.reasons.join(" · ") || (row.match.status === "MATCHED" ? "Correspondência inequívoca" : row.match.status === "PENDING" ? "Selecione uma correspondência" : "Sem candidato seguro; será ignorada")}</small></span>
+          {row.match.status !== "IGNORED" || row.conflict ? <select aria-label={`Associar ${row.title || row.skuInfo || row.externalKey}`} value={selections[row.externalKey] ?? ""} onChange={event => setSelections(current => ({ ...current, [row.externalKey]: event.target.value }))}>
+            <option value="">{row.match.status === "PENDING" ? "Manter pendente" : row.conflict ? "Descartar ocorrência conflitante" : "Ignorar ocorrência"}</option>
+            {(row.match.status === "PENDING" ? row.match.candidates.map(candidate => targets.find(target => target.id === candidate.itemId)).filter((target): target is QcTarget => !!target) : row.conflict ? [] : targets).map(target => <option key={target.id} value={target.id}>{target.name}{target.variant ? ` · ${target.variant}` : ""}</option>)}
+          </select> : <small className="muted">Ignorada</small>}
         </label>)}</div>
         <div className="qc-panel-actions"><Button variant="outline" disabled={busy} onClick={() => setPrepared(null)}>Voltar</Button><Button disabled={busy} onClick={() => hasCorrections ? setConfirmCorrections(true) : void confirmLinks()}>{busy ? "Salvando…" : "Confirmar vínculos"}</Button></div>
       </>}
       {prepared && confirmed && <>
         <p className="qc-status-note" role="status">{batchInfo || "Vínculos confirmados. Fotos ainda não foram transferidas."}</p>
-        <p className="muted">O servidor processa até duas fotos por chamada para caber no prazo da transferência. Falhas ficam disponíveis para nova tentativa.</p>
-        <div className="qc-panel-actions"><Button variant="outline" onClick={() => { setPrepared(null); setConfirmed(false); }}>Nova importação</Button><Button disabled={busy} onClick={() => void runBatch()}>{busy ? "Processando…" : "Processar próximo lote"}</Button></div>
+        <p className="muted">As fotos serão transferidas em sequência. Se houver falhas, você poderá tentar novamente.</p>
+        <div className="qc-panel-actions"><Button variant="outline" onClick={() => { setPrepared(null); setConfirmed(false); setTransferComplete(false); }}>Nova importação</Button><Button disabled={busy || transferComplete} onClick={() => void runBatch()}>{busy ? "Processando…" : transferComplete ? "Transferências concluídas" : "Continuar / tentar novamente"}</Button></div>
       </>}
       {error && <p className="error" role="alert">{error}</p>}
     </Surface>
+    <Surface open={matchingOpen} onOpenChange={value => { if (!busy) setMatchingOpen(value); }} title="Vínculos QC pendentes" description="Revise cada ocorrência ambígua e escolha um dos produtos candidatos. Só depois de salvar o vínculo as fotos dessa ocorrência começam a ser transferidas." sheet>
+      {!summary.pendingRows?.length && <p className="muted">Nenhuma ocorrência com candidatos aguarda vínculo.</p>}
+      {!!summary.pendingRows?.length && <div className="qc-preview-list">{summary.pendingRows.map(row => <div className="qc-preview-row" key={row.externalItemId}>
+        <span><strong>{row.title || row.skuInfo || row.orderGoodsId || row.orderGoodsNo || row.externalItemId}</strong><small>{row.skuInfo || "Sem variação"} · {row.photoCount} foto(s) aguardando vínculo{row.quantity === null ? "" : ` · quantidade HubBuy ${row.quantity}`}</small></span>
+        <div className="qc-pending-match-controls"><select aria-label={`Produto Loti para ${row.title || row.skuInfo || row.externalItemId}`} value={pendingSelections[row.externalItemId] ?? ""} onChange={event => setPendingSelections(current => ({ ...current, [row.externalItemId]: event.target.value }))}>
+          <option value="">Selecione um candidato</option>
+          {row.candidates.map(candidate => <option key={candidate.itemId} value={candidate.itemId}>{candidate.name} · {candidate.reasons.join(" · ")}</option>)}
+        </select><Button disabled={busy || !pendingSelections[row.externalItemId]} onClick={() => void resolvePending(row)}>{busy ? "Salvando…" : "Associar e processar fotos"}</Button></div>
+      </div>)}</div>}
+      {batchInfo && <p className="qc-status-note" role="status">{batchInfo}</p>}
+      {error && <p className="error" role="alert">{error}</p>}
+    </Surface>
     <Confirm open={confirmCorrections} onOpenChange={setConfirmCorrections} title="Confirmar correção de vínculo?" description="As fotos continuarão ligadas à ocorrência HubBuy e não serão movidas no R2. Esta ação altera apenas o produto Loti associado." label="Confirmar correções" busy={busy} onConfirm={() => { setConfirmCorrections(false); void confirmLinks(); }} />
-    <Confirm open={confirmReconcile} onOpenChange={setConfirmReconcile} title="Reconciliar QC pendente?" description="O servidor tentará novamente somente uploads e exclusões já conhecidos para esta compra. Nenhuma URL nova será recebida." label="Reconciliar pendências" busy={busy} onConfirm={() => void reconcile()} />
+    <Confirm open={confirmReconcile} onOpenChange={setConfirmReconcile} title="Tentar transferências ou remoções novamente?" description="O Loti tentará novamente as transferências e remoções pendentes. Essa ação não altera vínculos de ocorrências." label="Tentar novamente" busy={busy} onConfirm={() => void reconcile()} />
   </>;
 }
 
 export function QcGalleryButton({ purchaseId, itemId, itemName, canManageHere = false }: { purchaseId: string; itemId: string; itemName: string; canManageHere?: boolean }) {
-  const [open, setOpen] = useState(false), [images, setImages] = useState<QcImage[]>([]), [manage, setManage] = useState(false), [loading, setLoading] = useState(false), [error, setError] = useState(""), [broken, setBroken] = useState<Record<string, "source" | "fallback" | "failed">>({}), [confirmDelete, setConfirmDelete] = useState<string | null>(null), [deleting, setDeleting] = useState(false), [count, setCount] = useState<number | null>(null), [nextOffset, setNextOffset] = useState<number | null>(null);
-  const [refresh, setRefresh] = useState(0);
-  useEffect(() => { let active = true; void summaryFor(purchaseId).then(value => { if (active) { setCount(value.counts.find(row => row.itemId === itemId)?.count ?? 0); setManage(value.canManage); } }).catch(() => { if (active) setCount(null); }); return () => { active = false; }; }, [itemId, purchaseId, refresh]);
-  async function load(offset = 0) {
+  const [open, setOpen] = useState(false), [images, setImages] = useState<QcImage[]>([]), [loading, setLoading] = useState(false), [error, setError] = useState(""), [broken, setBroken] = useState<Record<string, "source" | "fallback" | "failed">>({}), [confirmDelete, setConfirmDelete] = useState<string | null>(null), [deleting, setDeleting] = useState(false), [nextOffset, setNextOffset] = useState<number | null>(null);
+  const { summary } = useQcSummary(purchaseId);
+  const count = summary ? summary.counts.find(row => row.itemId === itemId)?.count ?? 0 : null;
+  const manage = !!summary?.canManage;
+  const load = useCallback(async (offset = 0) => {
     setLoading(true); setError(""); setBroken({});
     try {
       const data = await qcRequest<{ images: QcImage[]; nextOffset: number | null }>(`/api/purchases/${encodeURIComponent(purchaseId)}/qc?itemId=${encodeURIComponent(itemId)}&offset=${offset}`, undefined, "GET");
       setImages(current => offset === 0 ? data.images : [...current, ...data.images]); setNextOffset(data.nextOffset);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível carregar a galeria QC."); }
     finally { setLoading(false); }
-  }
+  }, [itemId, purchaseId]);
+  useEffect(() => subscribeSummary(purchaseId, () => { if (open) void load(0); }), [load, open, purchaseId]);
   function openGallery() { setOpen(true); void load(0); }
   async function requestFallback(imageId: string) {
     setBroken(current => ({ ...current, [imageId]: "fallback" }));
@@ -140,7 +213,7 @@ export function QcGalleryButton({ purchaseId, itemId, itemName, canManageHere = 
     try {
       const result = await qcRequest<{ status: string; message?: string }>(`/api/qc/images/${encodeURIComponent(imageId)}`, undefined, "DELETE");
       if (result.status === "pending") setError(result.message ?? "O backup aguarda remoção física.");
-      await load(0); invalidateSummary(purchaseId); setRefresh(value => value + 1);
+      await load(0); invalidateSummary(purchaseId);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível excluir a foto."); }
     finally { setDeleting(false); setConfirmDelete(null); }
   }
