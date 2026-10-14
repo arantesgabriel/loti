@@ -124,3 +124,7 @@ The visual choice is closed; no new reference selection is required for implemen
 ## Packages and costs — 7 October 2026
 
 Approved manual financial follow-up begins after purchase finalization and closes independently. New finalizations create it atomically; older finalized purchases require an explicit start. Keep the purchase and its cost-sharing composition immutable; capture participant weights in a separate cost snapshot. One product charge per purchase uses one method; each package has one Brazil-freight charge/method and one customs obligation without a fee. Defaults are editable Pix 1% / card 5%, and recorded basis points remain fixed. Package quantities, cents, payment/value/logistics states, revisions and reasoned reopening follow [the approved phased plan](21_PACKAGES_AND_COSTS_PLAN.md). No automation, payment processing, member-to-member settlement, exchange conversion, resale or production migration/publication is included.
+
+## Product refunds — 14 October 2026
+
+Approved manual refund tracking follows [`23_PRODUCT_REFUNDS_PLAN.md`](23_PRODUCT_REFUNDS_PLAN.md). Cancellation quantity is independent from refund value: requested cancels selected pre-shipment units and removes their package allocations; received alone reduces net cost. Preserve original purchased bases, product fee/payment and historical snapshots. Use requested/received/voided states with audited correction and no real payment processing. Production migration and real refund entry require separate authorization.

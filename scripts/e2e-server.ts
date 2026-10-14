@@ -1,12 +1,25 @@
 import "dotenv/config";
-import { rmSync } from "node:fs";
+import { existsSync, rmSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-process.env.TURSO_DATABASE_URL = "file:./data/e2e.sqlite";
+import { relative, resolve } from "node:path";
+const explicitE2eDatabaseUrl = process.env.LOTI_E2E_DATABASE_URL;
+let explicitE2eDatabasePath: string | null = null;
+if (explicitE2eDatabaseUrl) {
+  if (!explicitE2eDatabaseUrl.startsWith("file:./data/e2e-refunds-")) throw new Error("LOTI_E2E_DATABASE_URL must target a new file under data/e2e-refunds-*.sqlite.");
+  explicitE2eDatabasePath = resolve(explicitE2eDatabaseUrl.slice("file:".length));
+  const dataPath = resolve("data");
+  const pathFromData = relative(dataPath, explicitE2eDatabasePath);
+  if (!/^e2e-refunds-[a-zA-Z0-9_-]+\.sqlite$/.test(pathFromData)) throw new Error("The E2E database path must be a new e2e-refunds-*.sqlite file directly under data/.");
+  if (existsSync(explicitE2eDatabasePath)) throw new Error("The explicitly selected E2E database already exists; choose a fresh disposable path.");
+  process.env.TURSO_DATABASE_URL = explicitE2eDatabaseUrl;
+} else {
+  process.env.TURSO_DATABASE_URL = "file:./data/e2e.sqlite";
+  rmSync("./data/e2e.sqlite", { force: true });
+}
 process.env.BETTER_AUTH_URL = "http://localhost:3100";
 process.env.BETTER_AUTH_SECRET = randomBytes(48).toString("base64url");
 process.env.LOTI_NEXT_DIR = ".next-e2e";
-rmSync("./data/e2e.sqlite", { force: true });
 await import("./seed");
 // An existing credential account without group membership exercises invitation login.
 const { openDatabase } = await import("../src/lib/db/connection");
@@ -28,4 +41,7 @@ try {
 
 const child = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "--webpack", "-H", "localhost", "-p", "3100"], { stdio: "inherit", env: process.env });
 for (const signal of ["SIGINT", "SIGTERM"] as const) process.on(signal, () => child.kill(signal));
-child.on("exit", code => process.exit(code ?? 0));
+child.on("exit", code => {
+  if (explicitE2eDatabasePath) rmSync(explicitE2eDatabasePath, { force: true });
+  process.exit(code ?? 0);
+});

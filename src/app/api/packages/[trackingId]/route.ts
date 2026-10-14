@@ -18,6 +18,11 @@ const bodySchema = z.discriminatedUnion("operation", [
   z.object({ operation: z.literal("package.save"), packageId: z.string().min(1), input: z.unknown() }).strict(),
   z.object({ operation: z.literal("charge.save"), chargeId: z.string().min(1), input: z.unknown() }).strict(),
   z.object({ operation: z.literal("charge.paid"), chargeId: z.string().min(1), input: z.unknown() }).strict(),
+  z.object({ operation: z.literal("refund.request"), input: z.unknown() }).strict(),
+  z.object({ operation: z.literal("refund.update"), refundId: z.string().min(1), input: z.unknown() }).strict(),
+  z.object({ operation: z.literal("refund.receive"), refundId: z.string().min(1), input: z.unknown() }).strict(),
+  z.object({ operation: z.literal("refund.correct"), refundId: z.string().min(1), input: z.unknown() }).strict(),
+  z.object({ operation: z.literal("refund.void"), refundId: z.string().min(1), input: z.unknown() }).strict(),
   z.object({ operation: z.literal("tracking.close"), input: z.unknown() }).strict(),
   z.object({ operation: z.literal("tracking.reopen"), input: z.unknown() }).strict(),
 ]);
@@ -42,6 +47,11 @@ export async function POST(request: Request, context: RouteContext) {
       case "package.save": await service.savePackage(trackingId, body.packageId, body.input); break;
       case "charge.save": await service.saveCharge(trackingId, body.chargeId, body.input); break;
       case "charge.paid": await service.markChargePaid(trackingId, body.chargeId, body.input); break;
+      case "refund.request": await service.requestRefund(trackingId, body.input); break;
+      case "refund.update": await service.updateRefundRequest(trackingId, body.refundId, body.input); break;
+      case "refund.receive": await service.receiveRefund(trackingId, body.refundId, body.input); break;
+      case "refund.correct": await service.correctRefundReceipt(trackingId, body.refundId, body.input); break;
+      case "refund.void": await service.voidRefund(trackingId, body.refundId, body.input); break;
       case "tracking.close": await service.closeTracking(trackingId, body.input); break;
       case "tracking.reopen": await service.reopenTracking(trackingId, body.input); break;
     }

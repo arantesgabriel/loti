@@ -177,3 +177,5 @@ Must cover:
 - `/packages/[trackingId]`: product cost table, product charge, package list/details, personal allocations, closure and reopening.
 - Existing finalized purchases start follow-up explicitly from History; new finalizations create it atomically.
 - Fee editing and payment confirmation use existing accessible Sheets/Surfaces; mobile lists stay compact and never force page-wide horizontal scrolling. See [screen contract](21_PACKAGES_AND_COSTS_PLAN.md#7-experiência-de-uso).
+
+Product refunds are a collapsed subsection inside Products and payment; request, receipt, correction and void flows use contextual Surfaces. They do not add a route or primary navigation item. See [refund plan](23_PRODUCT_REFUNDS_PLAN.md).

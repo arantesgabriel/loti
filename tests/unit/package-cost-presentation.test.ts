@@ -9,9 +9,11 @@ function view(overrides: Record<string, unknown> = {}) {
     packages: [],
     charges: [],
     productsCharge: { paymentStatus: "pending" },
+    refunds: [],
+    refundsSummary: { requestedCount: 0, receivedCount: 0, voidedCount: 0, requestedCents: 0, receivedCents: 0 },
     calculation: {
       productsCharge: { baseCents: null, feeCents: null, totalCents: null, paymentMethod: null, feeBps: null, paymentStatus: "pending" },
-      summary: { partialCents: 0, totalCents: null, hasKnownAmount: false, undistributedCents: 0, unitCount: 0, assignedUnits: 0 },
+      summary: { partialCents: 0, totalCents: null, hasKnownAmount: false, undistributedCents: 0, unitCount: 0, cancelledUnits: 0, shippingUnits: 0, assignedUnits: 0 },
     },
   };
   return { ...base, ...overrides, calculation: { ...base.calculation, ...(overrides.calculation as object | undefined) } } as unknown as CostTrackingView;

@@ -1,6 +1,3 @@
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import { createServices } from "@/lib/domain/services";
@@ -9,8 +6,8 @@ import { user, workspaces, workspaceMembers, purchaseItems, purchaseItemParticip
 
 describe("purchase cost-sharing transaction boundaries", () => {
   it("rolls back a product when participant insertion fails, and serializes edits with finalization across connections", async () => {
-    const directory = mkdtempSync(join(tmpdir(), "loti-sharing-concurrency-"));
-    const first = openDatabase(`file:${join(directory, "loti.sqlite")}`);
+    const url = "file::memory:?cache=shared";
+    const first = openDatabase(url);
     let second: ReturnType<typeof openDatabase> | undefined;
     let recovery: ReturnType<typeof openDatabase> | undefined;
     try {
@@ -25,7 +22,7 @@ describe("purchase cost-sharing transaction boundaries", () => {
         { workspaceId: "workspace", userId: "alice", createdAt: now },
         { workspaceId: "workspace", userId: "bob", createdAt: now },
       ]).run();
-      second = openDatabase(`file:${join(directory, "loti.sqlite")}`);
+      second = openDatabase(url);
       const alice = createServices(first.db, "alice"), bob = createServices(second.db, "bob");
       const purchase = await alice.savePurchase({ name: "Concurrent round" });
       const original = await alice.saveManualItem({ name: "Original RAM", url: "https://example.test/ram", personId: "alice", quantity: 1, unitPriceCents: 30_000 });
@@ -40,7 +37,7 @@ describe("purchase cost-sharing transaction boundaries", () => {
       expect(await first.db.select().from(purchaseItems)).toHaveLength(1);
       expect(await first.db.select().from(purchaseItemParticipants)).toHaveLength(1);
 
-      recovery = openDatabase(`file:${join(directory, "loti.sqlite")}`);
+      recovery = openDatabase(url);
       const concurrentAlice = createServices(recovery.db, "alice");
       const edit = bob.saveManualItem({
         name: "Edited RAM", url: "https://example.test/ram", quantity: 1, unitPriceCents: 60_000, sharingMode: "equal",
@@ -67,7 +64,6 @@ describe("purchase cost-sharing transaction boundaries", () => {
       recovery?.client.close();
       second?.client.close();
       first.client.close();
-      rmSync(directory, { recursive: true, force: true });
     }
   });
 });

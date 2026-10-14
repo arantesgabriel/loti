@@ -203,3 +203,7 @@ The UI must not force users through nested navigation for this action.
 Existing account: `Shared link → Entrar para aceitar → login → return to invite → Aceitar convite → Favorites`. Wrong-email session: `Trocar de conta → login with invited email → accept`.
 
 Pending invitations offer explicit regeneration (invalidates old link) or confirmed revocation. Links expire in seven days. Invalid/expired/revoked/used links explain the problem and direct the person to request a new link. Session failure after signup directs the person to normal login with their newly defined password.
+
+## Product refund follow-up
+
+`Open Products and payment → select an eligible pre-shipment quantity and its preparing/unassigned source → enter requested product and China values plus reason → units leave shipping allocation → confirm actual receipt separately → optionally correct or void with reason`. The original product payment and fee remain visible. A request alone does not reduce net cost. See [the approved refund contract](23_PRODUCT_REFUNDS_PLAN.md).

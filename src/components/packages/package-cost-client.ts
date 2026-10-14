@@ -1,17 +1,19 @@
 import type { CostTrackingView } from "@/lib/domain/package-cost-reading";
 
-export type CostTrackingSummary = Pick<CostTrackingView, "tracking" | "purchase" | "packages" | "charges" | "calculation" | "items">;
-export type CostResponse<T> = { ok: boolean; status: number; data?: T; error?: string };
+export type CostTrackingSummary = Pick<CostTrackingView, "tracking" | "purchase" | "packages" | "charges" | "calculation" | "items" | "refundsSummary">;
+export type CostResponse<T> = { ok: boolean; status: number; data?: T; error?: string; code?: string };
 
 export async function costRequest<T>(url: string, operation?: Record<string, unknown>): Promise<CostResponse<T>> {
   try {
     const response = await fetch(url, operation ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(operation) } : { cache: "no-store" });
     const result = await response.json();
-    return { ok: response.ok, status: response.status, data: result.data as T | undefined, error: result.error as string | undefined };
+    return { ok: response.ok, status: response.status, data: result.data as T | undefined, error: result.error as string | undefined, code: result.code as string | undefined };
   } catch {
     return { ok: false, status: 0, error: "Não foi possível conectar. Tente novamente." };
   }
 }
+
+export { parseCostCents } from "@/lib/domain/package-refund-calculations";
 
 export function percentFromBasisPoints(value: number) {
   return new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value / 100);

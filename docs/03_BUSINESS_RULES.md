@@ -129,3 +129,12 @@ The finalized purchase remains immutable. A separate workspace-authorized follow
 - Value state (`pending`, `known`, `no_charge`), payment state, and manual logistics state are independent. Unknown is not zero; no-charge obligations require no payment.
 - Product payment is one charge for the whole purchase with one method. Brazil freight is charged once per package with its own method and captured fee; customs has no transaction fee. Fee defaults are 1% Pix and 5% card and changes do not rewrite existing charges.
 - Financial closure requires complete unit coverage, resolved values/compositions, and resolved paid/no-charge obligations. Closed follow-ups are read-only; reopening requires confirmation and a reason. Neither operation changes `purchases.status`.
+
+## Product refunds
+
+1. A refund request cancels an explicit quantity and removes those units from their chosen preparing packages; unsorted units return without a package when a refund is voided.
+2. Requested, received and voided are separate states. Requested values appear as A receber and do not reduce cost. Only confirmed received product/China amounts create credit.
+3. Purchased quantity, original product/China unit bases, product payment status/method/fee and participant allocation snapshots remain unchanged. Finalized purchase and item snapshots are never edited.
+4. Only pre-shipment units are eligible under the current authorized manual package state. No refund may cover product payment fees, Brazil freight or customs charges.
+5. Refund requests, receipts, corrections and voids require workspace membership, optimistic revision and atomic audit events. A pending request blocks cost closure; a voided request remains in audit history but does not count as cancelled or credited.
+6. Active refunds freeze original product bases, product fee configuration and the refunded item's participant composition until all are voided. Full details: [23 — product refunds](23_PRODUCT_REFUNDS_PLAN.md).

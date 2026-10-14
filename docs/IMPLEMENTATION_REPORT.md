@@ -178,3 +178,28 @@ O cálculo agrega parcelas conhecidas por componente e mantém separado o total 
 | Jornada E2E de Pacotes e custos após o ajuste final | 1 cenário passou; inclui checagem de overflow em 320, 390, 768, 1024 e 1440px |
 | Capturas desktop/mobile | Inspecionadas em `artifacts/qa/packages-costs-ux/` (9 PNGs) |
 | Schema/migração/deploy | Sem alteração da refatoração UX; nenhuma migração de produção ou publicação feita |
+
+## Reembolsos de produtos — 14 de outubro de 2026
+
+Implementada a extensão de reembolsos em Pacotes e custos conforme [plano de reembolsos](23_PRODUCT_REFUNDS_PLAN.md), sem editar snapshots finalizados nem tratar automaticamente dados de Compra Outubro/2026. A migração aditiva `0005_fancy_shooting_star.sql` registra solicitação, recebimento e anulação com participantes e eventos auditáveis. Cancelar unidades retira apenas quantidades explícitas de pacotes elegíveis; crédito recebido reduz o custo líquido, enquanto o valor solicitado permanece “A receber”. A base, a taxa e o pagamento original dos produtos continuam preservados.
+
+A tela permite valores manuais, recebido zero confirmado, correções auditadas, anulação e consulta da composição/resíduo mesmo quando todas as unidades estão canceladas. As divisões dos produtos ficam protegidas somente no item reembolsado; as bases e a cobrança original ficam protegidas globalmente enquanto existir um reembolso não anulado. Disputas entre processos testam revisão e CAS; retry curto de `SQLITE_BUSY` permite que a transação concorrente prossiga para a validação da revisão.
+
+### Verificações desta implementação
+
+| Verificação | Resultado |
+| --- | --- |
+| `npm run typecheck` | Passou |
+| `npm run lint` | Passou sem avisos |
+| `npm test -- --maxWorkers=1` | **168 testes passaram**, 7 ignorados; 23 suítes passaram e 1 foi ignorada (24 total) |
+| `npm run build` | Passou; rotas e páginas geradas |
+| `npx playwright test tests/e2e/packages.spec.ts tests/e2e/package-refunds.spec.ts` | 2 cenários Chromium passaram; confirmou a regressão de custos anterior e, para reembolsos, foco, cancelar sem escrita, recebimento, correção inclusive a zero, anulação, composição residual e overflow em 320/390/768/1024/1440 px |
+| `npm run db:migrate` em SQLite temporário isolado | Passou |
+| Mesmo banco com `npm run db:verify` | Passou; 23 tabelas de esquema verificadas |
+| Revisão independente GPT‑6.1 Sol, esforço médio | Aprovada sem achados acionáveis; `git diff --check` passou |
+
+As oito capturas da jornada foram inspecionadas em `artifacts/qa/package-refunds/`: solicitação manual desktop, solicitado desktop/mobile, formulário de recebimento, recebido com residual, confirmação de anulação mobile, todas unidades canceladas e divisão por pessoa. O Vitest foi executado com um worker por arquivo para evitar um `ENOENT` do cache temporário SSR do Vitest no sandbox Windows; a repetição passou integralmente.
+
+### Handoff de migração e publicação
+
+Antes de publicar, faça backup/snapshot recuperável do alvo aprovado, aplique explicitamente `npm run db:migrate`, confira `npm run db:verify` e publique o código compatível sem escritores antigos concorrentes. Execute smoke test autenticado em ambiente isolado. A migração, deploy e registro de reembolsos reais continuam pendentes de autorização específica; nenhum banco remoto foi acessado ou alterado nesta tarefa.

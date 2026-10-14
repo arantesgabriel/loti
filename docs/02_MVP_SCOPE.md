@@ -134,3 +134,5 @@ The MVP succeeds when the five users can complete the full favorite → shared p
 ### Approved Packages and costs extension
 
 The original MVP exclusions above are superseded only for the manual, post-finalization cost follow-up in [the phased plan](21_PACKAGES_AND_COSTS_PLAN.md): effective prices, per-item China freight, package-level Brazil freight and customs values, Pix/card transaction fees, package assignments, manual payment states, manual preparation/sent/received stages, and independent financial closure/reopening. It adds no freight automation, tracking codes, exchange rates, payment processing, transfers between members, or resale/accounting features.
+
+The approved extension in [the refund plan](23_PRODUCT_REFUNDS_PLAN.md) adds only manually registered product/China refunds for units that remain in packages marked for preparation or are unassigned. It adds no payment processing, refund integration, or edits to finalized snapshots.

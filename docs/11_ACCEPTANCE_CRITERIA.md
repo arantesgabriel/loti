@@ -172,3 +172,11 @@ Exact implementation contract: [17_LOGIN_ORBITAL_MOTION.md](17_LOGIN_ORBITAL_MOT
 - Payment, value and manual logistics states are separately labeled. Unknown bases cannot be marked paid; no-charge customs resolves without a payment.
 - Only fully allocated follow-ups with resolved product bases and all charges paid/no-charge may close. Closed follow-ups reject every mutation until a confirmed, reasoned reopening. Purchase history remains read-only throughout.
 - Desktop uses the financial table and package list; payment Surfaces preview base + fee + total; mobile uses compact rows and contextual details with no horizontal page overflow.
+
+## Product refunds
+
+- Requested cancellation removes only explicitly selected eligible units from package contents; the original purchase item and quantity are unchanged.
+- Requested values remain separate from received values. Only confirmed receipt changes liquid cost; original product base, payment status/date/method and captured fee remain identical.
+- Component and per-person credits reconcile with original shares to the cent, with no negative member share. Package charges reset only for explicitly affected packages and with confirmation.
+- Requested refunds block closure. Corrections and voids require reason and audit event; voided units return unassigned and do not restore sent package contents.
+- The additive migration preserves existing paid costs and historical snapshots and creates no refund records automatically. Full acceptance matrix: [23](23_PRODUCT_REFUNDS_PLAN.md#11-fixtures-numéricas-e-matriz-de-testes).

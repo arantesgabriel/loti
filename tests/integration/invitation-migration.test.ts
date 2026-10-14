@@ -7,7 +7,7 @@ import { openDatabase } from "@/lib/db/connection";
 import { favorites, user, userPreferences, workspaceInvitations, workspaceMembers, workspaces } from "@/lib/db/schema";
 it("upgrades an existing database without changing records and repeats safely", async () => {
   const directory = await mkdtemp(join(tmpdir(), "loti-migration-"));
-  const { db, client } = openDatabase(`file:${join(directory, "db.sqlite")}`);
+  const { db, client } = openDatabase(":memory:");
   try {
     const oldMigrations = join(directory, "old");
     await mkdir(join(oldMigrations, "meta"), { recursive: true });

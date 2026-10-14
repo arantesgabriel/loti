@@ -187,3 +187,7 @@ Visual QA captures `artifacts/qa/login-{320,390,768,1024,1440}.png` and `login-r
 Follow the scenario matrix in [the implementation plan](21_PACKAGES_AND_COSTS_PLAN.md#9-matriz-mínima-de-testes). Unit coverage exercises safe-cent fees, proportional largest-remainder allocation, unit distribution, participant weights, pending/zero/no-charge states and incomplete totals. Integration coverage exercises explicit old-purchase start, atomic finalization, idempotency, authorization, revision conflicts, quantity coverage, payment invalidation, close/reopen and migration from the prior schema. Playwright covers the fourth navigation destination, finalized purchase → costs, one and multiple packages, manual payment previews, group defaults, partial values and responsive layouts.
 
 Use only isolated libSQL databases. Do not point local migration checks at `TURSO_DATABASE_URL` from `.env`; supply an explicit disposable `file:` target and never migrate production in this task.
+
+## Product refunds
+
+Run the pure calculation/parser fixtures, migration upgrade/repeat test from schema 0004, service integration matrix (eligibility, requested/received/voided, component caps, charge preservation, rollback and revision conflict), and Playwright refund flows at desktop/mobile widths. Use disposable databases only. Full command list and numerical fixture matrix: [23 — product refunds](23_PRODUCT_REFUNDS_PLAN.md#11-fixtures-numéricas-e-matriz-de-testes).

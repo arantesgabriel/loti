@@ -3,8 +3,8 @@ import { openDatabase } from "@/lib/db/connection";
 import { user, workspaces, workspaceMembers } from "@/lib/db/schema";
 import { createServices } from "@/lib/domain/services";
 
-export async function fixture() {
-  const { db, client } = openDatabase(":memory:");
+export async function fixture(url = ":memory:") {
+  const { db, client } = openDatabase(url);
   await migrate(db, { migrationsFolder: "./drizzle" });
   const now = new Date();
   await db.insert(user).values(["alice", "bob", "outsider", "foreign"].map(id => ({ id, name: id, email: `${id}@test.local`, emailVerified: true, createdAt: now, updatedAt: now }))).run();

@@ -83,3 +83,5 @@ After finalization, members may continue a separate financial follow-up for effe
 5. **Purchases are historical records.** Current favorite edits never rewrite the past.
 6. **Consumer app, not dashboard.** Avoid decorative metrics and enterprise density.
 7. **Predictable collaboration.** Favorites are personal; purchases are collective.
+
+The approved product-refunds extension lets members record pre-shipment unit cancellations and follow a manual request through receipt or audited voiding. The original product payment and captured fee remain intact; requested money is not treated as received. See [the refund plan](23_PRODUCT_REFUNDS_PLAN.md).

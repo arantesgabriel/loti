@@ -32,7 +32,7 @@ function nextAction(detail: CostTrackingView): CostNextAction | null {
     return { label: "Confirmar pagamento dos produtos", section: "products", target: "products-paid" };
   }
 
-  if (detail.calculation.summary.assignedUnits < detail.calculation.summary.unitCount) {
+  if (detail.calculation.summary.assignedUnits < detail.calculation.summary.shippingUnits) {
     const targetPackage = detail.packages[0];
     return targetPackage
       ? { label: "Distribuir unidades nos pacotes", section: "packages", target: `package-content-${targetPackage.id}`, packageId: targetPackage.id }
@@ -57,6 +57,9 @@ function nextAction(detail: CostTrackingView): CostNextAction | null {
     }
   }
 
+  const requested = detail.refunds.find(refund => refund.status === "requested");
+  if (requested) return { label: `Conferir reembolso de ${detail.items.find(item => item.id === requested.costItemId)?.original.name ?? "produto"}`, section: "products", target: "refunds-section" };
+
   return { label: "Encerrar custos", section: "products", target: "close-costs" };
 }
 
@@ -78,6 +81,7 @@ export function packageCostPresentation(detail: CostTrackingView) {
   const packageCount = detail.packages.length;
   const assignedUnits = detail.calculation.summary.assignedUnits;
   const unitCount = detail.calculation.summary.unitCount;
+  const shippingUnits = detail.calculation.summary.shippingUnits;
 
   return {
     nextAction: nextAction(detail),
@@ -87,13 +91,15 @@ export function packageCostPresentation(detail: CostTrackingView) {
     productsSummary: [
       `${detail.items.length} ${detail.items.length === 1 ? "produto" : "produtos"}`,
       unitsLabel(unitCount),
+      ...(detail.calculation.summary.cancelledUnits ? [`${unitsLabel(detail.calculation.summary.cancelledUnits)} canceladas`] : []),
+      ...(detail.refundsSummary.requestedCount ? [`${detail.refundsSummary.requestedCount} ${detail.refundsSummary.requestedCount === 1 ? "reembolso solicitado" : "reembolsos solicitados"}`] : []),
       ...(pricePending ? [missingValueLabel(pricePending, "preço efetivo", "preços efetivos")] : []),
       ...(chinaPending ? [missingValueLabel(chinaPending, "frete China", "fretes China")] : []),
       pendingProductPayment(detail),
     ].join(" · "),
     packagesSummary: [
       `${packageCount} ${packageCount === 1 ? "pacote" : "pacotes"}`,
-      `${assignedUnits}/${unitCount} unidades distribuídas`,
+      `${assignedUnits}/${shippingUnits} unidades enviáveis distribuídas`,
       ...(pendingPackageValues ? [missingValueLabel(pendingPackageValues, "valor", "valores")] : []),
       ...(pendingPackagePayments ? [`${pendingPackagePayments} ${pendingPackagePayments === 1 ? "pagamento pendente" : "pagamentos pendentes"}`] : []),
     ].join(" · "),

@@ -83,9 +83,9 @@ describe("package cost calculations", () => {
     expect(result.items[0].partialCents).toBe(10_001);
     expect(result.items[0].totalCents).toBeNull();
     expect(result.items[0].shares).toEqual([
-      { personId: "a", partialAmountCents: 3_334, amountCents: null },
-      { personId: "b", partialAmountCents: 3_334, amountCents: null },
-      { personId: "c", partialAmountCents: 3_333, amountCents: null },
+      { personId: "a", grossPartialAmountCents: 3_334, receivedRefundCents: 0, requestedRefundCents: 0, partialAmountCents: 3_334, amountCents: null },
+      { personId: "b", grossPartialAmountCents: 3_334, receivedRefundCents: 0, requestedRefundCents: 0, partialAmountCents: 3_334, amountCents: null },
+      { personId: "c", grossPartialAmountCents: 3_333, receivedRefundCents: 0, requestedRefundCents: 0, partialAmountCents: 3_333, amountCents: null },
     ]);
   });
 
