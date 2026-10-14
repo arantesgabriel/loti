@@ -18,6 +18,11 @@ describe("HubBuy QC parser", () => {
     expect(result.occurrences[0]?.photos[0]?.urlHash).toHaveLength(64);
   });
 
+  it("accepts the numeric channel and title field used by HubBuy responses", () => {
+    const result = parseHubBuyImport(payload({ channel: 2, goodsName: null, title: "Título HubBuy" }));
+    expect(result.occurrences[0]).toMatchObject({ channel: "2", title: "Título HubBuy" });
+  });
+
   it("accepts empty freePhotos and reports a partial page without deleting absent rows", () => {
     const result = parseHubBuyImport({ code: 0, data: { count: 4, list: [{ orderNo: "1", goodsList: [{ orderGoodsNo: "NO-1", freePhotos: [] }] }] } });
     expect(result).toMatchObject({ photoCount: 0, partial: true, reportedCount: 4 });

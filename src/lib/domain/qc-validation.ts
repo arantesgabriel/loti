@@ -25,6 +25,10 @@ function optionalText(value: unknown, max: number, name: string): string | null 
   if (typeof value !== "string" || value.length > max || value.trim() !== value || /[\u0000-\u001f\u007f]/.test(value)) throw new DomainError(`Campo HubBuy inválido: ${name}.`, 400, "QC_IMPORT_INVALID");
   return value;
 }
+function optionalChannel(value: unknown): string | null {
+  if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) value = String(value);
+  return optionalText(value, 200, "channel");
+}
 function optionalCount(value: unknown): number | null {
   if (value === undefined || value === null || value === "") return null;
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0 || value > 10_000) throw new DomainError("Quantidade HubBuy inválida.", 400, "QC_IMPORT_INVALID");
@@ -74,10 +78,10 @@ export function parseHubBuyImport(input: unknown): ParsedQcImport {
       occurrences.push({
         externalKey, orderGoodsId, orderGoodsNo, orderNo,
         offerId: optionalText(goods.offerId, QC_LIMITS.externalIdChars, "offerId"),
-        channel: optionalText(goods.channel, 200, "channel"),
+        channel: optionalChannel(goods.channel),
         offerUrl: optionalText(goods.offerUrl, QC_LIMITS.urlChars, "offerUrl"),
         skuInfo: optionalText(goods.skuInfo, QC_LIMITS.skuChars, "skuInfo"),
-        title: optionalText(goods.goodsName, QC_LIMITS.titleChars, "goodsName"),
+        title: optionalText(goods.goodsName ?? goods.title, QC_LIMITS.titleChars, "goodsName/title"),
         quantity: optionalCount(goods.quantity), photos,
       });
     }
