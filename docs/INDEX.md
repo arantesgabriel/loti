@@ -18,6 +18,7 @@ This folder is the canonical product and engineering handoff for the Loti MVP.
 | `11_ACCEPTANCE_CRITERIA.md` | Feature-level and product-level acceptance criteria |
 | `12_TEST_PLAN.md` | Unit, integration, E2E and responsive testing |
 | `13_DEPLOYMENT.md` | Vercel + Turso/libSQL deployment model |
+| `RESET_PASSWORD.md` | Passo a passo para redefinir senhas pelo comando administrativo |
 | `14_LEGACY_MIGRATION.md` | One-time migration from the attached workbook |
 | `15_DECISIONS.md` | Final product/technical decisions and rejected alternatives |
 | `16_HUMAN_INPUTS.md` | Credentials and deployment inputs that an agent cannot invent |
@@ -27,6 +28,7 @@ This folder is the canonical product and engineering handoff for the Loti MVP.
 | `20_PURCHASE_COST_SHARING_PLAN.md` | Phased handoff for equal, percentage and fixed-value sharing of purchase item costs |
 | `21_PACKAGES_AND_COSTS_PLAN.md` | Phased handoff for packages, manual costs, transaction fees, payments and financial closure |
 | `22_PACKAGES_AND_COSTS_UX_REFACTOR_PLAN.md` | Phased refactoring of package costs with progressive disclosure, accurate partial totals and responsive editing |
+| `23_PRODUCT_REFUNDS_PLAN.md` | Phased handoff for product/China-freight refunds, cancelled shipping units, preserved payment fees, manual receipt and audit |
 | `design/REFERENCES.md` | Figma and palette inspiration URLs |
 | `design/PACKAGES_AND_COSTS_REFERENCES.md` | Approved A/B/C/D visual references, images and acceptance for Pacotes e custos |
 | `design/MOCKUPS.md` | Approved visual references and interpretation notes |

@@ -59,6 +59,8 @@ unset LOTI_USER_PASSWORD
 
 Repita para os demais membros com emails reais. O comando cria o espaço se necessário; contas existentes mantêm a senha e não duplicam associação. Signup público permanece desabilitado.
 
+Para redefinir a senha de uma conta existente e encerrar todas as suas sessões, use `npm run user:reset-password -- --email pessoa@example.com`. Veja o [passo a passo no PowerShell](docs/RESET_PASSWORD.md).
+
 ## Importar a planilha original
 
 ```sh

@@ -20,6 +20,7 @@
     "db:migrate": "node --import tsx scripts/migrate.ts",
     "db:seed": "node --import tsx scripts/seed.ts",
     "user:create": "node --import tsx scripts/create-user.ts",
+    "user:reset-password": "node --import tsx scripts/reset-password.ts",
     "import:legacy": "node --import tsx scripts/import-legacy-spreadsheet.ts",
     "test:serve": "node --import tsx scripts/e2e-server.ts",
     "db:verify": "node --import tsx scripts/verify-database.ts"
