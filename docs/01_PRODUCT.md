@@ -85,3 +85,5 @@ After finalization, members may continue a separate financial follow-up for effe
 7. **Predictable collaboration.** Favorites are personal; purchases are collective.
 
 The approved product-refunds extension lets members record pre-shipment unit cancellations and follow a manual request through receipt or audited voiding. The original product payment and captured fee remain intact; requested money is not treated as received. See [the refund plan](23_PRODUCT_REFUNDS_PLAN.md).
+
+The approved [HubBuy QC extension](24_HUBBUY_QC_IMPORT_PLAN.md) lets one explicitly configured member import pasted order JSON after finalization, match purchased occurrences to Loti items, and review associated QC photos in the item gallery. Members who can read the finalized purchase may view its galleries. The gallery is evidence for an occurrence, not an inventory/unit record; it does not change purchase, package, refund or financial data.

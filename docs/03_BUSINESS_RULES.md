@@ -138,3 +138,18 @@ The finalized purchase remains immutable. A separate workspace-authorized follow
 4. Only pre-shipment units are eligible under the current authorized manual package state. No refund may cover product payment fees, Brazil freight or customs charges.
 5. Refund requests, receipts, corrections and voids require workspace membership, optimistic revision and atomic audit events. A pending request blocks cost closure; a voided request remains in audit history but does not count as cancelled or credited.
 6. Active refunds freeze original product bases, product fee configuration and the refunded item's participant composition until all are voided. Full details: [23 — product refunds](23_PRODUCT_REFUNDS_PLAN.md).
+
+## HubBuy QC import
+
+1. QC describes a purchased HubBuy occurrence linked to a finalized Loti purchase item; it is independent of package, participant, favorite, refund and physical-unit identity.
+2. Every read requires a session and membership/access to the finalized purchase. Management additionally requires the persisted user ID configured as `LOTI_QC_MANAGER_USER_ID` and membership in that purchase workspace. Display name/email never grant management.
+3. The manager manually supplies bounded order JSON. Parse on the server, keep only an explicit field whitelist, and never trust browser-supplied identities, associations, URLs, hashes, MIME, dimensions, or storage keys.
+4. Auto-matching requires strong, unambiguous product identity and an exact non-empty variant. Similar titles, listing IDs alone, empty variants, quantity/identity conflicts, or multiple candidates require manual review. A suggestion is never an association until confirmed.
+5. Multiple external occurrences may reference one item; one occurrence has at most one current item link. Explicit rematching is audited and never moves image objects.
+6. Only `goodsList[].freePhotos` is eligible. Images are downloaded from the exact allowlisted HTTPS HubBuy host using the validated public DNS address for the actual connection; redirects, private/reserved IPs, excess bytes, unsupported formats, invalid decodes, animation and dimension/pixel excess are rejected.
+7. Only server-generated R2 keys and server-side S3 clients may access the private bucket. Catalog/claims/audit/quota live in Turso. User-controlled IDs resolve to records before authorization; the browser never supplies a bucket/key or signs its own access.
+8. Import is additive and idempotent. Existing photos remain if absent from a later JSON; URL/content aliases do not duplicate objects; tombstones prevent reimport or late uploads from restoring visibility.
+9. Deletion hides the image immediately after the atomic tombstone and remains pending until the known R2 object/active upload is safely removed. Retry is idempotent; no object listing or automatic restoration is allowed.
+10. QC galleries are the only surfaces allowed to display product photography. QC changes do not mutate finalized snapshots, package rows, refund records, payments, quantities or calculations. Closing/reopening costs does not govern QC access or management.
+
+See [24 — HubBuy QC import](24_HUBBUY_QC_IMPORT_PLAN.md) for limits, state transitions, SSRF/image validation, routes and race handling.

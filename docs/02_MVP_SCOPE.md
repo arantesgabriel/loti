@@ -136,3 +136,13 @@ The MVP succeeds when the five users can complete the full favorite → shared p
 The original MVP exclusions above are superseded only for the manual, post-finalization cost follow-up in [the phased plan](21_PACKAGES_AND_COSTS_PLAN.md): effective prices, per-item China freight, package-level Brazil freight and customs values, Pix/card transaction fees, package assignments, manual payment states, manual preparation/sent/received stages, and independent financial closure/reopening. It adds no freight automation, tracking codes, exchange rates, payment processing, transfers between members, or resale/accounting features.
 
 The approved extension in [the refund plan](23_PRODUCT_REFUNDS_PLAN.md) adds only manually registered product/China refunds for units that remain in packages marked for preparation or are unassigned. It adds no payment processing, refund integration, or edits to finalized snapshots.
+
+### Approved HubBuy QC extension — V1 + V1.1
+
+- Manually paste a bounded HubBuy order JSON for a finalized purchase; there is no HubBuy authentication or API synchronization.
+- Conservatively associate purchased occurrences with existing purchase-item snapshots, with explicit suggestions and manual correction.
+- Back up only validated `freePhotos` to private R2 and show them in authorized per-item QC galleries, including History.
+- Use the source HubBuy image URL first and an authorization-checked, short-lived private R2 URL only as fallback.
+- Keep matching, upload, retry, deletion, quotas and audit independent from packages, costs, refunds and purchase snapshots.
+
+This is the only photo exception: no listing thumbnails or product images in operational cards/lists. Do not add a bookmarklet, browser extension, automatic collection, scraping, AI, workers or queues. External Cloudflare configuration, secrets, bucket creation, production migration and publication require specific authorization.

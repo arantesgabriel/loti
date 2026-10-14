@@ -107,7 +107,7 @@
 - mobile uses a compact rounded floating navigation island with a full-size animated selection fill; only the active destination shows its label;
 - navigation has Favorites, Purchase, Pacotes e custos and History; the selected package label is `Pacotes`;
 - cards/list toggle exists;
-- operational item surfaces display no real product photos, listing thumbnails or large 3D product renders;
+- operational cards/lists display no real product photos, listing thumbnails or large 3D product renders; only the explicitly opened, authorized QC gallery may show validated `freePhotos`;
 - operational item lists/cards, purchase/history and drawers use consistent small functional category markers;
 - sparse Visor-inspired illustrations are reserved for editorial/branding surfaces;
 - purchase markers remain smaller and quieter than pending/added controls;
@@ -180,3 +180,22 @@ Exact implementation contract: [17_LOGIN_ORBITAL_MOTION.md](17_LOGIN_ORBITAL_MOT
 - Component and per-person credits reconcile with original shares to the cent, with no negative member share. Package charges reset only for explicitly affected packages and with confirmation.
 - Requested refunds block closure. Corrections and voids require reason and audit event; voided units return unassigned and do not restore sent package contents.
 - The additive migration preserves existing paid costs and historical snapshots and creates no refund records automatically. Full acceptance matrix: [23](23_PRODUCT_REFUNDS_PLAN.md#11-fixtures-numéricas-e-matriz-de-testes).
+
+## HubBuy QC import — V1 + V1.1
+
+- Every endpoint requires an authoritative session and server-side membership/access to the selected finalized purchase; management additionally requires the exact configured Better Auth user ID and a matching workspace membership.
+- Invalid/missing configuration fails closed; display name/email, browser flags, alternate IDs, and client-computed candidates never grant access.
+- Bodies, strings, arrays, image count/bytes/dimensions/pixels, transfer budgets, concurrency and persistent rate limits stay within `docs/24_HUBBUY_QC_IMPORT_PLAN.md`.
+- Parsing accepts only successful HubBuy JSON structure and whitelists needed fields; it drops extra properties and rejects oversized or malformed input.
+- Exact, unambiguous identity can auto-match only with a non-empty literal variant; names or listing IDs alone never link. Suggestions need explicit confirmation; ambiguous/conflicting records remain unresolved.
+- Multiple occurrences may map to one item; shared item galleries do not duplicate images. Rematching is revision-checked/audited and does not move backup objects.
+- Only `freePhotos` are considered. Downloads reject redirects and non-allowlisted hosts, private/reserved DNS results, DNS rebinding, MIME/magic-byte mismatch, unsupported images, truncation, animation, excessive stream size, timeout and oversized pixels/dimensions before R2 PUT.
+- R2 keys never come from clients; Turso reservation/claim precedes PUT, retries are idempotent, ready-only photos are visible, and mocked storage/transport failures remain recoverable.
+- The manager can resume/reconcile known pending operations. Quotas persist across connections; at most one active transfer/cleanup claim exists per manager/workspace.
+- Deletion atomically hides the image and writes an audit tombstone before R2 DELETE. Retry handles absent objects, failed deletion and concurrent/late upload without resurrection.
+- Private fallback checks the image's active authorized record on each request, rate-limits, and emits only a short-lived GET URL; no signatures or storage keys are persisted or logged.
+- QC is visible from package item context and finalized History; financial close/reopen does not control it. Images never become list/card thumbnails.
+- Reimport, rematching, package division, refund/cancellation, or QC deletion does not change snapshots, amounts, rates, allocations, refunds, payment status, quantity or logistics.
+- Empty and existing-schema migrations are repeat-safe and preserve plan 23 data; no production migration, Cloudflare configuration, bucket creation or publication occurs without separate authorization.
+
+Complete cases and numerical limits: [24 — HubBuy QC import](24_HUBBUY_QC_IMPORT_PLAN.md#11-matriz-mínima-de-testes).

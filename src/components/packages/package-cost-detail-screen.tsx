@@ -14,6 +14,7 @@ import { formatMoney } from "@/lib/domain/money";
 import { splitByWeights } from "@/lib/domain/package-cost-calculations";
 import { costRequest, percentFromBasisPoints, percentInputFromBasisPoints, basisPointsFromPercent, parseCostCents } from "./package-cost-client";
 import { RefundsSection } from "./refunds-section";
+import { QcGalleryButton, QcImportPanel } from "@/components/qc/qc-components";
 
 type Detail = CostTrackingView;
 type DetailItem = Detail["items"][number];
@@ -202,7 +203,7 @@ export function PackageCostDetailScreen({ trackingId }: { trackingId: string }) 
           <p className="cost-last-edited muted"><UserRound size={13} aria-hidden="true"/><span>Atualizado por <strong>{updatedByName}</strong>{lastEdited && <> · <time dateTime={new Date(detail.tracking.updatedAt).toISOString()}>{lastEdited}</time></>}</span></p>
         </div>
       </div>
-      <div className="cost-heading-actions"><span className="cost-status">Compra finalizada</span><span className={`cost-status ${locked ? "closed" : "open"}`}>{locked ? <><LockKeyhole size={13}/> Custos encerrados</> : "Custos abertos"}</span>{locked && <Button aria-label="Reabrir acompanhamento" variant="outline" onClick={() => setReopenOpen(true)}><RotateCcw size={16}/><span className="desktop-label">Reabrir</span></Button>}</div>
+      <div className="cost-heading-actions"><QcImportPanel purchaseId={detail.purchase.id} targets={detail.items.map(item => ({ id: item.original.id, name: item.original.name, variant: item.original.variant, quantity: item.original.quantity }))}/><span className="cost-status">Compra finalizada</span><span className={`cost-status ${locked ? "closed" : "open"}`}>{locked ? <><LockKeyhole size={13}/> Custos encerrados</> : "Custos abertos"}</span>{locked && <Button aria-label="Reabrir acompanhamento" variant="outline" onClick={() => setReopenOpen(true)}><RotateCcw size={16}/><span className="desktop-label">Reabrir</span></Button>}</div>
     </div>
 
     <div className="cost-summary-card">
@@ -290,8 +291,9 @@ function pendingDetails(item: DetailItem) {
 function ProductCostsList({ detail, locked, onDetails, onEdit, onRefund }: { detail: Detail; locked: boolean; onDetails: (itemId: string) => void; onEdit: (item: DetailItem) => void; onRefund: (itemId: string) => void }) {
   if (!detail.items.length) return <p className="muted cost-empty-note">Esta compra não contém produtos.</p>;
   const operationalItems = detail.items.filter(item => (item.calculation?.shippingQuantity ?? item.original.quantity) > 0);
-  if (!operationalItems.length) return <p className="muted cost-empty-note">Todos os produtos foram cancelados. A composição e os valores residuais continuam no histórico de reembolsos e no resumo.</p>;
   return <>
+    {!operationalItems.length && <p className="muted cost-empty-note">Todos os produtos foram cancelados. A composição e os valores residuais continuam no histórico de reembolsos e no resumo.</p>}
+    {!!operationalItems.length && <>
     <div className="cost-table-wrap">
       <table className="cost-table"><thead><tr><th>Produto</th><th>Qtd.</th><th>Preço efetivo / un.</th><th>Frete China / un.</th><th>Taxa de pagamento</th><th>Frete Brasil</th><th>Receita</th><th>Total</th><th><span className="sr-only">Ações</span></th></tr></thead><tbody>
         {operationalItems.map(item => <tr key={item.id}>
@@ -323,6 +325,8 @@ function ProductCostsList({ detail, locked, onDetails, onEdit, onRefund }: { det
         </article>;
       })}
     </div>
+    </>}
+    <section className="qc-cost-list" aria-label="Controle de qualidade por produto"><h3>Controle de qualidade</h3><p className="muted">Fotos permanecem associadas à ocorrência comprada, mesmo após reembolso ou divisão em pacotes.</p><div>{detail.items.map(item => <div className="qc-cost-row" key={item.id}><span>{item.original.name}{item.original.variant ? ` · ${item.original.variant}` : ""}</span><QcGalleryButton purchaseId={detail.purchase.id} itemId={item.original.id} itemName={item.original.name} canManageHere/></div>)}</div></section>
   </>;
 }
 

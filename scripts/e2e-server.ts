@@ -20,9 +20,20 @@ if (explicitE2eDatabaseUrl) {
 process.env.BETTER_AUTH_URL = "http://localhost:3100";
 process.env.BETTER_AUTH_SECRET = randomBytes(48).toString("base64url");
 process.env.LOTI_NEXT_DIR = ".next-e2e";
+for (const name of ["R2_ACCOUNT_ID", "R2_BUCKET_NAME", "R2_WRITE_ACCESS_KEY_ID", "R2_WRITE_SECRET_ACCESS_KEY", "R2_READ_ACCESS_KEY_ID", "R2_READ_SECRET_ACCESS_KEY"]) process.env[name] = "";
 await import("./seed");
-// An existing credential account without group membership exercises invitation login.
+// Configure the exact seeded Better Auth ID as the QC manager only in this
+// disposable E2E process; production/dev configuration remains untouched.
 const { openDatabase } = await import("../src/lib/db/connection");
+const qcManagerFixture = openDatabase();
+try {
+  const { user } = await import("../src/lib/db/schema");
+  const { eq } = await import("drizzle-orm");
+  const manager = await qcManagerFixture.db.select({ id: user.id }).from(user).where(eq(user.email, "gabriel@loti.test")).get();
+  if (!manager) throw new Error("The isolated QC E2E manager could not be provisioned.");
+  process.env.LOTI_QC_MANAGER_USER_ID = manager.id;
+} finally { qcManagerFixture.client.close(); }
+// An existing credential account without group membership exercises invitation login.
 const { createAuth } = await import("../src/lib/auth/config");
 const invitationFixture = openDatabase();
 try {

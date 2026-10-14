@@ -25,6 +25,8 @@ Before writing code, read the files in this order:
 17. `docs/16_HUMAN_INPUTS.md`
 18. `docs/17_LOGIN_ORBITAL_MOTION.md`
 
+For approved post-MVP extensions that are in scope for the current task, also read their full handoff after the canonical list. In particular, refunds use `docs/23_PRODUCT_REFUNDS_PLAN.md` and HubBuy QC uses `docs/24_HUBBUY_QC_IMPORT_PLAN.md`.
+
 The execution prompt is `PROMPT_ONE_SHOT.md`.
 
 ## Source of truth priority
@@ -74,3 +76,4 @@ The approved mockups were generated before the final product name was chosen and
 Implement phase-by-phase, but continue autonomously between phases. Run lint, typecheck, tests, migrations and build continuously. Fix failures before proceeding. Stop only for a genuine human-only blocker such as missing credentials or an unavailable external account.
 
 - Product refunds follow `docs/23_PRODUCT_REFUNDS_PLAN.md`: cancellation removes explicitly selected pre-shipment units, while only a confirmed receipt creates credit. Preserve original product/China bases, payment confirmation, captured fee and finalized snapshots.
+- HubBuy QC V1 + V1.1 follow `docs/24_HUBBUY_QC_IMPORT_PLAN.md`: an authorized member manually imports pasted HubBuy order JSON; only validated `freePhotos` are archived privately and shown in item QC galleries. This narrow exception permits source photography only in the QC gallery, never as operational product thumbnails. Preserve finalized snapshots, package/cost/refund state and all financial calculations. Do not implement API sync, scraping, bookmarklet, extension, AI, workers or queues. Do not configure Cloudflare/secrets, create buckets, publish or migrate production without specific authorization.

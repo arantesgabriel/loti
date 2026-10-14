@@ -29,6 +29,13 @@ The canonical target is Vercel + Turso/libSQL. Production does not use Railway o
 
 The databases `loti-prod` and `loti-dev` are provisioned and migrated. Vercel project `loti` is connected to `arantesgabriel/loti`, with `feat/mvp` as its production branch and server-side credentials scoped by database. Production origin: `https://loti-omega.vercel.app`.
 
+## HubBuy QC operational inputs
+
+- The exact Better Auth user ID approved to manage QC, supplied/verified by the operator and stored only as server-side `LOTI_QC_MANAGER_USER_ID`. Never infer it from a person's name or email.
+- Separately authorized Cloudflare development/Preview and production R2 resources, private buckets and scoped read/write access keys; keep secrets in the matching server-only environment. This implementation does not create or configure them.
+- The applicable R2 account ID, bucket name and access keys for the chosen environment, if/when that environment is specifically authorized; the code derives only the documented account endpoint and never accepts bucket selection from a browser.
+- Before any remote validation: confirm the intended Vercel runtime/plan supports the configured route duration and provide an authorized synthetic test object/import fixture. Production configuration, migration and publication require their own explicit authorization.
+
 ## What is not a blocker
 
 Do not stop for ordinary code errors, migration failures, tests, or naming already resolved by the canonical specification. Fix those and continue.

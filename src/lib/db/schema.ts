@@ -279,3 +279,48 @@ export const purchaseCostRefundEvents = sqliteTable("purchase_cost_refund_events
   check("cost_refund_event_type", sql`${t.eventType} IN ('requested','request_updated','received','receipt_corrected','voided')`),
   check("cost_refund_event_json", sql`json_valid(${t.detailsJson})`),
 ]);
+
+// HubBuy QC is an independent evidence catalog. It deliberately has no writes
+// to purchases, snapshots, package costs, payments or refunds.
+export const qcImports = sqliteTable("qc_imports", {
+  id: text("id").primaryKey(), workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+  purchaseId: text("purchase_id").notNull().references(() => purchases.id), actorId: text("actor_id").notNull().references(() => user.id),
+  manifestJson: text("manifest_json").notNull(), status: text("status", { enum: ["prepared", "confirmed", "expired"] }).notNull(),
+  revision: integer("revision").notNull().default(0), bytesReserved: integer("bytes_reserved").notNull().default(0), bytesConsumed: integer("bytes_consumed").notNull().default(0),
+  expiresAt: timestamp("expires_at"), createdAt: timestamp("created_at"), updatedAt: timestamp("updated_at"),
+}, t => [index("qc_import_purchase_idx").on(t.purchaseId, t.createdAt), check("qc_import_manifest_json", sql`json_valid(${t.manifestJson})`), check("qc_import_status", sql`${t.status} IN ('prepared','confirmed','expired')`), check("qc_import_revision", sql`typeof(${t.revision}) = 'integer' AND ${t.revision} >= 0`), check("qc_import_bytes", sql`typeof(${t.bytesReserved}) = 'integer' AND ${t.bytesReserved} BETWEEN 0 AND 209715200 AND typeof(${t.bytesConsumed}) = 'integer' AND ${t.bytesConsumed} BETWEEN 0 AND 209715200`)]);
+
+export const hubbuyExternalItems = sqliteTable("hubbuy_external_items", {
+  id: text("id").primaryKey(), workspaceId: text("workspace_id").notNull().references(() => workspaces.id), purchaseId: text("purchase_id").notNull().references(() => purchases.id),
+  purchaseItemId: text("purchase_item_id").references(() => purchaseItems.id), orderGoodsId: text("order_goods_id"), orderGoodsNo: text("order_goods_no"),
+  orderNo: text("order_no"), offerId: text("offer_id"), channel: text("channel"), offerUrl: text("offer_url"), skuInfo: text("sku_info"), title: text("title"), quantity: integer("quantity"),
+  revision: integer("revision").notNull().default(0), confirmedBy: text("confirmed_by").references(() => user.id), confirmedAt: integer("confirmed_at", { mode: "timestamp_ms" }), createdAt: timestamp("created_at"), updatedAt: timestamp("updated_at"),
+}, t => [uniqueIndex("qc_external_purchase_order_goods_idx").on(t.purchaseId, t.orderNo, t.orderGoodsId).where(sql`${t.orderGoodsId} IS NOT NULL`), uniqueIndex("qc_external_purchase_goods_no_idx").on(t.purchaseId, t.orderNo, t.orderGoodsNo).where(sql`${t.orderGoodsNo} IS NOT NULL`), index("qc_external_purchase_item_idx").on(t.purchaseItemId), check("qc_external_revision", sql`typeof(${t.revision}) = 'integer' AND ${t.revision} >= 0`), check("qc_external_quantity", sql`${t.quantity} IS NULL OR (typeof(${t.quantity}) = 'integer' AND ${t.quantity} BETWEEN 0 AND 10000)`)]);
+
+export const qcImages = sqliteTable("qc_images", {
+  id: text("id").primaryKey(), externalItemId: text("external_item_id").notNull().references(() => hubbuyExternalItems.id),
+  sourceUrl: text("source_url").notNull(), sourceUrlHash: text("source_url_hash").notNull(), contentSha256: text("content_sha256"), r2Key: text("r2_key").notNull(),
+  status: text("status", { enum: ["pending", "ready", "failed", "deleted"] }).notNull(), deleteState: text("delete_state", { enum: ["none", "pending", "deleted"] }).notNull().default("none"),
+  mimeType: text("mime_type"), byteSize: integer("byte_size"), width: integer("width"), height: integer("height"), ordinal: integer("ordinal").notNull(),
+  revision: integer("revision").notNull().default(0), claimToken: text("claim_token"), claimExpiresAt: integer("claim_expires_at", { mode: "timestamp_ms" }), errorCode: text("error_code"),
+  createdBy: text("created_by").notNull().references(() => user.id), createdAt: timestamp("created_at"), updatedAt: timestamp("updated_at"), deletedAt: integer("deleted_at", { mode: "timestamp_ms" }), deletedBy: text("deleted_by").references(() => user.id),
+}, t => [uniqueIndex("qc_image_external_content_idx").on(t.externalItemId, t.contentSha256).where(sql`${t.contentSha256} IS NOT NULL`), uniqueIndex("qc_image_external_source_idx").on(t.externalItemId, t.sourceUrlHash), uniqueIndex("qc_image_r2_key_idx").on(t.r2Key), index("qc_image_external_state_idx").on(t.externalItemId, t.status, t.ordinal), check("qc_image_state", sql`(${t.status} = 'deleted' AND ${t.deletedAt} IS NOT NULL AND ${t.deletedBy} IS NOT NULL AND ${t.deleteState} IN ('pending','deleted')) OR (${t.status} != 'deleted' AND ${t.deletedAt} IS NULL AND ${t.deletedBy} IS NULL AND ${t.deleteState} = 'none')`), check("qc_image_ready", sql`${t.status} != 'ready' OR (${t.contentSha256} IS NOT NULL AND ${t.mimeType} IN ('image/jpeg','image/png','image/webp') AND typeof(${t.byteSize}) = 'integer' AND ${t.byteSize} BETWEEN 1 AND 8388608 AND typeof(${t.width}) = 'integer' AND ${t.width} BETWEEN 1 AND 8192 AND typeof(${t.height}) = 'integer' AND ${t.height} BETWEEN 1 AND 8192)`), check("qc_image_ordinal", sql`typeof(${t.ordinal}) = 'integer' AND ${t.ordinal} BETWEEN 0 AND 199`)]);
+
+export const qcImageSources = sqliteTable("qc_image_sources", {
+  id: text("id").primaryKey(), importId: text("import_id").references(() => qcImports.id), externalItemId: text("external_item_id").notNull().references(() => hubbuyExternalItems.id), imageId: text("image_id").references(() => qcImages.id),
+  sourceUrl: text("source_url").notNull(), sourceUrlHash: text("source_url_hash").notNull(), ordinal: integer("ordinal").notNull(),
+  state: text("state", { enum: ["pending", "ready", "failed", "deleted"] }).notNull(), attempts: integer("attempts").notNull().default(0), bytesReserved: integer("bytes_reserved").notNull().default(0), bytesConsumed: integer("bytes_consumed").notNull().default(0), errorCode: text("error_code"), createdAt: timestamp("created_at"), updatedAt: timestamp("updated_at"),
+}, t => [uniqueIndex("qc_source_external_hash_idx").on(t.externalItemId, t.sourceUrlHash), index("qc_source_work_idx").on(t.state, t.updatedAt), check("qc_source_ordinal", sql`typeof(${t.ordinal}) = 'integer' AND ${t.ordinal} BETWEEN 0 AND 199`), check("qc_source_attempts", sql`typeof(${t.attempts}) = 'integer' AND ${t.attempts} >= 0`), check("qc_source_budget", sql`typeof(${t.bytesReserved}) = 'integer' AND ${t.bytesReserved} BETWEEN 0 AND 8388608 AND typeof(${t.bytesConsumed}) = 'integer' AND ${t.bytesConsumed} BETWEEN 0 AND 209715200`)]);
+
+export const qcEvents = sqliteTable("qc_events", {
+  id: text("id").primaryKey(), workspaceId: text("workspace_id").notNull().references(() => workspaces.id), purchaseId: text("purchase_id").notNull().references(() => purchases.id), actorId: text("actor_id").references(() => user.id),
+  eventType: text("event_type", { enum: ["QC_IMPORT", "QC_MATCH", "QC_DELETE", "QC_FALLBACK"] }).notNull(), resultCode: text("result_code").notNull(), contextJson: text("context_json").notNull(), createdAt: timestamp("created_at"),
+}, t => [index("qc_event_purchase_idx").on(t.purchaseId, t.createdAt), check("qc_event_context_json", sql`json_valid(${t.contextJson})`)]);
+
+export const qcRateLimits = sqliteTable("qc_rate_limits", {
+  key: text("key").primaryKey(), windowStart: integer("window_start").notNull(), count: integer("count").notNull(),
+}, t => [check("qc_rate_count", sql`typeof(${t.count}) = 'integer' AND ${t.count} >= 0`)]);
+
+export const qcTransferLocks = sqliteTable("qc_transfer_locks", {
+  scope: text("scope").primaryKey(), ownerId: text("owner_id").notNull(), version: integer("version").notNull(), leaseUntil: integer("lease_until").notNull(), updatedAt: timestamp("updated_at"),
+}, t => [check("qc_transfer_lock_version", sql`typeof(${t.version}) = 'integer' AND ${t.version} >= 0`)]);

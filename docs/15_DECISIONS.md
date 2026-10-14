@@ -128,3 +128,7 @@ Approved manual financial follow-up begins after purchase finalization and close
 ## Product refunds — 14 October 2026
 
 Approved manual refund tracking follows [`23_PRODUCT_REFUNDS_PLAN.md`](23_PRODUCT_REFUNDS_PLAN.md). Cancellation quantity is independent from refund value: requested cancels selected pre-shipment units and removes their package allocations; received alone reduces net cost. Preserve original purchased bases, product fee/payment and historical snapshots. Use requested/received/voided states with audited correction and no real payment processing. Production migration and real refund entry require separate authorization.
+
+## HubBuy QC import — 14 October 2026
+
+Approved scope is only V1 + V1.1 from [`24_HUBBUY_QC_IMPORT_PLAN.md`](24_HUBBUY_QC_IMPORT_PLAN.md): manual pasted order JSON, conservative deterministic matching plus explicit suggestion/reconciliation, `freePhotos` only, validated private R2 backup with an authorized temporary fallback, persistent idempotency/claims/limits/audit, and tombstone deletion. Management uses a server-configured Better Auth user ID. QC belongs to purchased occurrences and is independent of shipment packages, cost/refund state and finalized snapshots. Photos appear only in the QC gallery. No HubBuy API sync, scraping, bookmarklet, extension, automation, AI, workers or queues. External configuration, buckets, secrets, production migrations and publication require separate authorization.

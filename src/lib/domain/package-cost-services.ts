@@ -110,8 +110,11 @@ export function packageCostServices(db: AppDatabase, userId: string) {
     for (let attempt = 0; ; attempt++) {
       try { return await db.transaction(operation); }
       catch (error) {
-        if (!isDatabaseBusy(error) || attempt >= 5) throw error;
-        await new Promise(resolve => setTimeout(resolve, 20 * 2 ** attempt));
+        // Separate server processes can contend longer than the short local
+        // transaction queue. Retry only SQLite BUSY; optimistic revisions still
+        // decide the winner once the writer commits.
+        if (!isDatabaseBusy(error) || attempt >= 8) throw error;
+        await new Promise(resolve => setTimeout(resolve, Math.min(2_000, 25 * 2 ** attempt)));
       }
     }
   });

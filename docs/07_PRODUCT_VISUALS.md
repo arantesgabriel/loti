@@ -19,6 +19,10 @@ The resolver normalizes accents/case and applies ordered keyword rules. NVMe mat
 
 Keep the existing `visual_key` column and `visualKey` API property as the category key. No schema change or migration is needed. Saving a favorite or editing an active item's name recalculates its own category; adding a favorite copies its key into the independent purchase snapshot. Favorite changes/deletion never mutate existing item keys. Finalized snapshots remain read-only. Unknown or corrupt stored keys render the generic marker without a broken asset request.
 
+### Approved HubBuy QC gallery exception
+
+Only the specific QC gallery may render validated source photos from `freePhotos`, after server-side authorization and lazy loading. Photos are evidence for a purchased occurrence, not product-card/list imagery, and never replace the neutral category marker on operational surfaces. The gallery must honor deletion tombstones and use the source URL first with an authorized short-lived private backup fallback. No image is sourced from `goodsList[].image`. See [24 — HubBuy QC import](24_HUBBUY_QC_IMPORT_PLAN.md).
+
 ## Initial categories
 
 - `generic`

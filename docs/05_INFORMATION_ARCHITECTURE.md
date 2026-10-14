@@ -179,3 +179,5 @@ Must cover:
 - Fee editing and payment confirmation use existing accessible Sheets/Surfaces; mobile lists stay compact and never force page-wide horizontal scrolling. See [screen contract](21_PACKAGES_AND_COSTS_PLAN.md#7-experiência-de-uso).
 
 Product refunds are a collapsed subsection inside Products and payment; request, receipt, correction and void flows use contextual Surfaces. They do not add a route or primary navigation item. See [refund plan](23_PRODUCT_REFUNDS_PLAN.md).
+
+HubBuy QC stays within the existing Pacotes e custos detail and finalized purchase detail in History. The configured manager gets an Importar QC action and contextual preview/association/processing surfaces. A compact Ver QC action opens one shared gallery for the physical purchase item from package contents or History; there is no new route or primary navigation item. The admin import action is not shown in active Purchase. See [24 — HubBuy QC import](24_HUBBUY_QC_IMPORT_PLAN.md).

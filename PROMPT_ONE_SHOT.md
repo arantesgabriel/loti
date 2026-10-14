@@ -661,7 +661,7 @@ Even if they seem useful, do not add:
 
 - scraping;
 - automatic product metadata retrieval;
-- real product images;
+- real product images in operational product cards/lists (the approved QC-gallery exception is documented below);
 - runtime AI;
 - HubBuy API integration;
 - shipment tracking;
@@ -684,6 +684,8 @@ Even if they seem useful, do not add:
 - analytics dashboard.
 
 Do not expand scope merely because a library makes a feature easy.
+
+The approved HubBuy QC extension is a narrow exception to the no-marketplace-integration/no-product-images rules: follow only `docs/24_HUBBUY_QC_IMPORT_PLAN.md` V1 + V1.1. It accepts manually pasted HubBuy JSON, matches bought occurrences conservatively to finalized Loti items, validates and privately backs up only `freePhotos`, and displays them in authorized QC galleries. It does not add API sync, scraping, listing thumbnails, or changes to product/financial snapshots. External configuration, bucket creation, production migrations and publication still require specific authorization.
 
 ---
 
@@ -849,3 +851,7 @@ Implement the manual post-finalization financial follow-up in `docs/21_PACKAGES_
 ## Product refunds extension
 
 Implement the approved manual product/China-freight refund workflow in `docs/23_PRODUCT_REFUNDS_PLAN.md`. A requested refund cancels selected units and removes them from package allocations; only a separately confirmed received amount reduces net cost. Preserve original purchased quantity, product/China bases, product payment confirmation, captured fee and immutable finalized snapshots. Requested/received/voided records and corrections are audited, authorized and transactional. Never create production refund data or run a production migration without specific authorization.
+
+## HubBuy QC import — approved V1 + V1.1 extension
+
+Implement only the manual import, conservative matching/reconciliation, authorized item galleries, validated private R2 backup/fallback, idempotent retry, audit, quotas and tombstone deletion in `docs/24_HUBBUY_QC_IMPORT_PLAN.md`. Resolve the configured administrator only by persisted Better Auth user ID; all requests require a valid session and server-side purchase/workspace authorization. Strict bounded parsing, source fetching fixed to a validated public IP and actual image decoding precede storage. Use disposable libSQL databases and mocked services until external credentials and authorization are provided. Do not configure Cloudflare/secrets, create buckets, publish, or migrate production. Do not implement bookmarklet, extension, automation, AI, worker or queue. QC records never change purchase snapshots, package allocations, refunds, payment or financial calculations.

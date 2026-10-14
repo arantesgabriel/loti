@@ -93,7 +93,7 @@ A persistent toggle must exist near search/filters. The setting is per user.
 
 ## Favorite visual content
 
-Do **not** use real product photos, listing thumbnails or large 3D renders. Operational items use small functional category markers described in `07_PRODUCT_VISUALS.md`. Cards use a 36px tile (28px mobile) beside name/variation, with price, ownership and actions using the full card width. List markers are 30px (26px mobile). Purchase/History markers are 20–24px, quieter than the status control. Markers are decorative (`aria-hidden`); product names carry semantics.
+Do **not** use real product photos, listing thumbnails or large 3D renders in operational items; the only exception is an explicitly opened, lazy-loaded HubBuy QC gallery for validated `freePhotos`. Operational items continue to use small functional category markers described in `07_PRODUCT_VISUALS.md`. Cards use a 36px tile (28px mobile) beside name/variation, with price, ownership and actions using the full card width. List markers are 30px (26px mobile). Purchase/History markers are 20–24px, quieter than the status control. Markers are decorative (`aria-hidden`); product names carry semantics.
 
 ## Desktop Favorites
 

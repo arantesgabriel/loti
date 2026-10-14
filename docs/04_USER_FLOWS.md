@@ -207,3 +207,7 @@ Pending invitations offer explicit regeneration (invalidates old link) or confir
 ## Product refund follow-up
 
 `Open Products and payment → select an eligible pre-shipment quantity and its preparing/unassigned source → enter requested product and China values plus reason → units leave shipping allocation → confirm actual receipt separately → optionally correct or void with reason`. The original product payment and fee remain visible. A request alone does not reduce net cost. See [the approved refund contract](23_PRODUCT_REFUNDS_PLAN.md).
+
+## Import HubBuy QC
+
+`Open finalized purchase in Pacotes e custos → Importar QC (configured manager only) → paste bounded HubBuy order JSON → review matched/suggested/unmatched occurrences → confirm or correct item links → import up to five validated photos per batch → continue/retry known failures → open item QC gallery`. Members with purchase access can view photos in package contents or History. If the source image fails, the gallery may request one short-lived authorized R2 fallback. Deleting a QC image immediately hides it in Loti and retries private-object removal while retaining a tombstone. No step edits the purchase snapshot, package allocation, refund, payment or cost.
