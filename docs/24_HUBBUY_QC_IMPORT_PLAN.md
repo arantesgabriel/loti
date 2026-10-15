@@ -422,6 +422,13 @@ Esta evolução acrescenta uma apresentação compartilhada por item finalizado 
 - Somente o administrador QC pode definir capa e excluir no visualizador de Pacotes e custos. Histórico continua somente leitura. A exclusão remove a imagem do estado local imediatamente, atualiza contagem/capa e informa quando a remoção física ainda está pendente.
 - Respostas de preview/original são privadas e `no-store`; URLs assinadas não são persistidas em cache cliente. Reabertura revalida a galeria, e estado em memória é isolado pela sessão, compra e imagem.
 
-### Fase 3 — autorização separada obrigatória
+### Fase 3 — apresentação da capa em custos (autorizada pelo usuário)
 
-Fase 3 é somente a futura apresentação da capa/preview nas linhas ou cartões de produto de **Pacotes e custos**. Ela não está incluída nas fases 1 e 2 e não pode começar sem autorização explícita do usuário após a revisão do resultado. Até esse gate, nenhuma foto entra em linha/cartão operacional, e não são adicionados flags, slots ou estrutura visual preparatória. Nenhuma outra tela operacional passa a exibir fotos.
+Em 15/10/2026, o usuário autorizou esta fase. A entrega fica restrita às linhas de produto da tabela desktop e aos cartões responsivos de custos em **Pacotes e custos**:
+
+- Mostrar somente a capa QC compartilhada atualmente selecionada para o item, usando seu preview WebP privado já persistido. Não buscar o original, gerar preview durante leitura, emitir URL assinada ou usar `goodsList[].image`.
+- O lote de apresentações continua limitado a 20 IDs por requisição. A resposta inclui separadamente o preview da capa selecionada, mesmo quando ela não está entre as três primeiras imagens da galeria.
+- O preview mantém autorização de sessão/membership por item e é carregado pela rota binária privada, com `no-store` e `no-referrer`. Falta de capa, preview ausente/falho, remoção ou falha de leitura preservam o marcador funcional de categoria.
+- Seleção de capa, exclusão/fallback e correção de vínculo invalidam e recarregam a apresentação de custos. O usuário sem acesso QC continua vendo o mesmo gate de autorização da rota de preview.
+- Nenhuma foto é adicionada ao resumo/linha separada de Controle de qualidade, à Compra atual, Histórico, Favoritos, drawers de produto ou outros cartões/listas. A galeria e o visualizador continuam sendo as únicas superfícies que exibem fotos fora das linhas/cartões de custos explicitamente autorizadas.
+- Nenhum dado financeiro, snapshot, refund, pagamento, quantidade, alocação, estado logístico ou schema/migration é alterado por esta apresentação.

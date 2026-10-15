@@ -179,7 +179,17 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
     const owned = await db.select({ id: purchaseItems.id }).from(purchaseItems).where(and(eq(purchaseItems.purchaseId, purchaseId), inArray(purchaseItems.id, itemIds))).all();
     if (owned.length !== itemIds.length) throw new DomainError("Um produto não pertence a esta compra.", 404, "QC_ITEM_NOT_FOUND");
     const counts = await db.select({ itemId: hubbuyExternalItems.purchaseItemId, total: count() }).from(qcImages).innerJoin(hubbuyExternalItems, eq(qcImages.externalItemId, hubbuyExternalItems.id)).where(and(eq(hubbuyExternalItems.purchaseId, purchaseId), inArray(hubbuyExternalItems.purchaseItemId, itemIds), eq(qcImages.status, "ready"), eq(qcImages.deleteState, "none"))).groupBy(hubbuyExternalItems.purchaseItemId).all();
-    const coverRows = await db.select({ itemId: qcPresentations.purchaseItemId, revision: qcPresentations.revision, imageId: sql<string | null>`CASE WHEN ${hubbuyExternalItems.id} IS NOT NULL THEN ${qcImages.id} ELSE NULL END` }).from(qcPresentations).leftJoin(qcImages, and(eq(qcPresentations.primaryImageId, qcImages.id), eq(qcImages.status, "ready"), eq(qcImages.deleteState, "none"))).leftJoin(hubbuyExternalItems, and(eq(qcImages.externalItemId, hubbuyExternalItems.id), eq(hubbuyExternalItems.purchaseId, purchaseId), eq(hubbuyExternalItems.purchaseItemId, qcPresentations.purchaseItemId))).where(inArray(qcPresentations.purchaseItemId, itemIds)).all();
+    const coverRows = await db.select({
+      itemId: qcPresentations.purchaseItemId,
+      revision: qcPresentations.revision,
+      imageId: sql<string | null>`CASE WHEN ${hubbuyExternalItems.id} IS NOT NULL THEN ${qcImages.id} ELSE NULL END`,
+      width: qcImages.width,
+      height: qcImages.height,
+      occurrence: sql<string>`coalesce(${hubbuyExternalItems.skuInfo}, ${hubbuyExternalItems.title}, 'Ocorrência HubBuy')`,
+    }).from(qcPresentations)
+      .leftJoin(qcImages, and(eq(qcPresentations.primaryImageId, qcImages.id), eq(qcImages.status, "ready"), eq(qcImages.deleteState, "none")))
+      .leftJoin(hubbuyExternalItems, and(eq(qcImages.externalItemId, hubbuyExternalItems.id), eq(hubbuyExternalItems.purchaseId, purchaseId), eq(hubbuyExternalItems.purchaseItemId, qcPresentations.purchaseItemId)))
+      .where(inArray(qcPresentations.purchaseItemId, itemIds)).all();
     const idsSql = sql.join(itemIds.map(id => sql`${id}`), sql`, `);
     const previewRows = await db.all(sql<{ purchase_item_id: string; image_id: string; width: number | null; height: number | null; occurrence: string }>`WITH ranked AS (
       SELECT h.purchase_item_id, q.id AS image_id, q.width, q.height, coalesce(h.sku_info, h.title, 'Ocorrência HubBuy') AS occurrence,
@@ -190,6 +200,9 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
     ) SELECT purchase_item_id, image_id, width, height, occurrence FROM ranked WHERE row_number <= 3 ORDER BY purchase_item_id, row_number`) as { purchase_item_id: string; image_id: string; width: number | null; height: number | null; occurrence: string }[];
     const countsByItem = new Map(counts.map(row => [row.itemId!, Number(row.total)]));
     const covers = new Map(coverRows.map(row => [row.itemId, { revision: row.revision, imageId: row.imageId }]));
+    const coverImageIds = [...new Set(coverRows.flatMap(row => row.imageId ? [row.imageId] : []))];
+    const readyCoverIds = coverImageIds.length ? await db.select({ imageId: qcImagePreviews.imageId }).from(qcImagePreviews).where(and(inArray(qcImagePreviews.imageId, coverImageIds), eq(qcImagePreviews.status, "ready"), eq(qcImagePreviews.deleteState, "none"))).all() : [];
+    const readyCoverIdSet = new Set(readyCoverIds.map(row => row.imageId));
     const previewsByItem = new Map<string, typeof previewRows>();
     for (const row of previewRows) {
       const list = previewsByItem.get(row.purchase_item_id) ?? [];
@@ -200,7 +213,8 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
       const previews = previewsByItem.get(itemId) ?? [];
       const total = countsByItem.get(itemId) ?? 0;
       const cover = covers.get(itemId);
-      return { purchaseItemId: itemId, qcCount: total, primaryImageId: cover?.imageId ?? null, presentationRevision: cover?.revision ?? 0, canSetCover, previews: previews.map(row => ({ imageId: row.image_id, previewUrl: `/api/qc/images/${encodeURIComponent(row.image_id)}/preview`, occurrence: row.occurrence, width: row.width, height: row.height })), remainingCount: Math.max(0, total - previews.length) };
+      const selectedCover = coverRows.find(row => row.itemId === itemId && row.imageId === cover?.imageId);
+      return { purchaseItemId: itemId, qcCount: total, primaryImageId: cover?.imageId ?? null, presentationRevision: cover?.revision ?? 0, coverPreview: cover?.imageId && readyCoverIdSet.has(cover.imageId) && selectedCover ? { imageId: cover.imageId, previewUrl: `/api/qc/images/${encodeURIComponent(cover.imageId)}/preview`, occurrence: selectedCover.occurrence, width: selectedCover.width, height: selectedCover.height } : null, canSetCover, previews: previews.map(row => ({ imageId: row.image_id, previewUrl: `/api/qc/images/${encodeURIComponent(row.image_id)}/preview`, occurrence: row.occurrence, width: row.width, height: row.height })), remainingCount: Math.max(0, total - previews.length) };
     }) };
   }
 

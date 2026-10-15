@@ -149,14 +149,16 @@ describe("HubBuy QC persistence and permissions", () => {
     expect((await f.db.select().from(qcPresentations).get())?.primaryImageId).toBe(images[0]!.id);
     expect(await bob.getPreview(images[0]!.id)).toEqual(previewBytes);
     await expect(bob.setPresentationCover("qc-purchase", "qc-purchase-item", images[1]!.id, 0)).rejects.toMatchObject({ status: 403, code: "QC_FORBIDDEN" });
-    expect(await alice.getQcPresentations("qc-purchase", ["qc-purchase-item"])).toMatchObject({ items: [{ purchaseItemId: "qc-purchase-item", qcCount: 2, primaryImageId: images[0]!.id, canSetCover: true, previews: [{ imageId: images[0]!.id }, { imageId: images[1]!.id }], remainingCount: 0 }] });
+    expect(await alice.getQcPresentations("qc-purchase", ["qc-purchase-item"])).toMatchObject({ items: [{ purchaseItemId: "qc-purchase-item", qcCount: 2, primaryImageId: images[0]!.id, coverPreview: { imageId: images[0]!.id, previewUrl: `/api/qc/images/${images[0]!.id}/preview`, width: 2, height: 2, occurrence: "Black / 42" }, canSetCover: true, previews: [{ imageId: images[0]!.id }, { imageId: images[1]!.id }], remainingCount: 0 }] });
     await expect(alice.getQcPresentations("qc-purchase", Array.from({ length: 21 }, (_, index) => `item-${index}`))).rejects.toMatchObject({ status: 400, code: "QC_PRESENTATION_BATCH_INVALID" });
 
     expect(await alice.setPresentationCover("qc-purchase", "qc-purchase-item", images[1]!.id, 0)).toMatchObject({ primaryImageId: images[1]!.id, revision: 1 });
+    expect(await alice.getQcPresentations("qc-purchase", ["qc-purchase-item"])).toMatchObject({ items: [{ primaryImageId: images[1]!.id, coverPreview: { imageId: images[1]!.id } }] });
     expect((await alice.getGallery("qc-purchase", "qc-purchase-item")).primaryImageId).toBe(images[1]!.id);
     await alice.deleteImage(images[1]!.id);
     const gallery = await alice.getGallery("qc-purchase", "qc-purchase-item");
     expect(gallery).toMatchObject({ totalCount: 1, primaryImageId: images[0]!.id, presentationRevision: 2 });
+    expect(await alice.getQcPresentations("qc-purchase", ["qc-purchase-item"])).toMatchObject({ items: [{ primaryImageId: images[0]!.id, coverPreview: { imageId: images[0]!.id } }] });
     const deletion = await f.db.select().from(qcEvents).where(eq(qcEvents.resultCode, "TOMBSTONED")).get();
     expect(JSON.parse(deletion!.contextJson)).toMatchObject({ coverChanges: [{ fromImageId: images[1]!.id, toImageId: images[0]!.id }] });
   });
@@ -190,11 +192,13 @@ describe("HubBuy QC persistence and permissions", () => {
     const image = (await f.db.select().from(qcImages).get())!;
     expect(image.status).toBe("ready");
     expect((await alice.getGallery("qc-purchase", "qc-purchase-item")).primaryImageId).toBe(image.id);
+    expect(await alice.getQcPresentations("qc-purchase", ["qc-purchase-item"])).toMatchObject({ items: [{ primaryImageId: image.id, coverPreview: null }] });
     expect((await f.db.select().from(qcImagePreviews).where(eq(qcImagePreviews.imageId, image.id)).get())).toMatchObject({ status: "failed", errorCode: "QC_INTERNAL" });
 
     failPreview = false;
     expect(await alice.runBatch("qc-purchase")).toMatchObject({ previews: 1, processed: 1, complete: true, remaining: 0 });
     expect((await f.db.select().from(qcImagePreviews).where(eq(qcImagePreviews.imageId, image.id)).get())).toMatchObject({ status: "ready", deleteState: "none" });
+    expect(await alice.getQcPresentations("qc-purchase", ["qc-purchase-item"])).toMatchObject({ items: [{ primaryImageId: image.id, coverPreview: { imageId: image.id } }] });
   });
 
   it("bounds gallery pages, opens a requested image beyond page one, and caps batch previews at three", async () => {

@@ -117,7 +117,12 @@ test("HubBuy QC automatically completes four distinct photos and refreshes galle
   await page.route(`**/api/purchases/${purchase.purchaseId}/qc**`, async route => {
     const request = route.request();
     if (request.method() === "GET") {
-      const itemId = new URL(request.url()).searchParams.get("itemId");
+      const params = new URL(request.url()).searchParams;
+      if (params.has("itemIds")) {
+        const itemIds = params.get("itemIds")?.split(",") ?? [];
+        return response(route, { purchaseId: purchase.purchaseId, items: itemIds.map(purchaseItemId => ({ purchaseItemId, qcCount: purchaseItemId === purchase.firstItemId ? importedPhotos : 0, primaryImageId: purchaseItemId === purchase.firstItemId ? coverId : null, presentationRevision: purchaseItemId === purchase.firstItemId ? coverRevision : 0, coverPreview: purchaseItemId === purchase.firstItemId && coverId ? { imageId: coverId, previewUrl: `/api/qc/images/${coverId}/preview`, width: 160, height: 107, occurrence: "Blue / 40" } : null, canSetCover: true, previews: [], remainingCount: 0 })) });
+      }
+      const itemId = params.get("itemId");
       return response(route, itemId ? { itemId, pageOffset: 0, totalCount: importedPhotos, presentationRevision: coverRevision, primaryImageId: coverId, canSetCover: true, images: photoIds.slice(0, importedPhotos).map(id => ({ id, previewUrl: `/api/qc/images/${id}/preview`, width: 1, height: 1, occurrence: "Blue / 40" })), nextOffset: null } : { purchaseId: purchase.purchaseId, canManage: true, counts: [{ itemId: purchase.firstItemId, count: importedPhotos }], pendingMatching: 0, pendingRows: [], pendingTransfers: 4 - importedPhotos, pendingDeletes: 0, pendingPreviews: 0 });
     }
     const body = request.postDataJSON() as { operation: string };
@@ -177,6 +182,10 @@ test("HubBuy QC automatically completes four distinct photos and refreshes galle
   await page.locator(".qc-viewer-surface").getByRole("button", { name: "Fechar" }).click();
   await page.reload();
   if (!(await page.locator(".qc-cost-list").isVisible())) await page.getByRole("button", { name: /Produtos e pagamento/ }).click();
+  const costRow = page.locator(".cost-table tbody tr").filter({ hasText: "QC Marker Product" });
+  await expect(costRow.locator(".qc-cost-cover")).toHaveAttribute("data-qc-image-id", "qc-photo-2");
+  await expect(costRow.locator(".qc-cost-cover img")).toHaveAttribute("alt", "Foto QC compartilhada de QC Marker Product");
+  await expect(costRow.locator(".qc-cost-cover img")).toBeVisible();
   await page.locator(".qc-cost-list").getByRole("button", { name: "Ver QC de QC Marker Product" }).click();
   await expect(page.locator(".qc-gallery-card.is-cover .qc-cover-badge")).toContainText("Capa atual");
   await page.locator(".qc-gallery-open").nth(1).click();
@@ -192,6 +201,7 @@ test("HubBuy QC automatically completes four distinct photos and refreshes galle
   await expect(page.locator(".qc-viewer-toolbar")).toContainText("Foto 2 de 3");
   await expect(page.locator(".qc-viewer-photo img")).toBeVisible();
   expect(coverId).toBe("qc-photo-1");
+  await expect(costRow.locator(".qc-cost-cover")).toHaveAttribute("data-qc-image-id", "qc-photo-1");
   for (const width of [320, 390, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     const surface = await page.locator(".qc-viewer-surface").boundingBox();
@@ -211,7 +221,12 @@ test("HubBuy QC automatically completes four distinct photos and refreshes galle
   await page.getByRole("button", { name: "Todas as fotos" }).click();
   await expect(page.locator(".qc-gallery-card")).toHaveCount(3);
   await page.locator(".qc-viewer-surface").getByRole("button", { name: "Fechar" }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileCostCard = page.locator(".cost-product-mobile-card").filter({ hasText: "QC Marker Product" });
+  await expect(mobileCostCard.locator(".qc-cost-cover")).toHaveAttribute("data-qc-image-id", "qc-photo-1");
+  await expect(mobileCostCard.locator(".qc-cost-cover img")).toBeVisible();
   await page.goto(`/history/${purchase.purchaseId}`);
+  await expect(page.locator(".qc-cost-cover")).toHaveCount(0);
   await page.getByRole("button", { name: "QC Marker Product", exact: true }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Ver QC de QC Marker Product" }).click();
   await expect(page.locator(".qc-viewer-surface")).toBeVisible();

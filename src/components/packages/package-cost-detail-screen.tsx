@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, CalendarDays, ChevronDown, CircleCheck, CircleDollarSign, Clock3, Hash, LockKeyhole, Package, Plus, RotateCcw, UserRound, UsersRound } from "lucide-react";
 import { toast } from "sonner";
-import { Avatar, EmptyState, ProductCategoryMarker } from "@/components/shared";
+import { Avatar, EmptyState } from "@/components/shared";
 import { Button } from "@/components/ui/button";
 import { Confirm, Surface } from "@/components/ui/surface";
 import type { CostTrackingView } from "@/lib/domain/package-cost-reading";
@@ -14,7 +14,7 @@ import { formatMoney } from "@/lib/domain/money";
 import { splitByWeights } from "@/lib/domain/package-cost-calculations";
 import { costRequest, percentFromBasisPoints, percentInputFromBasisPoints, basisPointsFromPercent, parseCostCents } from "./package-cost-client";
 import { RefundsSection } from "./refunds-section";
-import { QcGalleryButton, QcImportPanel } from "@/components/qc/qc-components";
+import { QcCostCover, QcGalleryButton, QcImportPanel, useQcCostCovers } from "@/components/qc/qc-components";
 
 type Detail = CostTrackingView;
 type DetailItem = Detail["items"][number];
@@ -289,6 +289,7 @@ function pendingDetails(item: DetailItem) {
 }
 
 function ProductCostsList({ detail, locked, onDetails, onEdit, onRefund }: { detail: Detail; locked: boolean; onDetails: (itemId: string) => void; onEdit: (item: DetailItem) => void; onRefund: (itemId: string) => void }) {
+  const qcCovers = useQcCostCovers(detail.purchase.id, detail.items.map(item => item.original.id));
   if (!detail.items.length) return <p className="muted cost-empty-note">Esta compra não contém produtos.</p>;
   const operationalItems = detail.items.filter(item => (item.calculation?.shippingQuantity ?? item.original.quantity) > 0);
   return <>
@@ -297,7 +298,7 @@ function ProductCostsList({ detail, locked, onDetails, onEdit, onRefund }: { det
     <div className="cost-table-wrap">
       <table className="cost-table"><thead><tr><th>Produto</th><th>Qtd.</th><th>Preço efetivo / un.</th><th>Frete China / un.</th><th>Taxa de pagamento</th><th>Frete Brasil</th><th>Receita</th><th>Total</th><th><span className="sr-only">Ações</span></th></tr></thead><tbody>
         {operationalItems.map(item => <tr key={item.id}>
-          <td data-label="Produto"><div className="cost-product-name"><ProductCategoryMarker visualKey={item.original.visualKey}/><span><strong>{item.original.name}</strong><small>{item.original.variant || "Sem variação"}</small>{item.participants.length > 0 && <small className="cost-product-participants"><UsersRound size={12} aria-hidden="true"/><span>{item.participants.map(person => person.name).join(" · ")}</span></small>}</span></div></td>
+          <td data-label="Produto"><div className="cost-product-name"><QcCostCover purchaseId={detail.purchase.id} itemName={item.original.name} visualKey={item.original.visualKey} cover={qcCovers[item.original.id]}/><span><strong>{item.original.name}</strong><small>{item.original.variant || "Sem variação"}</small>{item.participants.length > 0 && <small className="cost-product-participants"><UsersRound size={12} aria-hidden="true"/><span>{item.participants.map(person => person.name).join(" · ")}</span></small>}</span></div></td>
           <td data-label="Quantidade"><span className="cost-quantity"><Hash size={12} aria-hidden="true"/>{item.original.quantity}</span><small className="cost-cell-pending">{item.calculation?.cancelledQuantity ? `${item.original.quantity} compradas · ${item.calculation.cancelledQuantity} cancelada(s) · ${item.calculation.shippingQuantity} para envio` : ""}</small></td>
           <td data-label="Preço efetivo / un.">{displayedValue(item.effectivePriceState, item.effectivePriceUnitCents)}</td>
           <td data-label="Frete China / un.">{displayedValue(item.chinaFreightState, item.chinaFreightUnitCents)}</td>
@@ -313,7 +314,7 @@ function ProductCostsList({ detail, locked, onDetails, onEdit, onRefund }: { det
       {operationalItems.map(item => {
         const pending = pendingDetails(item);
         return <article className="cost-product-mobile-card" key={item.id}>
-          <div className="cost-product-mobile-title"><ProductCategoryMarker visualKey={item.original.visualKey}/><span><strong>{item.original.name}</strong><small>{item.original.variant || "Sem variação"}</small>{item.calculation?.cancelledQuantity ? <small>{item.original.quantity} compradas · {item.calculation.cancelledQuantity} cancelada(s) · {item.calculation.shippingQuantity} para envio</small> : null}{item.participants.length > 0 && <small className="cost-product-participants"><UsersRound size={12} aria-hidden="true"/><span>{item.participants.map(person => person.name).join(" · ")}</span></small>}</span></div>
+          <div className="cost-product-mobile-title"><QcCostCover purchaseId={detail.purchase.id} itemName={item.original.name} visualKey={item.original.visualKey} cover={qcCovers[item.original.id]}/><span><strong>{item.original.name}</strong><small>{item.original.variant || "Sem variação"}</small>{item.calculation?.cancelledQuantity ? <small>{item.original.quantity} compradas · {item.calculation.cancelledQuantity} cancelada(s) · {item.calculation.shippingQuantity} para envio</small> : null}{item.participants.length > 0 && <small className="cost-product-participants"><UsersRound size={12} aria-hidden="true"/><span>{item.participants.map(person => person.name).join(" · ")}</span></small>}</span></div>
           <dl className="cost-product-mobile-values">
             <div><dt>Quantidade</dt><dd>{unitsLabel(item.original.quantity)}</dd></div>
             <div><dt>Preço efetivo / un.</dt><dd>{displayedValue(item.effectivePriceState, item.effectivePriceUnitCents)}</dd></div>

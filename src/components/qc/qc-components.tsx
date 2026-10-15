@@ -9,6 +9,8 @@ import { resolveProductCategory } from "@/lib/domain/categories";
 import { useWorkspace } from "@/components/workspace-provider";
 
 type QcImage = { id: string; previewUrl: string | null; width: number | null; height: number | null; occurrence: string };
+export type QcCostCoverPresentation = { imageId: string; previewUrl: string; width: number | null; height: number | null; occurrence: string };
+type QcPresentationItem = { purchaseItemId: string; coverPreview: QcCostCoverPresentation | null };
 type QcPendingMatch = { externalItemId: string; revision: number; orderNo: string | null; orderGoodsId: string | null; orderGoodsNo: string | null; skuInfo: string | null; title: string | null; quantity: number | null; photoCount: number; candidates: { itemId: string; name: string; reasons: string[] }[] };
 type QcSummary = { canManage: boolean; counts: { itemId: string; count: number }[]; pendingMatching?: number; pendingRows?: QcPendingMatch[]; pendingTransfers?: number; pendingDeletes?: number; pendingPreviews?: number };
 type QcPreview = { externalKey: string; orderNo: string | null; orderGoodsId: string | null; orderGoodsNo: string | null; offerId: string | null; skuInfo: string | null; title: string | null; quantity: number | null; photoCount: number; match: { status: string; targetItemId: string | null; candidates: { itemId: string; name: string; reasons: string[] }[] }; existingItemId: string | null; conflict: string | null };
@@ -43,6 +45,7 @@ function occurrenceStatus(row: QcPreview): { tone: QcStatusTone; label: string; 
 
 const summaryCache = new Map<string, { promise: Promise<QcSummary>; expiresAt: number }>();
 const summaryListeners = new Map<string, Set<() => void>>();
+const presentationListeners = new Map<string, Set<() => void>>();
 const previewRequests = new Map<string, Promise<Blob>>();
 let activeUserScope: string | null = null;
 const summaryKey = (userId: string, purchaseId: string) => `${userId}:${purchaseId}`;
@@ -75,6 +78,7 @@ function summaryFor(userId: string, purchaseId: string) {
 function invalidateSummary(purchaseId: string) {
   for (const [key] of summaryCache) if (key.endsWith(`:${purchaseId}`)) summaryCache.delete(key);
   for (const [key, listeners] of summaryListeners) if (key.endsWith(`:${purchaseId}`)) for (const listener of listeners) listener();
+  for (const listener of presentationListeners.get(purchaseId) ?? []) listener();
 }
 function useQcSummary(purchaseId: string) {
   const { data } = useWorkspace();
@@ -93,6 +97,42 @@ async function qcRequest<T>(url: string, body?: unknown, method = "POST") {
   const result = await response.json();
   if (!response.ok) throw new Error(result.error ?? "Não foi possível concluir a operação QC.");
   return result.data as T;
+}
+
+export function useQcCostCovers(purchaseId: string, itemIds: string[]) {
+  const { data } = useWorkspace();
+  const userId = data.currentUser.id, itemIdsKey = JSON.stringify(itemIds), key = `${userId}:${purchaseId}:${itemIdsKey}`;
+  const [result, setResult] = useState<{ key: string; covers: Record<string, QcCostCoverPresentation> } | null>(null), [revision, setRevision] = useState(0);
+
+  useEffect(() => {
+    const listeners = presentationListeners.get(purchaseId) ?? new Set<() => void>();
+    const refresh = () => setRevision(current => current + 1);
+    listeners.add(refresh); presentationListeners.set(purchaseId, listeners);
+    return () => { listeners.delete(refresh); if (!listeners.size) presentationListeners.delete(purchaseId); };
+  }, [purchaseId, userId]);
+
+  useEffect(() => {
+    let active = true;
+    const covers: Record<string, QcCostCoverPresentation> = {};
+    const ids = JSON.parse(itemIdsKey) as string[];
+    const load = async () => {
+      try {
+        for (let offset = 0; offset < ids.length; offset += 20) {
+          if (!active) return;
+          const params = new URLSearchParams({ itemIds: ids.slice(offset, offset + 20).join(",") });
+          const batch = await qcRequest<{ items: QcPresentationItem[] }>(`/api/purchases/${encodeURIComponent(purchaseId)}/qc?${params}`, undefined, "GET");
+          for (const item of batch.items) if (item.coverPreview) covers[item.purchaseItemId] = item.coverPreview;
+        }
+      } catch {
+        // A QC read must not block the financial cost screen; missing covers keep their category markers.
+      }
+      if (active) setResult({ key, covers });
+    };
+    void load();
+    return () => { active = false; };
+  }, [itemIdsKey, key, purchaseId, revision]);
+
+  return result?.key === key ? result.covers : {};
 }
 
 export function QcImportPanel({ purchaseId, targets }: { purchaseId: string; targets: QcTarget[] }) {
@@ -304,6 +344,35 @@ function QcPreviewImage({ image, userId, purchaseId, alt }: { image: QcImage; us
   // The authenticated API returns a private, bounded WebP. Keep it out of Next's image optimizer.
   // eslint-disable-next-line @next/next/no-img-element
   return <img src={current.src} loading="lazy" referrerPolicy="no-referrer" alt={alt} />;
+}
+
+export function QcCostCover({ purchaseId, itemName, visualKey, cover }: { purchaseId: string; itemName: string; visualKey: string; cover?: QcCostCoverPresentation }) {
+  const { data } = useWorkspace();
+  const userId = data.currentUser.id;
+  const key = `${userId}:${purchaseId}:${cover?.imageId ?? "none"}:${cover?.previewUrl ?? ""}`;
+  const [view, setView] = useState<{ key: string; src: string | null }>({ key: "", src: null });
+  const current = view.key === key ? view : null;
+
+  useEffect(() => {
+    let active = true, objectUrl: string | null = null;
+    if (!cover) return;
+    const request = previewBlob(userId, purchaseId, cover.imageId, cover.previewUrl);
+    if (!request) return;
+    void request.then(blob => {
+      if (!active) return;
+      objectUrl = URL.createObjectURL(blob);
+      setView({ key, src: objectUrl });
+    }).catch(() => { if (active) setView({ key, src: null }); });
+    return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [cover, key, purchaseId, userId]);
+
+  if (!cover || !current?.src) return <ProductCategoryMarker visualKey={visualKey} />;
+  return <div className="qc-cost-cover" data-qc-image-id={cover.imageId} title="Capa QC compartilhada">
+    {/* The authenticated API returns a private, bounded WebP; keep it out of Next's image optimizer. */}
+    {/* eslint-disable-next-line @next/next/no-img-element */}
+    <img src={current.src} referrerPolicy="no-referrer" alt={`Foto QC compartilhada de ${itemName}`} />
+    <span className="qc-cost-cover-badge" aria-hidden="true">QC</span>
+  </div>;
 }
 
 export function QcGalleryButton({ purchaseId, itemId, itemName, canManageHere = false }: { purchaseId: string; itemId: string; itemName: string; canManageHere?: boolean }) {

@@ -107,7 +107,7 @@
 - mobile uses a compact rounded floating navigation island with a full-size animated selection fill; only the active destination shows its label;
 - navigation has Favorites, Purchase, Pacotes e custos and History; the selected package label is `Pacotes`;
 - cards/list toggle exists;
-- operational cards/lists display no real product photos, listing thumbnails or large 3D product renders; only the explicitly opened, authorized QC gallery/viewer may currently show validated `freePhotos`. Product cost lines/cards may show the shared QC cover only after the separate Phase 3 authorization;
+- operational cards/lists display no real product photos, listing thumbnails or large 3D product renders; only the explicitly opened, authorized QC gallery/viewer may show validated `freePhotos`, with the separately authorized Phase 3 exception limited to the selected shared QC cover/private preview on product cost lines/cards in Pacotes e custos;
 - operational item lists/cards, purchase/history and drawers use consistent small functional category markers;
 - sparse Visor-inspired illustrations are reserved for editorial/branding surfaces;
 - purchase markers remain smaller and quieter than pending/added controls;
@@ -209,4 +209,4 @@ Complete cases and numerical limits: [24 — HubBuy QC import](24_HUBBUY_QC_IMPO
 - The viewer paginates, opens image IDs beyond the first page, fetches one original only when selected, supports keyboard/touch navigation and keeps History read-only. Cover/delete controls appear only in the manager's Pacotes e custos viewer.
 - Preview/original reads are session-bound and private. Client state is scoped by user and purchase; reopening revalidates and logout/user change clears scope. Original and preview fallback state is component-local, with no document-wide source swapping.
 - Responsive Playwright coverage includes 320, 390, 768, 1024 and 1440px, focus return, Escape, previous/next, cover conflict, deletion fallback and image failure recovery.
-- Phase 3 is not part of these criteria: cost-line/card photos require explicit user authorization after review and are limited to Pacotes e custos.
+- Phase 3 shows only the selected, active shared cover through its private bounded preview on desktop product cost lines and responsive mobile product cost cards in Pacotes e custos. Missing covers/previews and failed reads retain the functional category marker. Cover changes and deletion fallback refresh the displayed preview. History, Favorites, Purchase, the separate QC cost list, and every other surface stay photo-free outside the QC gallery/viewer.
