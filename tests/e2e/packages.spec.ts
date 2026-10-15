@@ -12,7 +12,7 @@ test("finalized purchase gets a separate cost tracking with payment, package, an
   }
 
   await login(page, "profile-qa", "Profile-QA-Old-2026!");
-  const origin = "http://localhost:3100";
+  const origin = test.info().project.use.baseURL ?? "http://localhost:3100";
   const created = await page.request.post("/api/app", { headers: { Origin: origin }, data: { operation: "purchase.save", input: { name: "Custos QA outubro", hubbuyAccount: "hubbuy-qa@example.test" } } });
   expect(created.ok()).toBeTruthy();
   const purchaseData = await created.json();

@@ -3,6 +3,7 @@ import { mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 test("requests, receives, corrects and voids product refunds without changing the original payment", async ({ page }) => {
+  test.setTimeout(180_000);
   const screenshotDir = resolve(process.cwd(), "artifacts/qa/package-refunds");
   async function capture(name: string) {
     if (process.env.LOTI_CAPTURE_REFUNDS_QA !== "1") return;
@@ -19,7 +20,7 @@ test("requests, receives, corrects and voids product refunds without changing th
   const response = await loginResponse;
   expect(response.ok(), `Login response ${response.status()}: ${await response.text()}`).toBeTruthy();
   await page.waitForURL("**/favorites");
-  const origin = "http://localhost:3100";
+  const origin = test.info().project.use.baseURL ?? "http://localhost:3100";
   const created = await page.request.post("/api/app", { headers: { Origin: origin }, data: { operation: "purchase.save", input: { name: "Refund QA outubro" } } });
   expect(created.ok()).toBeTruthy();
   const purchaseData = await created.json();
@@ -46,7 +47,7 @@ test("requests, receives, corrects and voids product refunds without changing th
   await expect(surface).toBeVisible();
   await expect(surface.getByLabel("Pacote 1 unidades a cancelar")).toBeFocused();
   await surface.getByRole("button", { name: "Cancelar", exact: true }).click();
-  await expect(page.locator(".refunds-toggle")).toContainText("0 a receber");
+  await expect(page.locator(".refunds-section")).toHaveCount(0);
   await page.getByRole("button", { name: "Registrar reembolso", exact: true }).click();
   surface = page.getByRole("dialog");
   await expect(surface.getByText("2 compradas · 0 canceladas · 2 para envio")).toBeVisible();
@@ -56,9 +57,17 @@ test("requests, receives, corrects and voids product refunds without changing th
   await surface.getByLabel("Motivo").fill("Fornecedor cancelou uma unidade");
   await capture("refund-request-form-desktop");
   await surface.getByRole("button", { name: "Registrar solicitação", exact: true }).click();
-  await expect(page.locator(".refunds-toggle")).toContainText("1 a receber");
-  await page.locator(".refunds-toggle").click();
-  await expect(page.locator(".refund-row").first()).toContainText("Solicitado");
+  await expect(page.locator(".refunds-total")).toContainText("R$ 0,00");
+  await expect(page.locator(".refunds-total")).toContainText("A receber: R$ 75,00");
+  await expect(page.locator(".refund-row .refund-status").first()).toHaveText("A receber");
+  await expect(page.locator("#items-title")).toBeVisible();
+  const toggle = page.locator(".refund-row").first().locator(".refund-details-toggle");
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator(".refund-row").first().getByRole("button", { name: "Registrar recebimento", exact: true })).toHaveCount(0);
+  await toggle.focus();
+  await page.keyboard.press("Enter");
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await capture("refund-requested-desktop");
   await page.setViewportSize({ width: 390, height: 844 });
   await capture("refund-requested-mobile");
@@ -69,7 +78,9 @@ test("requests, receives, corrects and voids product refunds without changing th
   await surface.getByLabel("Frete China recebido (R$)").fill("10,00");
   await capture("refund-receipt-form-desktop");
   await surface.getByRole("button", { name: "Registrar recebimento", exact: true }).click();
-  await expect(page.locator(".refund-row").first()).toContainText("Recebido");
+  await expect(page.locator(".refund-row .refund-status").first()).toHaveText("Reembolsado");
+  await expect(page.locator(".refunds-heading")).toContainText("1 item reembolsado nesta compra.");
+  await expect(page.locator(".refunds-total")).toContainText("R$ 90,00");
   await expect(page.locator(".refund-financial-summary")).toContainText("R$ 90,00");
   await expect(page.getByText("Pagamento confirmado", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Corrigir valores recebidos", exact: true }).click();
@@ -89,12 +100,13 @@ test("requests, receives, corrects and voids product refunds without changing th
   await expect(zeroCorrection).toBeDisabled();
   await surface.getByLabel("Confirmo zerar o crédito recebido: ele será removido e o custo voltará a ficar integral.").check();
   await zeroCorrection.click();
-  await expect(page.locator(".refund-row").first()).toContainText("Recebido R$ 0,00");
+  await expect(page.locator(".refund-row .refund-amount").first()).toContainText("R$ 0,00");
   await page.getByRole("button", { name: "Registrar reembolso", exact: true }).click();
   surface = page.getByRole("dialog");
   await surface.getByLabel("Pacote 1 unidades a cancelar").fill("1");
   await surface.getByLabel("Motivo").fill("Segunda unidade cancelada");
   await surface.getByRole("button", { name: "Registrar solicitação", exact: true }).click();
+  await page.locator(".refund-row.status-requested").getByRole("button", { name: /Ver detalhes/ }).click();
   await page.locator(".refund-row.status-requested").getByRole("button", { name: "Anular registro", exact: true }).click();
   surface = page.getByRole("dialog");
   await surface.getByLabel("Motivo da anulação").fill("Solicitação aberta por engano");
@@ -102,7 +114,8 @@ test("requests, receives, corrects and voids product refunds without changing th
   await page.setViewportSize({ width: 390, height: 844 });
   await capture("refund-void-confirmation-mobile");
   await surface.getByRole("button", { name: "Confirmar anulação", exact: true }).click();
-  await expect(page.locator(".refunds-toggle")).toContainText("0 a receber · 1 recebido(s) · 1 anulado(s)");
+  await expect(page.locator(".refunds-total")).not.toContainText("A receber");
+  await expect(page.locator(".refunds-voided summary").first()).toHaveText("Histórico anulado · 1");
   await expect(page.locator(".refunds-voided")).toContainText("Solicitação aberta por engano");
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.getByRole("button", { name: "Registrar reembolso", exact: true }).click();
@@ -110,6 +123,13 @@ test("requests, receives, corrects and voids product refunds without changing th
   await expect(surface.getByLabel("Unidades sem pacote a cancelar")).toHaveValue("1");
   await surface.getByLabel("Motivo").fill("Cancelamento integral da segunda unidade");
   await surface.getByRole("button", { name: "Registrar solicitação", exact: true }).click();
+  await expect(page.locator(".refund-row.status-requested")).toHaveCount(1);
+  await expect(page.locator(".refund-row.status-received")).toHaveCount(1);
+  await expect(page.locator("#items-title")).toHaveCount(0);
+  await expect(page.locator(".cost-table")).toHaveCount(0);
+  await expect(page.locator(".cost-product-mobile-card")).toHaveCount(0);
+  await expect(page.locator(".refunds-total")).toContainText("A receber: R$ 110,00");
+  await page.locator(".refund-row.status-requested").getByRole("button", { name: /Ver detalhes/ }).click();
   await expect(page.locator(".refund-row.status-requested")).toContainText("1 unidade cancelada");
   await expect(page.locator(".refund-financial-summary")).toContainText("A receber");
   await capture("refund-all-cancelled-desktop");
@@ -133,4 +153,96 @@ test("requests, receives, corrects and voids product refunds without changing th
     }));
     expect(dimensions.content, `Horizontal overflow at ${dimensions.viewport}px: ${dimensions.content}px; ${JSON.stringify(dimensions.offenders)}`).toBeLessThanOrEqual(dimensions.viewport);
   }
+});
+
+test("summarizes multiple refunded products and keeps only remaining units in product costs", async ({ page }) => {
+  test.setTimeout(180_000);
+  await page.goto("/login");
+  await page.getByLabel("Email", { exact: true }).fill("profile-qa@loti.test");
+  await page.getByLabel("Senha", { exact: true }).fill("Profile-QA-Old-2026!");
+  await page.getByRole("button", { name: "Entrar", exact: true }).click();
+  await page.waitForURL("**/favorites");
+  const headers = { Origin: test.info().project.use.baseURL ?? "http://localhost:3100" };
+  async function app(operation: string, input: unknown, id?: string) {
+    const response = await page.request.post("/api/app", { headers, data: { operation, input, id } });
+    expect(response.ok(), await response.text()).toBeTruthy();
+    return response.json();
+  }
+  const purchaseData = await app("purchase.save", { name: "Resumo de múltiplos reembolsos" });
+  const purchaseId = purchaseData.result.id as string;
+  const personId = purchaseData.data.currentUser.id as string;
+  for (const name of ["Camiseta reembolso", "Tênis reembolso"]) {
+    await app("item.save", { name, url: "https://example.test/refund-summary", personId, quantity: 2, unitPriceCents: 10_000 });
+  }
+  await app("purchase.finalize", true, purchaseId);
+  const rows = (await (await page.request.get("/api/packages")).json()).data;
+  const trackingId = rows.find((row: { purchase: { id: string } }) => row.purchase.id === purchaseId).tracking.id;
+  const url = `/api/packages/${trackingId}`;
+  let detail = (await (await page.request.get(url)).json()).data;
+  async function cost(operation: string, input: Record<string, unknown>, rest: Record<string, unknown> = {}) {
+    const response = await page.request.post(url, { headers, data: { operation, ...rest, input: { expectedRevision: detail.tracking.revision, ...input } } });
+    expect(response.ok(), await response.text()).toBeTruthy();
+    detail = (await response.json()).data;
+  }
+  for (const item of detail.items) {
+    await cost("item.save", { itemId: item.id, effectivePriceState: "known", effectivePriceUnitCents: 10_000, chinaFreightState: "no_charge", chinaFreightUnitCents: null });
+  }
+  await cost("charge.save", { chargeType: "products", paymentMethod: "pix" }, { chargeId: detail.productsCharge.id });
+  await cost("charge.paid", {}, { chargeId: detail.productsCharge.id });
+  const itemIds = detail.items.map((item: { id: string }) => item.id) as string[];
+  const packageId = detail.packages[0].id;
+  async function cancel(costItemId: string, quantity: number, productCents: number) {
+    await cost("refund.request", { costItemId, quantity, requestedProductCents: productCents, requestedChinaCents: 0, reason: "Tamanho incorreto", packageRemovals: [{ packageId, quantity }], unassignedQuantity: 0 });
+    const refundId = detail.refunds.at(-1).id;
+    await cost("refund.receive", { receivedProductCents: productCents, receivedChinaCents: 0, confirmed: true }, { refundId });
+  }
+  await cancel(itemIds[0], 2, 15_000); // Partial monetary refund for a fully cancelled line.
+  await page.goto(`/packages/${trackingId}`);
+  await page.getByRole("button", { name: /Produtos e pagamento/ }).click();
+  await expect(page.locator(".cost-table tbody tr")).toHaveCount(1);
+  await expect(page.locator(".refunds-total")).toContainText("R$ 150,00");
+  await cancel(itemIds[1], 1, 10_000);
+  await page.reload();
+  await page.getByRole("button", { name: /Produtos e pagamento/ }).click();
+  await expect(page.locator(".refunds-heading")).toContainText("2 itens reembolsados nesta compra.");
+  await expect(page.locator(".refunds-total")).toContainText("R$ 250,00");
+  await expect(page.locator(".cost-table tbody tr")).toHaveCount(1);
+  await cancel(itemIds[1], 1, 8_000);
+  await page.reload();
+  await page.getByRole("button", { name: /Produtos e pagamento/ }).click();
+  await expect(page.locator(".refund-row.status-received")).toHaveCount(3);
+  await expect(page.locator(".refunds-heading")).toContainText("2 itens reembolsados nesta compra.");
+  await expect(page.locator(".refunds-total")).toContainText("R$ 330,00");
+  await expect(page.getByRole("heading", { name: "Custos por produto", exact: true })).toHaveCount(0);
+  await expect(page.locator(".cost-table")).toHaveCount(0);
+  for (const width of [320, 390, 768, 1024, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    const section = page.getByRole("region", { name: "Reembolsos", exact: true });
+    const toggle = section.locator(".refund-details-toggle").first();
+    await toggle.focus();
+    await page.keyboard.press("Space");
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(section).toContainText("Pagamento original · Pix");
+    const dimensions = await page.evaluate(() => ({ viewport: innerWidth, content: document.documentElement.scrollWidth }));
+    expect(dimensions.content).toBeLessThanOrEqual(dimensions.viewport);
+    if (process.env.LOTI_CAPTURE_REFUNDS_QA === "1") {
+      mkdirSync(resolve("artifacts/qa/package-refunds"), { recursive: true });
+      await section.screenshot({ path: resolve(`artifacts/qa/package-refunds/refunds-summary-${width}.png`) });
+    }
+    await page.keyboard.press("Space");
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  }
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const toggle = page.locator(".refund-details-toggle").first();
+  await toggle.click();
+  const transitionDuration = await page.locator(".refund-details-panel").first().evaluate(element => getComputedStyle(element).transitionDuration);
+  expect(parseFloat(transitionDuration)).toBeLessThan(0.01);
+  await cost("package.delete", {}, { packageId });
+  await cost("tracking.close", { confirmed: true });
+  await page.reload();
+  await page.getByRole("button", { name: /Produtos e pagamento/ }).click();
+  await page.locator(".refund-details-toggle").first().click();
+  await expect(page.locator(".refunds-section").getByRole("button", { name: "Corrigir valores recebidos", exact: true })).toHaveCount(0);
+  await expect(page.locator(".refunds-section").getByRole("button", { name: "Ver composição", exact: true })).toHaveCount(1);
 });

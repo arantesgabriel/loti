@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
+import { ChevronDown, CircleCheck, CircleX, Clock3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Surface } from "@/components/ui/surface";
+import { QcCostCover, useQcCostPresentations } from "@/components/qc/qc-components";
 import type { CostTrackingView } from "@/lib/domain/package-cost-reading";
 import { formatMoney } from "@/lib/domain/money";
 import { parseCostCents } from "./package-cost-client";
@@ -14,8 +16,8 @@ type Mutate = (operation: string, rest: Record<string, unknown>) => Promise<bool
 const formatInput = (cents: number) => (cents / 100).toFixed(2);
 const itemLabel = (item: Item) => `${item.original.name}${item.original.variant ? ` · ${item.original.variant}` : ""}`;
 
-export function RefundsSection({ detail, locked, busy, requestItemId, expanded, onToggle, onRequestClose, onDetails, mutate }: {
-  detail: Detail; locked: boolean; busy: boolean; requestItemId: string | null; expanded: boolean; onToggle: () => void; onRequestClose: () => void; onDetails: (itemId: string) => void; mutate: Mutate;
+export function RefundsSection({ detail, locked, busy, requestItemId, onRequestClose, onDetails, mutate }: {
+  detail: Detail; locked: boolean; busy: boolean; requestItemId: string | null; onRequestClose: () => void; onDetails: (itemId: string) => void; mutate: Mutate;
 }) {
   const [activeRefundId, setActiveRefundId] = useState<string | null>(null);
   const [mode, setMode] = useState<"receive" | "correct" | "void" | "edit">("receive");
@@ -24,6 +26,9 @@ export function RefundsSection({ detail, locked, busy, requestItemId, expanded, 
   const requested = detail.refunds.filter(refund => refund.status === "requested");
   const received = detail.refunds.filter(refund => refund.status === "received");
   const voided = detail.refunds.filter(refund => refund.status === "voided");
+  const receivedItems = new Set(received.map(refund => refund.costItemId)).size;
+  const refundedItemIds = new Set(detail.refunds.map(refund => refund.costItemId));
+  const qcPresentations = useQcCostPresentations(detail.purchase.id, detail.items.filter(item => refundedItemIds.has(item.id)).map(item => item.original.id));
 
   function openRefund(refund: Refund, nextMode: typeof mode) { setActiveRefundId(refund.id); setMode(nextMode); }
   async function submit(operation: string, refundId: string | undefined, input: unknown) {
@@ -32,32 +37,76 @@ export function RefundsSection({ detail, locked, busy, requestItemId, expanded, 
   }
 
   return <>
-    <section className="refunds-section" aria-labelledby="refunds-title">
-      <button className="refunds-toggle" type="button" aria-expanded={expanded} aria-controls="refunds-content" data-cost-target="refunds-section" onClick={onToggle}><span><strong id="refunds-title">Reembolsos</strong><small>{requested.length} a receber · {received.length} recebido(s) · {voided.length} anulado(s)</small></span><span>{expanded ? "Recolher" : "Ver"}</span></button>
-      {expanded && <div id="refunds-content"><p className="muted">Cancelamentos retiram unidades do envio; somente valores recebidos reduzem o custo atual.</p>{requested.length + received.length + voided.length === 0 ? <p className="muted">Nenhum reembolso registrado.</p> : <div className="refunds-list">
-        {requested.map(refund => <RefundRow key={refund.id} refund={refund} detail={detail} onDetails={onDetails} onAction={openRefund} />)}
-        {received.map(refund => <RefundRow key={refund.id} refund={refund} detail={detail} onDetails={onDetails} onAction={openRefund} />)}
-        {voided.length > 0 && <details className="refunds-voided"><summary>Histórico anulado · {voided.length}</summary>{voided.map(refund => <RefundRow key={refund.id} refund={refund} detail={detail} onDetails={onDetails} onAction={openRefund} />)}</details>}
-      </div>}</div>}
-    </section>
+    {detail.refunds.length > 0 && <div className="cost-section-content"><section className="refunds-section" aria-labelledby="refunds-title" data-cost-target="refunds-section" tabIndex={-1}>
+      <header className="refunds-heading">
+        <div><h2 id="refunds-title">Reembolsos</h2><p>{receivedItems > 0 ? `${receivedItems} ${receivedItems === 1 ? "item reembolsado" : "itens reembolsados"} nesta compra.` : requested.length > 0 ? "Aguardando recebimento do reembolso." : "Histórico de registros anulados."}{requested.length > 0 && receivedItems > 0 ? ` ${requested.length} ${requested.length === 1 ? "solicitação a receber" : "solicitações a receber"}.` : ""}</p></div>
+        <div className="refunds-total"><span>Total reembolsado</span><strong>{formatMoney(detail.refundsSummary.receivedCents)}</strong>{requested.length > 0 && <small>A receber: {formatMoney(detail.refundsSummary.requestedCents)}</small>}</div>
+      </header>
+      <div className="refunds-list">
+        {[...requested, ...received].map(refund => <RefundRow key={refund.id} refund={refund} detail={detail} cover={qcPresentations[detail.items.find(item => item.id === refund.costItemId)?.original.id ?? ""]?.coverPreview ?? undefined} locked={locked} busy={busy} onDetails={onDetails} onAction={openRefund} />)}
+        {voided.length > 0 && <details className="refunds-voided"><summary>Histórico anulado · {voided.length}</summary>{voided.map(refund => <RefundRow key={refund.id} refund={refund} detail={detail} locked={locked} busy={busy} onDetails={onDetails} onAction={openRefund} />)}</details>}
+      </div>
+    </section></div>}
     {requestItem && <RefundRequestSurface item={requestItem} detail={detail} busy={busy} onClose={onRequestClose} onSubmit={input => submit("refund.request", undefined, input)} />}
     {activeRefund && <RefundActionSurface refund={activeRefund} item={detail.items.find(item => item.id === activeRefund.costItemId)!} mode={mode} detail={detail} locked={locked} busy={busy} onClose={() => setActiveRefundId(null)} onSubmit={(operation, input) => submit(operation, activeRefund.id, input)} />}
   </>;
 }
 
-function RefundRow({ refund, detail, onDetails, onAction }: { refund: Refund; detail: Detail; onDetails: (itemId: string) => void; onAction: (refund: Refund, mode: "receive" | "correct" | "void" | "edit") => void }) {
+type RefundRowProps = {
+  refund: Refund; detail: Detail; locked: boolean; busy: boolean;
+  cover?: React.ComponentProps<typeof QcCostCover>["cover"];
+  onDetails: (itemId: string) => void;
+  onAction: (refund: Refund, mode: "receive" | "correct" | "void" | "edit") => void;
+};
+
+function RefundRow({ refund, detail, cover, locked, busy, onDetails, onAction }: RefundRowProps) {
+  const [expanded, setExpanded] = useState(false);
+  const panelId = useId();
   const item = detail.items.find(value => value.id === refund.costItemId);
   const name = item ? itemLabel(item) : "Produto";
-  const amount = (refund.receivedProductCents ?? 0) + (refund.receivedChinaCents ?? 0);
+  const received = refund.status === "received";
+  const amount = received ? (refund.receivedProductCents ?? 0) + (refund.receivedChinaCents ?? 0) : refund.requestedProductCents + refund.requestedChinaCents;
+  const date = new Date(refund.status === "voided" ? refund.voidedAt ?? refund.requestedAt : received ? refund.receivedAt ?? refund.requestedAt : refund.requestedAt);
+  const StatusIcon = received ? CircleCheck : refund.status === "requested" ? Clock3 : CircleX;
+  const paymentMethod = refund.originalPaymentMethod === "pix" ? "Pix" : refund.originalPaymentMethod === "card" ? "Cartão" : null;
   return <article className={`refund-row status-${refund.status}`} id={`refund-${refund.id}`}>
-    <div className="refund-row-main"><strong>{name}</strong><span>{refund.quantity} {refund.quantity === 1 ? "unidade cancelada" : "unidades canceladas"} · {refund.status === "requested" ? "Solicitado" : refund.status === "received" ? "Recebido" : "Anulado"}</span><small>Solicitado {formatMoney(refund.requestedProductCents + refund.requestedChinaCents)}{refund.status === "received" ? ` · Recebido ${formatMoney(amount)}` : ""}{refund.status === "voided" && refund.voidReason ? ` · ${refund.voidReason}` : ""}</small></div>
-    <div className="refund-row-actions">
-      {item && <Button size="sm" variant="ghost" onClick={() => onDetails(item.id)}>Ver composição</Button>}
-      {refund.status === "requested" && <><Button size="sm" onClick={() => onAction(refund, "receive")}>Registrar recebimento</Button><Button size="sm" variant="outline" onClick={() => onAction(refund, "edit")}>Editar solicitação</Button></>}
-      {refund.status === "received" && <Button size="sm" variant="outline" onClick={() => onAction(refund, "correct")}>Corrigir valores recebidos</Button>}
-      {refund.status !== "voided" && <Button size="sm" variant="ghost" onClick={() => onAction(refund, "void")}>Anular registro</Button>}
+    <div className="refund-row-summary">
+      <div className="refund-product">
+        {item && <QcCostCover purchaseId={detail.purchase.id} itemName={item.original.name} visualKey={item.original.visualKey} cover={cover}/>}
+        <div><h3>{name}</h3><p>{refund.participants.length === 1 ? "Usuário" : "Participantes"}: {refund.participants.map(person => person.name).join(" · ")}</p></div>
+      </div>
+      <div className="refund-context"><span className="refund-status"><StatusIcon size={14} aria-hidden="true"/>{received ? "Reembolsado" : refund.status === "requested" ? "A receber" : "Anulado"}</span><p><time dateTime={date.toISOString()}>{date.toLocaleDateString("pt-BR", { day: "numeric", month: "short", year: "numeric", timeZone: "America/Sao_Paulo" }).replaceAll(" de ", " ")}</time><span aria-hidden="true"> · </span>{refund.status === "voided" ? refund.voidReason : refund.reason}</p></div>
+      <div className="refund-amount"><strong>{refund.status === "voided" ? "Sem crédito ativo" : formatMoney(amount)}</strong><small>{refund.status === "requested" ? "Valor solicitado" : paymentMethod ? `Pagamento original · ${paymentMethod}` : ""}</small></div>
+      <Button className="refund-details-toggle" size="sm" variant="outline" aria-expanded={expanded} aria-controls={panelId} aria-label={`${expanded ? "Recolher detalhes" : "Ver detalhes"} de ${name}`} onClick={() => setExpanded(value => !value)}>{expanded ? "Recolher detalhes" : "Ver detalhes"}<ChevronDown size={16} aria-hidden="true"/></Button>
     </div>
+    <div className="refund-details-panel" id={panelId} inert={!expanded} aria-hidden={!expanded} data-expanded={expanded}><div>
+      <RefundDetails refund={refund} item={item}/>
+      <div className="refund-row-actions">
+        {item && <Button size="sm" variant="ghost" onClick={() => onDetails(item.id)}>Ver composição</Button>}
+        {!locked && <>
+          {refund.status === "requested" && <><Button size="sm" disabled={busy} onClick={() => onAction(refund, "receive")}>Registrar recebimento</Button><Button size="sm" variant="outline" disabled={busy} onClick={() => onAction(refund, "edit")}>Editar solicitação</Button></>}
+          {received && <Button size="sm" variant="outline" disabled={busy} onClick={() => onAction(refund, "correct")}>Corrigir valores recebidos</Button>}
+          {refund.status !== "voided" && <Button size="sm" variant="ghost" disabled={busy} onClick={() => onAction(refund, "void")}>Anular registro</Button>}
+        </>}
+      </div>
+    </div></div>
   </article>;
+}
+
+function RefundDetails({ refund, item }: { refund: Refund; item?: Item }) {
+  const received = refund.status === "received";
+  return <div className="refund-details">
+    <dl>
+      <div><dt>Unidades</dt><dd>{refund.quantity} {refund.quantity === 1 ? "unidade cancelada" : "unidades canceladas"}{refund.status === "voided" ? " · cancelamento anulado" : ""}</dd></div>
+      <div><dt>Base original das unidades</dt><dd>{formatMoney(refund.quantity * (refund.originalProductUnitCents + refund.originalChinaUnitCents))}</dd></div>
+      {received && <div><dt>Valor solicitado</dt><dd>{formatMoney(refund.requestedProductCents + refund.requestedChinaCents)}</dd></div>}
+      <div><dt>{received ? "Produto recebido" : "Produto solicitado"}</dt><dd>{formatMoney(received ? refund.receivedProductCents ?? 0 : refund.requestedProductCents)}</dd></div>
+      <div><dt>{received ? "Frete China recebido" : "Frete China solicitado"}</dt><dd>{formatMoney(received ? refund.receivedChinaCents ?? 0 : refund.requestedChinaCents)}</dd></div>
+      {item && <div><dt>Custo líquido da linha{item.calculation?.totalCents === null ? " (parcial)" : ""}</dt><dd>{formatMoney(item.calculation?.totalCents ?? item.calculation?.partialCents ?? 0)}</dd></div>}
+    </dl>
+    <p className="muted">A taxa do pagamento original permanece no custo. O custo líquido considera todos os reembolsos recebidos desta linha.</p>
+    <details className="refund-events"><summary>Histórico deste reembolso · {refund.events.length} eventos</summary>{refund.events.map(event => <p key={event.id}><strong>{{ requested: "Solicitação", request_updated: "Solicitação editada", received: "Recebimento", receipt_corrected: "Recebimento corrigido", voided: "Anulação" }[event.eventType]}</strong> · {event.actorName} · {new Date(event.createdAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}{event.reason ? ` · ${event.reason}` : ""}</p>)}</details>
+  </div>;
 }
 
 function RefundRequestSurface({ item, detail, busy, onClose, onSubmit }: { item: Item; detail: Detail; busy: boolean; onClose: () => void; onSubmit: (input: unknown) => Promise<void> }) {

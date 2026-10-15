@@ -49,7 +49,6 @@ export function PackageCostDetailScreen({ trackingId }: { trackingId: string }) 
   const [closeConfirm, setCloseConfirm] = useState(false), [reopenOpen, setReopenOpen] = useState(false), [reopenReason, setReopenReason] = useState("");
   const [resetConfirm, setResetConfirm] = useState<PaymentReset | null>(null);
   const [refundItemId, setRefundItemId] = useState<string | null>(null);
-  const [refundsExpanded, setRefundsExpanded] = useState(false);
   const [openSections, setOpenSections] = useState<Record<CostSectionKey, boolean>>({ products: false, packages: false, people: false });
   const [expandedPackages, setExpandedPackages] = useState<Record<string, boolean>>({});
   const focusTarget = useRef<string | null>(null);
@@ -121,7 +120,6 @@ export function PackageCostDetailScreen({ trackingId }: { trackingId: string }) 
   function openNextAction() {
     if (!nextAction) return;
     if (nextAction.target === "close-costs") { setCloseConfirm(true); return; }
-    if (nextAction.target === "refunds-section") setRefundsExpanded(true);
     setOpenSections(current => ({ ...current, [nextAction.section]: true }));
     if (nextAction.packageId) setExpandedPackages(current => ({ ...current, [nextAction.packageId!]: true }));
     focusTarget.current = nextAction.target;
@@ -236,11 +234,11 @@ export function PackageCostDetailScreen({ trackingId }: { trackingId: string }) 
       </div>
       <p className="muted cost-hint">O percentual fica registrado nesta cobrança mesmo se o padrão do grupo mudar.</p>
     </div>
-    <div className="cost-section-content" aria-labelledby="items-title">
+    {shippingUnits > 0 && <div className="cost-section-content" aria-labelledby="items-title">
       <div className="cost-section-heading"><div><h2 id="items-title">Custos por produto</h2><p className="muted">Valores unitários de preço e frete China; os demais encargos são rateados pelas unidades.</p></div><strong>{detail.calculation.summary.totalCents === null ? "Total parcial " : "Total final "}{detail.calculation.summary.hasKnownAmount ? formatMoney(detail.calculation.summary.totalCents ?? detail.calculation.summary.partialCents) : "Falta informar"}</strong></div>
       <ProductCostsList detail={detail} locked={!!locked} onDetails={setItemDetailId} onEdit={item => setItemEditor({ id: item.id, name: item.original.name })} onRefund={setRefundItemId}/>
-    </div>
-    <div className="cost-section-content"><RefundsSection key={refundItemId ?? "closed"} detail={detail} locked={!!locked} busy={busy} requestItemId={refundItemId} expanded={refundsExpanded} onToggle={() => setRefundsExpanded(value => !value)} onRequestClose={() => setRefundItemId(null)} onDetails={setItemDetailId} mutate={mutate}/></div>
+    </div>}
+    <RefundsSection key={refundItemId ?? "closed"} detail={detail} locked={!!locked} busy={busy} requestItemId={refundItemId} onRequestClose={() => setRefundItemId(null)} onDetails={setItemDetailId} mutate={mutate}/>
     </ProgressiveSection>
 
     <ProgressiveSection id="packages" title="Pacotes" summary={presentation.packagesSummary} open={openSections.packages} onToggle={() => setOpenSections(current => ({ ...current, packages: !current.packages }))}>
@@ -290,10 +288,8 @@ function pendingDetails(item: DetailItem) {
 
 function ProductCostsList({ detail, locked, onDetails, onEdit, onRefund }: { detail: Detail; locked: boolean; onDetails: (itemId: string) => void; onEdit: (item: DetailItem) => void; onRefund: (itemId: string) => void }) {
   const qcCovers = useQcCostCovers(detail.purchase.id, detail.items.map(item => item.original.id));
-  if (!detail.items.length) return <p className="muted cost-empty-note">Esta compra não contém produtos.</p>;
   const operationalItems = detail.items.filter(item => (item.calculation?.shippingQuantity ?? item.original.quantity) > 0);
   return <>
-    {!operationalItems.length && <p className="muted cost-empty-note">Todos os produtos foram cancelados. A composição e os valores residuais continuam no histórico de reembolsos e no resumo.</p>}
     {!!operationalItems.length && <>
     <div className="cost-table-wrap">
       <table className="cost-table"><thead><tr><th>Produto</th><th>Qtd.</th><th>Preço efetivo / un.</th><th>Frete China / un.</th><th>Taxa de pagamento</th><th>Frete Brasil</th><th>Receita</th><th>Total</th><th><span className="sr-only">Ações</span></th></tr></thead><tbody>

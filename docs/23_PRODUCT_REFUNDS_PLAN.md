@@ -344,7 +344,7 @@ Ler refunds, participantes e eventos em lote com `inArray`, após autorização;
 
 ## 9. Experiência e componentes
 
-Preservar três portas de entrada: Produtos e pagamento, Pacotes, Divisão por pessoa. **Reembolsos** é uma subseção recolhida dentro de Produtos e pagamento, sem nova rota/aba principal.
+Preservar três portas de entrada: Produtos e pagamento, Pacotes, Divisão por pessoa. **Reembolsos** é uma subseção independente dentro de Produtos e pagamento, sem nova rota/aba principal. A refatoração aprovada em 15/10/2026 usa resumo + lista compacta: aparece somente quando há registros, com detalhes recolhidos por reembolso.
 
 ### 9.1 Fluxo de solicitação
 
@@ -356,16 +356,16 @@ Preservar três portas de entrada: Produtos e pagamento, Pacotes, Divisão por p
 
 ### 9.2 Consultar e receber
 
-- Sublista: produto/variante, unidades canceladas, Solicitado/Recebido/Anulado, valor e data. Contagem de solicitados visível no resumo mesmo recolhido.
+- Lista compacta: capa QC privada compartilhada quando disponível (fallback de categoria existente), produto/variante, participantes capturados, status textual, data/motivo reais, valor e método do pagamento original quando capturado. O total soma somente recebimentos confirmados; solicitações ficam separadas como A receber. A contagem de itens recebidos usa linhas de produto distintas, sem duplicar um produto com vários registros. O escopo é o acompanhamento da compra, incluindo cancelamentos sem pacote; o texto usa “nesta compra”.
 - `Registrar recebimento` abre formulário com campos reais preenchidos pela solicitação, editáveis; prévia do líquido após recebimento e lembrete de taxa preservada. Exigir confirmação antes de registrar zero.
-- Detalhe mostra solicitado e recebido separados, motivo, participantes, autor/data e eventos. `Corrigir valores recebidos` e `Anular registro` exigem motivo/confirmação com impacto visível.
+- “Ver detalhes” expande inline a base original das unidades, quantidade cancelada, componentes solicitado/recebido, custo líquido da linha e histórico de eventos, com teclado, aria-expanded, foco visível e reduced motion. Ações de alteração ficam nesse detalhe e são ocultadas quando os custos estão encerrados. `Corrigir valores recebidos` e `Anular registro` exigem motivo/confirmação com impacto visível.
 - Anulados ficam em histórico secundário recolhido; não somam A receber, canceladas nem créditos.
 - Próxima tarefa pode ser `Conferir reembolso de <produto>` depois das pendências existentes de valores/pagamentos/alocação/pacotes e antes de encerrar. Abre a subseção, sem marcar como recebido automaticamente.
 
 ### 9.3 Produtos, totais e pessoas
 
 - Lista operacional usa itens com shippingQuantity > 0. Linha parcialmente cancelada mostra `3 compradas · 1 cancelada · 2 para envio` e seu custo líquido, incluindo residual das canceladas; detalhe explica a composição.
-- Item totalmente cancelado sai dessa lista, mas sua composição/custo residual fica acessível na subseção Reembolsos. Totais continuam incluindo a linha uma vez.
+- Item totalmente cancelado sai dessa lista, mas sua composição/custo residual fica acessível na subseção Reembolsos. Sem unidades enviáveis, não renderizar o bloco Custos por produto nem tabela/empty state. Totais continuam incluindo a linha uma vez.
 - Pagamento dos produtos mostra **Pagamento original**, base/taxa/total originais e pago. Abaixo, composição de bruto, reembolso recebido, A receber e líquido atual. Não exibir líquido como nova cobrança a pagar.
 - Em Divisão por pessoa, exibir líquido conhecido/final e crédito/A receber sob demanda; quem ficou apenas com taxa/residual ainda aparece. Não omitir pessoas só por zero unidades de envio.
 - Resumo geral e lista de acompanhamentos mostram líquido parcial/final com solicitado pendente explícito. Não marcar como concluído apenas porque produtos estão pagos.
@@ -582,3 +582,12 @@ Fases 0–6 executadas sequencialmente. O mapa da seção 4 e os planos 21/22 fo
 - **Validação/revisão final:** `npm run typecheck`, `npm run lint` sem avisos, `npm test -- --maxWorkers=1` (168 passaram, 7 ignorados), `npm run build`, E2E de custos + reembolsos (2 cenários), migração/verify (23 tabelas) e code review GPT‑6.1 Sol medium passaram. O Vitest paralelo teve um erro de cache SSR temporário `ENOENT` no sandbox Windows; repetir com um worker passou integralmente.
 
 **Handoff operacional:** backup/snapshot aprovado → definir explicitamente `TURSO_DATABASE_URL`/`TURSO_AUTH_TOKEN` do alvo autorizado → executar `npm run db:migrate` → `npm run db:verify` → publicar somente com autorização específica e sem escritores antigos concorrentes → smoke test autenticado isolado. Não executar em produção nesta tarefa. Não registrar dados de Compra Outubro/2026.
+
+
+## 15. Refatoração visual aprovada — 15 de outubro de 2026
+
+Implementada a Proposta 1, resumo + lista compacta, em `refunds-section.tsx`, com linha e detalhe separados no mesmo módulo e tokens existentes. A seção não ocupa espaço quando não há registros, e Custos por produto só aparece com unidades enviáveis. Capas reutilizam a apresentação QC privada existente; nenhuma regra financeira, schema, snapshot ou cálculo foi alterado.
+
+Validação local: lint e typecheck; 226 testes Vitest passaram, 7 ignorados; build de produção passou; três cenários Playwright de Reembolsos/Pacotes passaram. A matriz cobre nenhum/um/vários registros, vários produtos e múltiplos reembolsos da mesma linha, cancelamento parcial/total, recebido menor que a base, recebido zero, correção/anulação, leitura após encerramento, teclado, reduced motion e ausência de overflow em 320/390/768/1024/1440 px. Capturas desktop/mobile inspecionadas: `artifacts/qa/package-refunds/refunds-summary-{320,390,768,1024,1440}.png`.
+
+O Playwright final usou um build de produção local, porta 3107 e banco descartável exclusivos para evitar falhas intermitentes de manifests do servidor Next em desenvolvimento durante trabalhos simultâneos. Os scripts/configs temporários foram removidos. Nenhum ambiente remoto, produção, publicação ou migração de produção foi usado.
