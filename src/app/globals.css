@@ -81,7 +81,9 @@ a {
     }
 }
 
-.qc-manager-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.qc-manager-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.qc-manager-actions .button { min-height: 44px; }
+.qc-pending-count { display: inline-grid; min-width: 20px; height: 20px; place-items: center; padding: 0 5px; border-radius: 999px; background: var(--primary-soft); color: var(--primary-ink); font-size: 11px; font-weight: 600; }
 .qc-import-label { display: grid; gap: 8px; font-weight: 600; }
 .qc-import-label textarea { width: 100%; min-height: 180px; resize: vertical; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--foreground); padding: 12px; font: 12px/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; }
 .qc-panel-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; }

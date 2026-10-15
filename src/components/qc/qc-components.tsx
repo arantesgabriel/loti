@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleAlert, CircleHelp, FileText, ImagePlus, Info, RefreshCw, Star, Trash2 } from "lucide-react";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleAlert, CircleHelp, FileText, ImagePlus, Info, MoreVertical, RefreshCw, Star, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Confirm, Surface } from "@/components/ui/surface";
 import { ProductCategoryMarker } from "@/components/product-category-icons";
@@ -240,8 +241,10 @@ export function QcImportPanel({ purchaseId, targets }: { purchaseId: string; tar
   }
   const hasCorrections = !!prepared?.rows.some(row => row.existingItemId && row.existingItemId !== (selections[row.externalKey] || null));
   const openPanel = () => { setOpen(true); setPrepared(null); setConfirmed(false); setTransferComplete(false); setError(""); setBatchInfo(""); setTransfer(null); setActiveSourceId(null); setImportedIds(new Set()); };
+  const pendingMatches = summary.pendingMatching ?? 0;
+  const pendingOperations = (summary.pendingTransfers ?? 0) + (summary.pendingDeletes ?? 0) + (summary.pendingPreviews ?? 0);
   return <>
-    <div className="qc-manager-actions"><Button variant="outline" size="sm" onClick={openPanel}><ImagePlus size={15}/>Importar QC</Button><Button variant="ghost" size="sm" onClick={() => setMatchingOpen(true)}>Verificar vínculos pendentes{(summary.pendingMatching ?? 0) ? ` (${summary.pendingMatching})` : ""}</Button><Button variant="ghost" size="sm" onClick={() => setConfirmReconcile(true)}><RefreshCw size={15}/>Repetir pendências QC{((summary.pendingTransfers ?? 0) + (summary.pendingDeletes ?? 0) + (summary.pendingPreviews ?? 0) > 0) ? ` (${(summary.pendingTransfers ?? 0) + (summary.pendingDeletes ?? 0) + (summary.pendingPreviews ?? 0)})` : ""}</Button></div>
+    <div className="qc-manager-actions"><Button className="qc-import-primary" variant="outline" size="sm" onClick={openPanel}><ImagePlus size={15}/>Importar QC</Button><DropdownMenu.Root><DropdownMenu.Trigger asChild><Button variant="ghost" size="sm" aria-label={`Ações QC${pendingMatches + pendingOperations ? ` · ${pendingMatches + pendingOperations} pendências` : ""}`}><MoreVertical size={16}/><span>Ações QC</span>{pendingMatches + pendingOperations > 0 && <span className="qc-pending-count" aria-hidden="true">{pendingMatches + pendingOperations}</span>}</Button></DropdownMenu.Trigger><DropdownMenu.Portal><DropdownMenu.Content className="dropdown" align="end" sideOffset={6}><DropdownMenu.Item onSelect={() => setMatchingOpen(true)}><CircleHelp size={15}/>Verificar vínculos pendentes{pendingMatches ? ` (${pendingMatches})` : ""}</DropdownMenu.Item><DropdownMenu.Item onSelect={() => setConfirmReconcile(true)}><RefreshCw size={15}/>Repetir pendências QC{pendingOperations ? ` (${pendingOperations})` : ""}</DropdownMenu.Item></DropdownMenu.Content></DropdownMenu.Portal></DropdownMenu.Root></div>
     <Surface open={open} onOpenChange={value => { if (!busy) setOpen(value); }} title="Importar QC do HubBuy" description="Cole uma resposta HubBuy. Somente freePhotos são processadas; os vínculos serão confirmados antes de qualquer transferência." sheet className={`qc-import-sheet${confirmed ? " qc-import-transfer-sheet" : ""}`}>
       {!prepared && <div className="qc-import-stage">
         <div className="qc-import-main qc-import-input-main">

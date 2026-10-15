@@ -363,7 +363,8 @@ test("ambiguous QC occurrence requires a candidate and then transfers every phot
   await mockQcMedia(page);
   await page.goto(`/packages/${purchase.trackingId}`);
   await page.getByRole("button", { name: /Produtos e pagamento/ }).click();
-  await page.getByRole("button", { name: /Verificar vínculos pendentes/ }).click();
+  await page.getByRole("button", { name: /Ações QC/ }).click();
+  await page.getByRole("menuitem", { name: /Verificar vínculos pendentes/ }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByText("QC Marker Product", { exact: true })).toBeVisible();
   const select = dialog.getByLabel("Produto Loti para QC Marker Product");
