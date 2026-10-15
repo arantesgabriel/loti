@@ -296,7 +296,37 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
     await authorizedPurchase(row.purchaseId, true);
     const manifest = JSON.parse(row.manifestJson) as ImportManifest;
     manifest.rows = manifest.rows.map(entry => ({ ...entry, match: normalizeQcMatch(entry.match) }));
-    return { importId: row.id, purchaseId: row.purchaseId, revision: row.revision, status: row.status, expiresAt: row.expiresAt, bytesReserved: row.bytesReserved, bytesConsumed: row.bytesConsumed, rows: manifest.rows.map(entry => ({ externalKey: entry.occurrence.externalKey, skuInfo: entry.occurrence.skuInfo, title: entry.occurrence.title, photoCount: entry.occurrence.photos.length, match: normalizeQcMatch(entry.match), conflict: entry.conflict ?? null })) };
+    // Read persisted sources, including ready photos from an earlier import.
+    // Never expose storage keys or fetch the original just to render progress.
+    const externals = await db.select().from(hubbuyExternalItems).where(eq(hubbuyExternalItems.purchaseId, row.purchaseId)).all();
+    const hashes = manifest.rows.flatMap(entry => entry.occurrence.photos.map(photo => photo.urlHash));
+    const sources = hashes.length ? await db.select({ source: qcImageSources, image: qcImages, preview: qcImagePreviews }).from(qcImageSources)
+      .innerJoin(hubbuyExternalItems, eq(qcImageSources.externalItemId, hubbuyExternalItems.id))
+      .leftJoin(qcImages, eq(qcImageSources.imageId, qcImages.id))
+      .leftJoin(qcImagePreviews, eq(qcImages.id, qcImagePreviews.imageId))
+      .where(and(eq(hubbuyExternalItems.purchaseId, row.purchaseId), inArray(qcImageSources.sourceUrlHash, hashes)))
+      .orderBy(asc(qcImageSources.updatedAt), asc(qcImageSources.createdAt), asc(qcImageSources.ordinal)).all() : [];
+    const photos = manifest.rows.flatMap(entry => {
+      const occurrence = entry.occurrence;
+      const external = entry.conflict ? undefined : externals.find(candidate => candidate.orderNo === occurrence.orderNo &&
+        (occurrence.orderGoodsId ? candidate.orderGoodsId === occurrence.orderGoodsId : candidate.orderGoodsNo === occurrence.orderGoodsNo));
+      return occurrence.photos.map(photo => {
+        const stored = sources.find(candidate => candidate.source.externalItemId === external?.id && candidate.source.sourceUrlHash === photo.urlHash);
+        const linked = !!external?.purchaseItemId;
+        const ready = linked && stored?.source.state === "ready" && stored.image?.status === "ready" && stored.image.deleteState === "none";
+        const state = !linked ? external && entry.match.status === "PENDING" ? "matching" : "ignored" : ready ? "ready"
+          : stored?.image?.status === "deleted" || stored?.source.state === "deleted" ? "deleted"
+          : stored?.source.state === "ready" ? "pending" : stored?.source.state ?? "pending";
+        let name = "";
+        try { name = decodeURIComponent(new URL(photo.url).pathname.split("/").pop() ?? "").slice(0, 180); } catch { /* A readable fallback is provided by the UI. */ }
+        return { id: `${occurrence.externalKey}:${photo.ordinal}`, sourceId: stored?.source.id ?? null, name, occurrence: occurrence.title || occurrence.skuInfo || occurrence.orderNo,
+          state, errorCode: stored?.source.errorCode ?? null, byteSize: ready ? stored!.image!.byteSize : null,
+          imageId: ready ? stored!.image!.id : null,
+          previewUrl: ready && stored?.preview?.status === "ready" && stored.preview.deleteState === "none" && stored.preview.transformVersion === QC_PREVIEW.version ? `/api/qc/images/${stored.image!.id}/preview` : null };
+      });
+    });
+    const nextSourceId = sources.find(({ source }) => source.importId === importId && (source.state === "pending" || source.state === "failed") && externals.some(external => external.id === source.externalItemId && external.purchaseItemId))?.source.id ?? null;
+    return { importId: row.id, purchaseId: row.purchaseId, revision: row.revision, status: row.status, expiresAt: row.expiresAt, bytesReserved: row.bytesReserved, bytesConsumed: row.bytesConsumed, photos, nextSourceId, rows: manifest.rows.map(entry => ({ externalKey: entry.occurrence.externalKey, skuInfo: entry.occurrence.skuInfo, title: entry.occurrence.title, photoCount: entry.occurrence.photos.length, match: normalizeQcMatch(entry.match), conflict: entry.conflict ?? null })) };
   }
 
   async function confirmImport(importId: string, expectedRevision: number, choices: Array<{ externalKey: string; purchaseItemId: string | null; correctExisting?: boolean; expectedItemId?: string | null }>) {

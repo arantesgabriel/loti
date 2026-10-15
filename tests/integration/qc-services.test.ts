@@ -69,6 +69,37 @@ describe("HubBuy QC persistence and permissions", () => {
     }
   });
 
+  it("reads real per-photo progress and queue order without leaking storage or changing snapshots", async () => {
+    const fake = mockStorage(), alice = distinctPhotoServices(f, fake.storage);
+    const before = await f.db.select().from(purchaseItems).all();
+    const prepared = await alice.prepare("qc-purchase", photoImport(4));
+    const confirmed = await alice.confirmImport(prepared.importId, prepared.revision, []);
+    const initial = await alice.getImport(prepared.importId);
+    expect(initial.photos).toHaveLength(4);
+    expect(initial.photos.every(photo => photo.state === "pending")).toBe(true);
+    const first = await alice.runImportBatch(prepared.importId, confirmed.revision);
+    expect(first.results[0]?.sourceId).toBe(initial.nextSourceId);
+    const progress = await alice.getImport(prepared.importId);
+    expect(progress.photos.filter(photo => photo.state === "ready")).toHaveLength(1);
+    expect(progress.photos.filter(photo => photo.state === "pending")).toHaveLength(3);
+    expect(progress.nextSourceId).not.toBe(initial.nextSourceId);
+    expect(progress.photos[0]).toMatchObject({ name: "photo-0.png", state: "ready", byteSize: expect.any(Number) });
+    expect(JSON.stringify(progress)).not.toMatch(/r2Key|signature|contentSha256|sourceUrl/);
+    await expect(services(f, fake.storage, "bob").getImport(prepared.importId)).rejects.toMatchObject({ status: 403 });
+    await expect(services(f, fake.storage, "foreign", "foreign").getImport(prepared.importId)).rejects.toMatchObject({ status: 403 });
+    expect(await f.db.select().from(purchaseItems).all()).toEqual(before);
+    const storedSources = await f.db.select().from(qcImageSources).orderBy(qcImageSources.ordinal).all();
+    await f.db.update(qcImageSources).set({ state: "failed", errorCode: "QC_IMAGE_FAILED" }).where(eq(qcImageSources.id, storedSources[1]!.id)).run();
+    await f.db.update(qcImageSources).set({ state: "pending", errorCode: "QC_PUT_UNCERTAIN" }).where(eq(qcImageSources.id, storedSources[2]!.id)).run();
+    const interrupted = await alice.getImport(prepared.importId);
+    expect(interrupted.photos[1]).toMatchObject({ state: "failed", errorCode: "QC_IMAGE_FAILED", previewUrl: null });
+    expect(interrupted.photos[2]).toMatchObject({ state: "pending", errorCode: "QC_PUT_UNCERTAIN", previewUrl: null });
+    // A fresh manifest must recognize ready sources kept under an older import.
+    const repeated = await alice.prepare("qc-purchase", photoImport(4));
+    await alice.confirmImport(repeated.importId, repeated.revision, []);
+    expect((await alice.getImport(repeated.importId)).photos.filter(photo => photo.state === "ready")).toHaveLength(1);
+  });
+
   it("imports a confirmed occurrence, authorizes fallback, tombstones deletion and prevents reimport resurrection", async () => {
     const fake = mockStorage(), alice = services(f, fake.storage), bob = services(f, fake.storage, "bob");
     const before = await f.db.select().from(purchaseItems).where(eq(purchaseItems.id, "qc-purchase-item")).get();
@@ -251,6 +282,9 @@ describe("HubBuy QC persistence and permissions", () => {
     expect(preview.rows[0]?.match).toMatchObject({ status: "PENDING", targetItemId: null, candidates: [{ itemId: "qc-purchase-item" }, { itemId: "qc-purchase-second-item" }] });
     const confirmed = await alice.confirmImport(preview.importId, preview.revision, []);
     expect(confirmed).toMatchObject({ linked: 0, pendingMatching: 1, ignored: 0, sources: 4, eligibleSources: 0 });
+    const pendingProgress = await alice.getImport(preview.importId);
+    expect(pendingProgress.photos.every(photo => photo.state === "matching")).toBe(true);
+    expect(pendingProgress.nextSourceId).toBeNull();
     const summary = await alice.getQcSummary("qc-purchase");
     expect(summary.pendingMatching).toBe(1);
     expect(summary.pendingRows).toHaveLength(1);
@@ -292,6 +326,7 @@ describe("HubBuy QC persistence and permissions", () => {
     await f.db.update(qcImports).set({ manifestJson: JSON.stringify(manualManifest) }).where(eq(qcImports.id, manual.importId)).run();
     expect((await alice.getImport(manual.importId)).rows[0]?.match).toMatchObject({ status: "IGNORED", targetItemId: null, candidates: [] });
     expect(await alice.confirmImport(manual.importId, manual.revision, [])).toMatchObject({ ignored: 1, pendingMatching: 0, sources: 0, eligibleSources: 0 });
+    expect((await alice.getImport(manual.importId)).photos[0]).toMatchObject({ state: "ignored", sourceId: null, previewUrl: null });
     expect(await f.db.select().from(hubbuyExternalItems).all()).toHaveLength(1);
     expect(await f.db.select().from(qcImageSources).all()).toHaveLength(1);
   });

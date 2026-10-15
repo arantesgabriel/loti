@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { login } from "./helpers";
 
 async function createFinalizedPurchase(page: import("@playwright/test").Page, name: string, secondItem = false) {
-  const origin = "http://localhost:3100";
+  const origin = test.info().project.use.baseURL ?? "http://localhost:3100";
   const created = await page.request.post("/api/app", { headers: { Origin: origin }, data: { operation: "purchase.save", input: { name } } });
   expect(created.ok()).toBeTruthy();
   const purchaseData = await created.json();
@@ -26,6 +26,10 @@ async function createFinalizedPurchase(page: import("@playwright/test").Page, na
 }
 
 const response = (route: import("@playwright/test").Route, data: unknown) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data }) });
+const transferSnapshot = (completed: number) => ({
+  nextSourceId: completed < 4 ? `source-${completed + 1}` : null,
+  photos: Array.from({ length: 4 }, (_, index) => ({ id: `photo-${index + 1}`, sourceId: `source-${index + 1}`, name: `IMG_00${index + 1}.jpg`, occurrence: "QC Marker Product", state: index < completed ? "ready" : "pending", errorCode: null, byteSize: null, imageId: null, previewUrl: null })),
+});
 async function mockQcMedia(page: import("@playwright/test").Page) {
   const artwork = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="480" height="320" viewBox="0 0 480 320"><rect width="480" height="320" rx="28" fill="#f5f2ee"/><rect x="28" y="28" width="424" height="264" rx="24" fill="#dce8f7"/><circle cx="370" cy="104" r="54" fill="#f77014"/><path d="M110 218h220l-28-92H138z" fill="#fff" stroke="#1c0113" stroke-width="8" stroke-linejoin="round"/><path d="M160 218v-52h112v52" fill="#f7bd81" stroke="#1c0113" stroke-width="8"/><text x="240" y="270" text-anchor="middle" font-family="Arial,sans-serif" font-size="24" fill="#1c0113">QC SAMPLE · BLUE 40</text></svg>');
   const [preview, original] = await Promise.all([
@@ -36,6 +40,93 @@ async function mockQcMedia(page: import("@playwright/test").Page) {
   await page.route("**/api/qc/images/*/source", route => response(route, { sourceUrl: "https://scm.hubbuy.app/qc/viewer-original.png" }));
   await page.route("https://scm.hubbuy.app/**", route => route.fulfill({ status: 200, contentType: "image/png", body: original }));
 }
+
+test("QC drawer shows the real queue, existing photos, failures, recovery and pending links", async ({ page }) => {
+  test.setTimeout(90000);
+  await login(page);
+  const purchase = await createFinalizedPurchase(page, "QC visual states E2E");
+  const snapshot = transferSnapshot(1);
+  snapshot.photos[0]!.name = "IMG_001.jpg";
+  Object.assign(snapshot.photos[0]!, { imageId: "qc-photo-1", previewUrl: "/api/qc/images/qc-photo-1/preview", byteSize: 2516582 });
+  await mockQcMedia(page);
+  snapshot.photos[1]!.name = "IMG_002_nome_extremamente_longo_para_validar_truncamento_sem_overflow.jpg";
+  snapshot.photos[2]!.state = "matching";
+  let releaseBatch: (() => void) | undefined;
+  let batches = 0;
+  await page.route(`**/api/purchases/${purchase.purchaseId}/qc**`, route => {
+    if (route.request().method() === "GET") {
+      if (new URL(route.request().url()).searchParams.has("itemIds")) return response(route, { items: [] });
+      return response(route, { canManage: true, counts: [], pendingRows: [], pendingMatching: 1 });
+    }
+    return response(route, { importId: "mock-visual-states", revision: 0, photoCount: 4, orderCount: 1, partial: false, rows: [{ externalKey: "visual", title: "QC Marker Product", photoCount: 4, match: { status: "MATCHED", targetItemId: purchase.firstItemId, candidates: [] }, existingItemId: null, conflict: null }] });
+  });
+  await page.route("**/api/qc/imports/mock-visual-states", async route => {
+    if (route.request().method() === "GET") return response(route, snapshot);
+    const body = route.request().postDataJSON() as { operation: string; expectedRevision: number };
+    if (body.operation === "confirm") return response(route, { revision: 1, linked: 1, ignored: 0, sources: 4, eligibleSources: 2, pendingMatching: 1 });
+    batches++;
+    if (batches === 1) await new Promise<void>(resolve => { releaseBatch = resolve; });
+    const sourceIndex = batches === 1 || batches === 3 ? 1 : 3;
+    const state = batches === 1 ? "failed" : batches === 2 ? "pending" : "ready";
+    Object.assign(snapshot.photos[sourceIndex]!, { state, errorCode: state === "failed" ? "QC_IMAGE_FAILED" : state === "pending" ? "QC_PUT_UNCERTAIN" : null });
+    snapshot.nextSourceId = batches === 2 ? "source-2" : batches === 4 ? null : "source-4";
+    return response(route, { imported: state === "ready" ? 1 : 0, existing: 0, failed: state === "failed" ? 1 : 0, pending: state === "pending" ? 1 : 0, processed: 1, remaining: batches === 4 ? 0 : 1, complete: batches === 4, revision: body.expectedRevision + 1, results: [{ sourceId: `source-${sourceIndex + 1}`, status: state === "ready" ? "imported" : state }] });
+  });
+  await page.goto(`/packages/${purchase.trackingId}`);
+  await page.getByRole("button", { name: /Produtos e pagamento/ }).click();
+  await page.getByRole("button", { name: "Importar QC", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("JSON HubBuy").fill("{}");
+  await dialog.getByRole("button", { name: "Analisar JSON" }).click();
+  await dialog.getByRole("button", { name: "Confirmar vínculos" }).click();
+  await expect(dialog.getByRole("status")).toContainText("Processando suas fotos");
+  await expect(dialog.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "1");
+  await expect(dialog.locator(".qc-transfer-row").nth(0)).toContainText("Já existente");
+  await expect(dialog.locator(".qc-transfer-thumbnail img")).toHaveCount(1);
+  await expect(dialog.locator(".qc-transfer-row").nth(0)).toContainText("2,4 MB");
+  await expect(dialog.locator(".qc-transfer-row").nth(1)).toContainText("Processando...");
+  await expect(dialog.locator(".qc-transfer-row").nth(2)).toContainText("Sem vínculo");
+  await expect(dialog.locator(".qc-transfer-row").nth(3)).toContainText("Aguardando...");
+  await expect(dialog.getByRole("button", { name: "Nova importação" })).toBeDisabled();
+  const qaFolder = join(process.cwd(), "artifacts", "qa", "qc-import-progress");
+  mkdirSync(qaFolder, { recursive: true });
+  for (const width of [1440, 1024, 768, 390, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+    await expect(dialog.getByRole("button", { name: "Fechar" })).toBeVisible();
+    await expect(dialog.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "1");
+    await dialog.screenshot({ path: join(qaFolder, `processing-${width}.png`) });
+  }
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(dialog.locator(".qc-transfer-spinner")).toHaveCSS("animation-name", "none");
+  releaseBatch!();
+  await expect(dialog.getByRole("status")).toContainText("Importação parcial");
+  await expect(dialog.locator(".qc-transfer-row").nth(1)).toContainText("Falha");
+  await expect(dialog.locator(".qc-transfer-row").nth(1)).toContainText("QC_IMAGE_FAILED");
+  await dialog.screenshot({ path: join(qaFolder, "failure-320.png") });
+  await page.setViewportSize({ width: 320, height: 480 });
+  const photoList = dialog.getByRole("list", { name: "Fotos da importação QC" });
+  await photoList.focus();
+  await page.keyboard.press("End");
+  await expect.poll(() => photoList.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+  await expect(dialog.getByRole("button", { name: "Continuar / tentar novamente" })).toBeInViewport();
+  await page.setViewportSize({ width: 320, height: 844 });
+  await dialog.getByRole("button", { name: "Continuar / tentar novamente" }).click();
+  await expect(dialog.locator(".qc-transfer-row").nth(1)).toContainText("Falha");
+  await expect(dialog.locator(".qc-transfer-row").nth(3)).toContainText("Pendente");
+  await expect(dialog.locator(".qc-transfer-row").nth(3)).toContainText("QC_PUT_UNCERTAIN");
+  await expect(dialog.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "2");
+  await page.setViewportSize({ width: 390, height: 600 });
+  await dialog.screenshot({ path: join(qaFolder, "recovery-390.png") });
+  await dialog.getByRole("button", { name: "Continuar / tentar novamente" }).click();
+  await expect(dialog.getByRole("button", { name: "Transferências concluídas" })).toBeDisabled();
+  await expect(dialog.getByRole("status")).toContainText("Importação parcial");
+  await expect(dialog.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "3");
+  await expect(dialog.locator(".qc-transfer-row").nth(1)).toContainText("Importada");
+  await expect(dialog.locator(".qc-transfer-summary")).toContainText("1 ocorrência aguarda vínculo manual");
+  await dialog.screenshot({ path: join(qaFolder, "partial-390.png") });
+  expect(batches).toBe(4);
+});
 
 test("HubBuy QC import is session-bound, manually confirmable and responsive", async ({ page }) => {
   await login(page);
@@ -102,9 +193,8 @@ test("HubBuy QC import is session-bound, manually confirmable and responsive", a
   }
   await page.setViewportSize({ width: 390, height: 844 });
   await dialog.getByRole("button", { name: "Confirmar vínculos" }).click();
-  await expect(dialog.locator(".qc-status-note")).toContainText("1 ocorrência(s) associada(s)");
-  await expect(dialog.locator(".qc-status-note")).toContainText("1 ignorada(s)");
-  await expect(dialog.locator(".qc-status-note")).toContainText("0 foto(s) registrada(s)");
+  await expect(dialog.getByRole("status")).toContainText("Nenhuma imagem de QC encontrada");
+  await expect(dialog.getByRole("progressbar")).toHaveCount(0);
   await expect(dialog.getByRole("button", { name: "Processar próximo lote" })).toHaveCount(0);
   expect((await page.request.get(`/api/purchases/${purchaseId}/qc`)).ok()).toBeTruthy();
 });
@@ -113,6 +203,8 @@ test("HubBuy QC automatically completes four distinct photos and refreshes galle
   await login(page);
   const purchase = await createFinalizedPurchase(page, "QC four photos E2E");
   let importedPhotos = 0, batches = 0, coverId: string | null = null, coverRevision = 0;
+  let releaseFirstBatch: (() => void) | undefined;
+  let releaseLastBatch: (() => void) | undefined;
   const photoIds = Array.from({ length: 4 }, (_, index) => `qc-photo-${index + 1}`);
   await page.route(`**/api/purchases/${purchase.purchaseId}/qc**`, async route => {
     const request = route.request();
@@ -131,13 +223,16 @@ test("HubBuy QC automatically completes four distinct photos and refreshes galle
   });
   await mockQcMedia(page);
   await page.route("**/api/qc/imports/mock-import-four", async route => {
+    if (route.request().method() === "GET") return response(route, transferSnapshot(importedPhotos));
     const body = route.request().postDataJSON() as { operation: string; expectedRevision: number };
     if (body.operation === "confirm") return response(route, { importId: "mock-import-four", revision: 1, linked: 1, pendingMatching: 0, ignored: 0, sources: 4, eligibleSources: 4 });
     if (body.operation === "batch") {
+      if (batches === 0) await new Promise<void>(resolve => { releaseFirstBatch = resolve; });
+      if (batches === 3) await new Promise<void>(resolve => { releaseLastBatch = resolve; });
       batches++;
       importedPhotos++;
       const remaining = 4 - batches;
-      return response(route, { imported: 1, existing: 0, failed: 0, pending: 0, processed: 1, remaining, hasMore: remaining > 0, complete: remaining === 0, partial: remaining > 0, revision: body.expectedRevision + 1, results: [{ status: "imported" }] });
+      return response(route, { imported: 1, existing: 0, failed: 0, pending: 0, processed: 1, remaining, hasMore: remaining > 0, complete: remaining === 0, partial: remaining > 0, revision: body.expectedRevision + 1, results: [{ sourceId: `source-${batches}`, status: "imported" }] });
     }
     throw new Error(`Unexpected import operation ${body.operation}`);
   });
@@ -150,7 +245,23 @@ test("HubBuy QC automatically completes four distinct photos and refreshes galle
   await dialog.getByRole("button", { name: "Analisar JSON" }).click();
   await expect(dialog.getByRole("button", { name: "Confirmar vínculos" })).toBeEnabled();
   await dialog.getByRole("button", { name: "Confirmar vínculos" }).click();
-  await expect(dialog.getByRole("status")).toContainText("Importação concluída.");
+  await expect(dialog.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "0");
+  await expect(dialog.locator(".qc-transfer-state").filter({ hasText: "Processando..." })).toHaveCount(1);
+  await expect(dialog.locator(".qc-transfer-state").filter({ hasText: "Aguardando..." })).toHaveCount(3);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const progressQa = join(process.cwd(), "artifacts", "qa", "qc-import-progress");
+  mkdirSync(progressQa, { recursive: true });
+  await dialog.screenshot({ path: join(progressQa, "starting-390.png"), animations: "disabled" });
+  releaseFirstBatch!();
+  await expect(dialog.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "3");
+  await expect(dialog.locator(".qc-transfer-state").filter({ hasText: "Importada" })).toHaveCount(3);
+  await expect(dialog.locator(".qc-transfer-state").filter({ hasText: "Processando..." })).toHaveCount(1);
+  await dialog.screenshot({ path: join(progressQa, "progress-75-390.png"), animations: "disabled" });
+  releaseLastBatch!();
+  await expect(dialog.getByRole("status")).toContainText("Importação concluída");
+  await expect(dialog.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "4");
+  await expect(dialog.locator(".qc-transfer-state").filter({ hasText: "Importada" })).toHaveCount(4);
+  await dialog.screenshot({ path: join(progressQa, "success-390.png"), animations: "disabled" });
   expect(batches).toBe(4);
   await dialog.getByRole("button", { name: "Fechar" }).click();
   const galleryButton = page.locator(".qc-cost-list").getByRole("button", { name: "Ver QC de QC Marker Product" });
@@ -280,13 +391,14 @@ test("QC transfer interruption stays partial, surfaces the error and refreshes c
     throw new Error(`Unexpected QC operation ${body.operation}`);
   });
   await page.route("**/api/qc/imports/mock-import-interrupted", async route => {
+    if (route.request().method() === "GET") return response(route, transferSnapshot(importedPhotos));
     const body = route.request().postDataJSON() as { operation: string; expectedRevision: number };
     if (body.operation === "confirm") return response(route, { importId: "mock-import-interrupted", revision: 1, linked: 1, pendingMatching: 0, ignored: 0, sources: 4, eligibleSources: 4 });
     if (body.operation === "batch") {
       batches++;
       if (batches === 2) return route.fulfill({ status: 429, contentType: "application/json", body: JSON.stringify({ error: "Limite QC atingido. Tente novamente mais tarde." }) });
       importedPhotos++;
-      return response(route, { imported: 1, existing: 0, failed: 0, pending: 0, processed: 1, remaining: 3, hasMore: true, complete: false, partial: true, revision: body.expectedRevision + 1, results: [{ status: "imported" }] });
+      return response(route, { imported: 1, existing: 0, failed: 0, pending: 0, processed: 1, remaining: 3, hasMore: true, complete: false, partial: true, revision: body.expectedRevision + 1, results: [{ sourceId: "source-1", status: "imported" }] });
     }
     throw new Error(`Unexpected import operation ${body.operation}`);
   });
@@ -301,7 +413,10 @@ test("QC transfer interruption stays partial, surfaces the error and refreshes c
   await expect(dialog.getByRole("alert")).toContainText("Limite QC atingido");
   expect(batches).toBe(2);
   await expect(dialog.getByRole("button", { name: "Continuar / tentar novamente" })).toBeEnabled();
-  await expect(dialog.getByRole("status")).not.toContainText("Importação concluída.");
+  await expect(dialog.getByRole("status")).toContainText("Importação interrompida");
+  await expect(dialog.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "1");
+  await expect(dialog.locator(".qc-transfer-state").filter({ hasText: "Importada" })).toHaveCount(1);
+  await expect(dialog.locator(".qc-transfer-state").filter({ hasText: "Aguardando" })).toHaveCount(3);
   await dialog.getByRole("button", { name: "Fechar" }).click();
   await expect(page.locator(".qc-cost-list").getByRole("button", { name: "Ver QC de QC Marker Product" })).toContainText("(1)");
 });
