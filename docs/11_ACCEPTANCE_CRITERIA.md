@@ -107,7 +107,7 @@
 - mobile uses a compact rounded floating navigation island with a full-size animated selection fill; only the active destination shows its label;
 - navigation has Favorites, Purchase, Pacotes e custos and History; the selected package label is `Pacotes`;
 - cards/list toggle exists;
-- operational cards/lists display no real product photos, listing thumbnails or large 3D product renders; only the explicitly opened, authorized QC gallery may show validated `freePhotos`;
+- operational cards/lists display no real product photos, listing thumbnails or large 3D product renders; only the explicitly opened, authorized QC gallery/viewer may currently show validated `freePhotos`. Product cost lines/cards may show the shared QC cover only after the separate Phase 3 authorization;
 - operational item lists/cards, purchase/history and drawers use consistent small functional category markers;
 - sparse Visor-inspired illustrations are reserved for editorial/branding surfaces;
 - purchase markers remain smaller and quieter than pending/added controls;
@@ -199,3 +199,14 @@ Exact implementation contract: [17_LOGIN_ORBITAL_MOTION.md](17_LOGIN_ORBITAL_MOT
 - Empty and existing-schema migrations are repeat-safe and preserve plan 23 data; no production migration, Cloudflare configuration, bucket creation or publication occurs without separate authorization.
 
 Complete cases and numerical limits: [24 — HubBuy QC import](24_HUBBUY_QC_IMPORT_PLAN.md#11-matriz-mínima-de-testes).
+
+## QC shared cover and viewer — foundation and viewer phases
+
+- A shared cover belongs to a finalized purchase item, is revision-checked, authorized to the configured QC manager and validated against the active purchase/item/occurrence/image chain.
+- The first ready linked photo initializes the cover atomically. Adding later photos does not replace a valid/manual cover; deleting the selected cover chooses the next deterministically ordered ready photo or clears the cover. Rematch repairs both affected items and is audited.
+- Private previews are versioned WebP, max 160×160 and 128 KiB, preserve aspect ratio, do not upscale and apply EXIF orientation. A preview failure leaves the original usable and can be retried through the manual QC reconciliation action.
+- Presentation batches accept at most 20 item IDs and return no more than three ready preview thumbnails per item, with counts/revision and no signed URLs. Gallery reads do not generate or repair database state.
+- The viewer paginates, opens image IDs beyond the first page, fetches one original only when selected, supports keyboard/touch navigation and keeps History read-only. Cover/delete controls appear only in the manager's Pacotes e custos viewer.
+- Preview/original reads are session-bound and private. Client state is scoped by user and purchase; reopening revalidates and logout/user change clears scope. Original and preview fallback state is component-local, with no document-wide source swapping.
+- Responsive Playwright coverage includes 320, 390, 768, 1024 and 1440px, focus return, Escape, previous/next, cover conflict, deletion fallback and image failure recovery.
+- Phase 3 is not part of these criteria: cost-line/card photos require explicit user authorization after review and are limited to Pacotes e custos.

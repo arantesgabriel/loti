@@ -21,11 +21,19 @@ const postSchema = z.discriminatedUnion("operation", [
 export async function GET(request: Request, context: RouteContext) {
   try {
     const user = await requireUser(), { purchaseId } = await context.params, service = qcServices(db, user.id);
-    const itemId = new URL(request.url).searchParams.get("itemId");
+    const params = new URL(request.url).searchParams;
+    const itemIdsRaw = params.get("itemIds");
+    if (itemIdsRaw !== null) {
+      const itemIds = itemIdsRaw ? itemIdsRaw.split(",") : [];
+      return NextResponse.json({ data: await service.getQcPresentations(purchaseId, itemIds) }, { headers: qcPrivateHeaders });
+    }
+    const itemId = params.get("itemId");
     if (!itemId) return NextResponse.json({ data: await service.getQcSummary(purchaseId) }, { headers: qcPrivateHeaders });
-    const offsetRaw = new URL(request.url).searchParams.get("offset") ?? "0";
+    const offsetRaw = params.get("offset") ?? "0";
     if (!/^\d{1,8}$/.test(offsetRaw)) throw new DomainError("Offset QC inválido.", 400, "QC_REQUEST_INVALID");
-    return NextResponse.json({ data: await service.getGallery(purchaseId, itemId, 50, Number(offsetRaw)) }, { headers: qcPrivateHeaders });
+    const imageId = params.get("imageId") ?? undefined;
+    if (imageId !== undefined && imageId.length > 200) throw new DomainError("ID de imagem QC inválido.", 400, "QC_REQUEST_INVALID");
+    return NextResponse.json({ data: await service.getGallery(purchaseId, itemId, 12, Number(offsetRaw), imageId) }, { headers: qcPrivateHeaders });
   } catch (error) { return qcFailure(error); }
 }
 

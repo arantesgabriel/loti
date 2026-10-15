@@ -21,7 +21,11 @@ Keep the existing `visual_key` column and `visualKey` API property as the catego
 
 ### Approved HubBuy QC gallery exception
 
-Only the specific QC gallery may render validated source photos from `freePhotos`, after server-side authorization and lazy loading. Photos are evidence for a purchased occurrence, not product-card/list imagery, and never replace the neutral category marker on operational surfaces. The gallery must honor deletion tombstones and use the source URL first with an authorized short-lived private backup fallback. No image is sourced from `goodsList[].image`. See [24 — HubBuy QC import](24_HUBBUY_QC_IMPORT_PLAN.md).
+Only the specific QC gallery may currently render validated source photos from `freePhotos`, after server-side authorization. Photos are evidence for a purchased occurrence and never replace the neutral category marker on Favorites, Purchase, History, drawers, or general product cards/lists. The gallery uses bounded private previews for navigation and loads one original at a time in its viewer; it honors deletion tombstones and uses the source URL first with an authorized short-lived private backup fallback. No image is sourced from `goodsList[].image`.
+
+### Separately gated cost-line presentation
+
+An approved shared QC cover and its private reduced preview may be shown on product cost lines/cards inside **Pacotes e custos** only in a future Phase 3, after the user explicitly authorizes that phase. Foundation and viewer work does not add these images to financial UI. No other operational surface is included, and code must not add hidden image slots, flags, or preparatory layout before that authorization. Purchase snapshots, cost values, packages, payment state, refunds and totals remain independent. See [24 — HubBuy QC import](24_HUBBUY_QC_IMPORT_PLAN.md).
 
 ## Initial categories
 

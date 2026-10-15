@@ -22,11 +22,12 @@ export const QC_LIMITS = {
   lockMs: 180_000,
 } as const;
 
-export type QcRateOperation = "prepare" | "match" | "batch" | "delete" | "fallback";
+export type QcRateOperation = "prepare" | "match" | "batch" | "delete" | "fallback" | "preview";
 export const QC_RATE_LIMITS: Record<QcRateOperation, { count: number; windowMs: number }> = {
   prepare: { count: 5, windowMs: 60_000 },
   match: { count: 20, windowMs: 60_000 },
   batch: { count: 12, windowMs: 60_000 },
   delete: { count: 20, windowMs: 60_000 },
   fallback: { count: 60, windowMs: 60_000 },
+  preview: { count: 180, windowMs: 60_000 },
 };

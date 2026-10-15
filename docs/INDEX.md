@@ -29,6 +29,7 @@ This folder is the canonical product and engineering handoff for the Loti MVP.
 | `21_PACKAGES_AND_COSTS_PLAN.md` | Phased handoff for packages, manual costs, transaction fees, payments and financial closure |
 | `22_PACKAGES_AND_COSTS_UX_REFACTOR_PLAN.md` | Phased refactoring of package costs with progressive disclosure, accurate partial totals and responsive editing |
 | `23_PRODUCT_REFUNDS_PLAN.md` | Phased handoff for product/China-freight refunds, cancelled shipping units, preserved payment fees, manual receipt and audit |
+| `24_HUBBUY_QC_IMPORT_PLAN.md` | V1 + V1.1 HubBuy QC import plus gated shared-cover/private-preview viewer evolution |
 | `design/REFERENCES.md` | Figma and palette inspiration URLs |
 | `design/PACKAGES_AND_COSTS_REFERENCES.md` | Approved A/B/C/D visual references, images and acceptance for Pacotes e custos |
 | `design/MOCKUPS.md` | Approved visual references and interpretation notes |

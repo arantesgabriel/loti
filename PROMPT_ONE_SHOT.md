@@ -310,7 +310,7 @@ Store category keys in the existing `visual_key` on favorites and independent pu
 
 Use the internal inline SVG library in `src/components/product-category-icons/`: consistent neutral stroke/fill, small size, no brand, gradient or large shadow. Cards have a 36px marker tile (28px mobile), List 30px (26px mobile), Purchase/History 20–24px, smaller than status controls. Keep names and values primary. Markers are decorative (`aria-hidden`), never extra keyboard stops. Drawers use the same system.
 
-Never use real thumbnails, large product images or generic 3D product renders in operational cards/lists. No public operational render directory, image APIs, runtime generation or per-item upload. Unknown or corrupt key → generic inline SVG marker.
+Never use real thumbnails, large product images or generic 3D product renders in operational cards/lists. No public operational render directory, image APIs, runtime generation or per-item upload. Unknown or corrupt key → generic inline SVG marker. The only future operational-photo exception is the explicitly gated QC Phase 3 in `docs/24_HUBBUY_QC_IMPORT_PLAN.md`: only after separate explicit authorization may the shared QC cover/private preview appear on the approved product cost lines/cards inside Pacotes e custos. Until then, keep photos in the QC gallery and add no hidden image slots, flags, or preparatory layout.
 
 Reserve Visor-inspired editorial illustrations (soft 3D, pastel, friendly, spacious, subtle shadows) for sparse branding surfaces such as existing login, suitable empty states or collection covers; do not add future landing/onboarding features merely for imagery.
 
@@ -685,7 +685,7 @@ Even if they seem useful, do not add:
 
 Do not expand scope merely because a library makes a feature easy.
 
-The approved HubBuy QC extension is a narrow exception to the no-marketplace-integration/no-product-images rules: follow only `docs/24_HUBBUY_QC_IMPORT_PLAN.md` V1 + V1.1. It accepts manually pasted HubBuy JSON, matches bought occurrences conservatively to finalized Loti items, validates and privately backs up only `freePhotos`, and displays them in authorized QC galleries. It does not add API sync, scraping, listing thumbnails, or changes to product/financial snapshots. External configuration, bucket creation, production migrations and publication still require specific authorization.
+The approved HubBuy QC extension is a narrow exception to the no-marketplace-integration/no-product-images rules: follow `docs/24_HUBBUY_QC_IMPORT_PLAN.md` V1 + V1.1 and its separately gated evolution phases. V1/V1.1 accepts manually pasted HubBuy JSON, matches bought occurrences conservatively to finalized Loti items, validates and privately backs up only `freePhotos`, and displays them in authorized QC galleries. A separately authorized foundation/viewer evolution may add a shared QC cover and private previews while keeping them in the gallery. Only a later, separately authorized Phase 3 may display those covers/previews on product cost lines/cards in Pacotes e custos. Do not implement API sync, scraping, listing thumbnails, hidden Phase 3 layout/flags, or changes to product/financial snapshots. External configuration, bucket creation, production migrations and publication still require specific authorization.
 
 ---
 

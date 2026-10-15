@@ -401,3 +401,27 @@ Decisões operacionais da implementação:
 Resultado dos gates locais: typecheck e lint passaram; 104 testes unitários e 98 testes de integração passaram, com 7 casos de integração skipped pelos marcadores já existentes. Playwright passou 25/25 incluindo QC e reembolso. O build de produção passou em saída isolada `.next-qc-final-20261014`. A migration foi aplicada e verificada em libSQL descartável; o teste de upgrade usa trilha aberta, trilha encerrada, custos pagos e reembolso recebido, compara os dados anteriores/depois e reaplica a migration. Suites Vitest foram serializadas neste host Windows para evitar falhas do cache SSR efêmero do runner; o teste de concorrência multiprocesso de reembolso também passou isoladamente.
 
 Handoff operacional após autorização específica: verificar o ID real do administrador; obter bucket privado e tokens limitados do ambiente; conferir suporte efetivo a `maxDuration=120` na configuração Vercel; então configurar ambiente de desenvolvimento e aplicar migration explicitamente antes do smoke test remoto. Produção exige autorização própria para secrets, migration e publicação. Até esses inputs existirem, armazenamento remoto, CDN/fallback real e execução hospedada não estão validados; a suite utiliza R2/HTTP simulados e banco descartável.
+
+## 14. Evolução de capa compartilhada e visualizador — fases 1 e 2
+
+Esta evolução acrescenta uma apresentação compartilhada por item finalizado e um visualizador paginado, sem alterar favoritos, snapshots, pacotes, custos, pagamentos, reembolsos ou totais.
+
+### Fundação
+
+- `qc_presentations` guarda uma única imagem de capa por `purchaseItemId`, a revisão otimista e os dados de auditoria. A associação da imagem é sempre revalidada pela cadeia compra → item comprado → ocorrência HubBuy → imagem QC pronta; a FK sozinha não autoriza o vínculo.
+- A primeira imagem pronta vinculada define a capa quando ainda não existe uma capa válida. Fotos posteriores não substituem uma capa manual. Ordem de fallback: `ordinal`, criação e ID.
+- Excluir a capa cria tombstone e escolhe atomicamente a primeira imagem restante, ou limpa a capa. Remapeamento de ocorrência repara a apresentação do item de origem e do destino. Nenhuma chave é movida no R2.
+- `qc_image_previews` cataloga o preview WebP privado e versionado (até 160×160, sem ampliação, com orientação EXIF aplicada e limite de 128 KiB). A chave é criada no servidor. O preview é gerado no mesmo pipeline manual de QC, com falha isolada do original; GET não gera arquivos.
+- Uma gravação R2 incerta continua pendente e recuperável por chave conhecida e HEAD. Tombstone do original ou preview continua ocultando o arquivo e a limpeza é repetida sem `ListObjects`.
+- A leitura binária exige sessão e autorização de compra; não retorna URL assinada nem aceita chave, bucket, transformação ou tamanho do cliente. A apresentação em lote aceita até 20 itens e retorna no máximo três previews por item, contagem e revisão, sem carregar a galeria completa.
+
+### Visualizador
+
+- O botão “Ver QC” conserva a posição aprovada dentro do detalhe de custos ou da leitura de Histórico. A galeria busca páginas de 12 imagens, ordenadas por `ordinal`, criação e ID. É possível abrir diretamente um `imageId` de páginas posteriores.
+- A galeria usa previews privados. O visualizador carrega o original somente para a imagem selecionada, primeiro da CDN HubBuy validada e depois do fallback privado autorizado. Anterior/próxima, teclado, toque, contador, ocorrência, carregamento, vazio, erro, foco e safe areas são parte do contrato.
+- Somente o administrador QC pode definir capa e excluir no visualizador de Pacotes e custos. Histórico continua somente leitura. A exclusão remove a imagem do estado local imediatamente, atualiza contagem/capa e informa quando a remoção física ainda está pendente.
+- Respostas de preview/original são privadas e `no-store`; URLs assinadas não são persistidas em cache cliente. Reabertura revalida a galeria, e estado em memória é isolado pela sessão, compra e imagem.
+
+### Fase 3 — autorização separada obrigatória
+
+Fase 3 é somente a futura apresentação da capa/preview nas linhas ou cartões de produto de **Pacotes e custos**. Ela não está incluída nas fases 1 e 2 e não pode começar sem autorização explícita do usuário após a revisão do resultado. Até esse gate, nenhuma foto entra em linha/cartão operacional, e não são adicionados flags, slots ou estrutura visual preparatória. Nenhuma outra tela operacional passa a exibir fotos.

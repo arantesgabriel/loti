@@ -9,6 +9,7 @@ export type QcObject = { key: string; bytes: Buffer; mimeType: string; sha256: s
 export interface QcStorage {
   put(object: QcObject): Promise<void>;
   head(key: string): Promise<{ exists: boolean; sha256?: string }>;
+  get(key: string, maxBytes: number): Promise<Buffer>;
   delete(key: string): Promise<void>;
   signRead(key: string): Promise<string>;
 }
@@ -44,6 +45,19 @@ export const r2QcStorage: QcStorage = {
       const candidate = error as { name?: string; $metadata?: { httpStatusCode?: number } };
       if (candidate.name === "NotFound" || candidate.name === "NoSuchKey" || candidate.$metadata?.httpStatusCode === 404) return { exists: false };
       throw new DomainError("Não foi possível verificar um backup QC pendente.", 502, "QC_STORAGE_UNAVAILABLE");
+    }
+  },
+  async get(key, maxBytes) {
+    const config = storageClients();
+    try {
+      const result = await config.read.send(new GetObjectCommand({ Bucket: config.bucket, Key: key }), { abortSignal: AbortSignal.timeout(QC_LIMITS.transferMs) });
+      if (!result.Body || result.ContentLength === undefined || result.ContentLength < 1 || result.ContentLength > maxBytes) throw new DomainError("O preview privado excedeu o limite esperado.", 502, "QC_PREVIEW_INVALID");
+      const bytes = Buffer.from(await result.Body.transformToByteArray());
+      if (!bytes.byteLength || bytes.byteLength > maxBytes || bytes.byteLength !== result.ContentLength) throw new DomainError("O preview privado está incompleto.", 502, "QC_PREVIEW_INVALID");
+      return bytes;
+    } catch (error) {
+      if (error instanceof DomainError) throw error;
+      throw new DomainError("O preview privado está indisponível.", 502, "QC_STORAGE_UNAVAILABLE");
     }
   },
   async delete(key) {

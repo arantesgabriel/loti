@@ -306,6 +306,29 @@ export const qcImages = sqliteTable("qc_images", {
   createdBy: text("created_by").notNull().references(() => user.id), createdAt: timestamp("created_at"), updatedAt: timestamp("updated_at"), deletedAt: integer("deleted_at", { mode: "timestamp_ms" }), deletedBy: text("deleted_by").references(() => user.id),
 }, t => [uniqueIndex("qc_image_external_content_idx").on(t.externalItemId, t.contentSha256).where(sql`${t.contentSha256} IS NOT NULL`), uniqueIndex("qc_image_external_source_idx").on(t.externalItemId, t.sourceUrlHash), uniqueIndex("qc_image_r2_key_idx").on(t.r2Key), index("qc_image_external_state_idx").on(t.externalItemId, t.status, t.ordinal), check("qc_image_state", sql`(${t.status} = 'deleted' AND ${t.deletedAt} IS NOT NULL AND ${t.deletedBy} IS NOT NULL AND ${t.deleteState} IN ('pending','deleted')) OR (${t.status} != 'deleted' AND ${t.deletedAt} IS NULL AND ${t.deletedBy} IS NULL AND ${t.deleteState} = 'none')`), check("qc_image_ready", sql`${t.status} != 'ready' OR (${t.contentSha256} IS NOT NULL AND ${t.mimeType} IN ('image/jpeg','image/png','image/webp') AND typeof(${t.byteSize}) = 'integer' AND ${t.byteSize} BETWEEN 1 AND 8388608 AND typeof(${t.width}) = 'integer' AND ${t.width} BETWEEN 1 AND 8192 AND typeof(${t.height}) = 'integer' AND ${t.height} BETWEEN 1 AND 8192)`), check("qc_image_ordinal", sql`typeof(${t.ordinal}) = 'integer' AND ${t.ordinal} BETWEEN 0 AND 199`)]);
 
+// A shared cover is presentation state for one purchased item. It never
+// changes the immutable purchase snapshot or package/cost calculations.
+export const qcPresentations = sqliteTable("qc_presentations", {
+  purchaseItemId: text("purchase_item_id").primaryKey().references(() => purchaseItems.id),
+  primaryImageId: text("primary_image_id").references(() => qcImages.id),
+  revision: integer("revision").notNull().default(0),
+  updatedBy: text("updated_by").references(() => user.id),
+  updatedAt: timestamp("updated_at"),
+}, t => [check("qc_presentation_revision", sql`typeof(${t.revision}) = 'integer' AND ${t.revision} >= 0`)]);
+
+// Private, generated, versioned 160px previews. The object key is generated
+// server-side and is never exposed to clients.
+export const qcImagePreviews = sqliteTable("qc_image_previews", {
+  imageId: text("image_id").primaryKey().references(() => qcImages.id),
+  r2Key: text("r2_key").notNull(), transformVersion: text("transform_version").notNull(),
+  status: text("status", { enum: ["pending", "ready", "failed", "deleted"] }).notNull(),
+  deleteState: text("delete_state", { enum: ["none", "pending", "deleted"] }).notNull().default("none"),
+  sha256: text("sha256"), byteSize: integer("byte_size"), width: integer("width"), height: integer("height"),
+  revision: integer("revision").notNull().default(0), claimToken: text("claim_token"), claimExpiresAt: integer("claim_expires_at", { mode: "timestamp_ms" }),
+  errorCode: text("error_code"), deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
+  createdAt: timestamp("created_at"), updatedAt: timestamp("updated_at"),
+}, t => [uniqueIndex("qc_image_preview_key_idx").on(t.r2Key), index("qc_preview_state_idx").on(t.status, t.updatedAt), check("qc_preview_state", sql`(${t.status} = 'deleted' AND ${t.deletedAt} IS NOT NULL AND ${t.deleteState} IN ('pending','deleted')) OR (${t.status} != 'deleted' AND ${t.deletedAt} IS NULL AND ${t.deleteState} = 'none')`), check("qc_preview_revision", sql`typeof(${t.revision}) = 'integer' AND ${t.revision} >= 0`), check("qc_preview_ready", sql`${t.status} != 'ready' OR (${t.sha256} IS NOT NULL AND typeof(${t.byteSize}) = 'integer' AND ${t.byteSize} BETWEEN 1 AND 131072 AND typeof(${t.width}) = 'integer' AND ${t.width} BETWEEN 1 AND 160 AND typeof(${t.height}) = 'integer' AND ${t.height} BETWEEN 1 AND 160)`)]);
+
 export const qcImageSources = sqliteTable("qc_image_sources", {
   id: text("id").primaryKey(), importId: text("import_id").references(() => qcImports.id), externalItemId: text("external_item_id").notNull().references(() => hubbuyExternalItems.id), imageId: text("image_id").references(() => qcImages.id),
   sourceUrl: text("source_url").notNull(), sourceUrlHash: text("source_url_hash").notNull(), ordinal: integer("ordinal").notNull(),

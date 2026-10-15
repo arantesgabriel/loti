@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import sharp from "sharp";
 import { validateQcImage } from "@/lib/qc/image-validation";
+import { generateQcPreview, QC_PREVIEW } from "@/lib/qc/preview";
 
 async function fixture(format: "jpeg" | "png" | "webp" = "png", width = 2, height = 2) {
   const image = sharp({ create: { width, height, channels: 3, background: { r: 70, g: 40, b: 20 } } });
@@ -39,5 +40,25 @@ describe("real QC image decoder", () => {
   it("rejects images beyond the 25 megapixel cap before decoding raw pixels", async () => {
     const large = await fixture("png", 5_001, 5_000);
     await expect(validateQcImage(large)).rejects.toMatchObject({ code: "QC_IMAGE_LIMIT" });
+  });
+});
+
+describe("private QC previews", () => {
+  it.each([[640, 320, 160, 80], [320, 640, 80, 160], [2, 3, 2, 3]])("keeps aspect ratio and does not upscale %sx%s input", async (width, height, expectedWidth, expectedHeight) => {
+    const original = await sharp({ create: { width, height, channels: 3, background: { r: 45, g: 70, b: 110 } } }).png().toBuffer();
+    const preview = await generateQcPreview(original);
+    const metadata = await sharp(preview.bytes).metadata();
+    expect(metadata.format).toBe("webp");
+    expect([preview.width, preview.height]).toEqual([expectedWidth, expectedHeight]);
+    expect(preview.width).toBeLessThanOrEqual(QC_PREVIEW.dimension);
+    expect(preview.height).toBeLessThanOrEqual(QC_PREVIEW.dimension);
+    expect(preview.bytes.byteLength).toBeLessThanOrEqual(QC_PREVIEW.maxBytes);
+    expect(preview.sha256).toHaveLength(64);
+  });
+
+  it("applies EXIF orientation before generating the preview", async () => {
+    const original = await sharp({ create: { width: 300, height: 120, channels: 3, background: { r: 45, g: 70, b: 110 } } }).jpeg().withMetadata({ orientation: 6 }).toBuffer();
+    const preview = await generateQcPreview(original);
+    expect(preview.height).toBeGreaterThan(preview.width);
   });
 });

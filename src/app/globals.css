@@ -94,7 +94,25 @@ a {
 .qc-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr)); gap: 12px; }
 .qc-gallery-card { position: relative; min-width: 0; overflow: hidden; margin: 0; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
 .qc-gallery-card img { display: block; width: 100%; aspect-ratio: 1; object-fit: contain; background: var(--surface-muted); }
+.qc-gallery-open { display: grid; width: 100%; padding: 0; border: 0; color: inherit; background: transparent; cursor: zoom-in; }
+.qc-preview-placeholder { display: grid; width: 100%; aspect-ratio: 1; place-items: center; padding: 10px; color: var(--muted); background: var(--surface-muted); font-size: 12px; text-align: center; }
+.qc-gallery-card.is-cover { outline: 2px solid var(--primary); outline-offset: 1px; }
 .qc-gallery-card figcaption { padding: 8px 10px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.qc-cover-badge { display: inline-flex; margin: 6px 0 0; padding: 3px 7px; border-radius: 99px; color: var(--primary-ink); background: var(--primary-soft); font-size: 11px; font-weight: 600; }
+.qc-gallery-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; }
+.dialog.qc-viewer-surface { width: min(900px, calc(100vw - 32px)); max-height: min(900px, calc(100dvh - 32px)); }
+.qc-viewer-content { display: grid; gap: 14px; }
+.qc-viewer-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.qc-viewer-main { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; gap: 12px; touch-action: pan-y; }
+.qc-viewer-photo { display: grid; min-width: 0; min-height: 200px; height: min(46vh, 460px); place-items: center; overflow: hidden; border-radius: 14px; background: var(--surface-muted); }
+.qc-viewer-photo > img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.qc-viewer-photo .qc-image-unavailable { min-height: 180px; padding: 18px; }
+.qc-viewer-occurrence { margin: 0; text-align: center; color: var(--muted); overflow-wrap: anywhere; }
+.qc-viewer-thumbnails { display: flex; gap: 8px; overflow-x: auto; padding: 3px 2px 7px; overscroll-behavior-x: contain; }
+.qc-viewer-thumb { flex: 0 0 64px; width: 64px; height: 64px; overflow: hidden; padding: 0; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-muted); cursor: pointer; }
+.qc-viewer-thumb.is-selected { outline: 2px solid var(--primary); outline-offset: 1px; }
+.qc-viewer-thumb img, .qc-viewer-thumb .qc-preview-placeholder { display: block; width: 100%; height: 100%; aspect-ratio: 1; object-fit: cover; }
+.qc-viewer-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .qc-image-unavailable { display: grid; min-height: 120px; place-content: center; gap: 8px; justify-items: center; color: var(--muted); background: var(--surface-muted); }
 .qc-delete-button { margin: 0 8px 8px; }
 .qc-cost-list { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border); }
@@ -106,6 +124,16 @@ a {
 @media (max-width: 600px) {
   .qc-preview-row { grid-template-columns: minmax(0, 1fr); }
   .qc-manager-actions { justify-content: flex-start; }
+}
+@media (max-width: 767px) {
+  .dialog.qc-viewer-surface { inset: 0; width: 100%; height: 100dvh; max-height: 100dvh; transform: none; border-radius: 0; display: flex; flex-direction: column; }
+  .qc-viewer-surface .surface-body { flex: 1; overflow-y: auto; padding: 16px 14px calc(16px + env(safe-area-inset-bottom)); }
+  .qc-viewer-surface .surface-head { flex: 0 0 auto; padding: max(14px, env(safe-area-inset-top)) 14px 14px; }
+  .qc-viewer-main { grid-template-columns: 40px minmax(0, 1fr) 40px; gap: 6px; }
+  .qc-viewer-photo { height: min(42vh, 380px); min-height: 170px; border-radius: 10px; }
+  .qc-viewer-actions { justify-content: stretch; }
+  .qc-viewer-actions > button { flex: 1 1 auto; min-height: 44px; }
+  .qc-gallery { grid-template-columns: repeat(auto-fill, minmax(min(100%, 140px), 1fr)); gap: 9px; }
 }
 
 :root {

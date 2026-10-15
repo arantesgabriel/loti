@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import { openDatabase } from "@/lib/db/connection";
-import { purchaseCostCharges, purchaseCostRefundEvents, purchaseCostRefundParticipants, purchaseCostRefunds, purchaseCostTrackings, purchaseItemCosts, purchaseItems, purchases, user, workspaceMembers, workspaces, qcImages, qcImports } from "@/lib/db/schema";
+import { hubbuyExternalItems, purchaseCostCharges, purchaseCostRefundEvents, purchaseCostRefundParticipants, purchaseCostRefunds, purchaseCostTrackings, purchaseItemCosts, purchaseItems, purchases, qcEvents, qcImagePreviews, qcImageSources, qcImages, qcImports, qcPresentations, user, workspaceMembers, workspaces } from "@/lib/db/schema";
 import { packageCostServices } from "@/lib/domain/package-cost-services";
 
 describe("QC migration from the refund baseline", () => {
@@ -13,7 +13,7 @@ describe("QC migration from the refund baseline", () => {
     try {
       mkdirSync(join(migrations, "meta"), { recursive: true });
       const journal = JSON.parse(readFileSync(resolve("drizzle/meta/_journal.json"), "utf8")) as { entries: { tag: string }[] };
-      journal.entries = journal.entries.slice(0, 6); // Existing migrations through 0005, including product refunds.
+      journal.entries = journal.entries.slice(0, 7); // Existing migrations through 0006, including QC V1.
       writeFileSync(join(migrations, "meta/_journal.json"), JSON.stringify(journal));
       for (const entry of journal.entries) copyFileSync(resolve(`drizzle/${entry.tag}.sql`), join(migrations, `${entry.tag}.sql`));
       await migrate(db, { migrationsFolder: migrations });
@@ -43,6 +43,11 @@ describe("QC migration from the refund baseline", () => {
       detail = await costs.closeTracking(closed.id, { expectedRevision: detail.tracking.revision, confirmed: true });
       const open = await costs.startTracking("open-history");
 
+      await db.insert(hubbuyExternalItems).values({ id: "qc-legacy-external", workspaceId: "workspace", purchaseId: "refund-history", purchaseItemId: "refund-item", orderGoodsId: "legacy-goods", orderGoodsNo: null, orderNo: "legacy-order", offerId: null, channel: null, offerUrl: null, skuInfo: "2TB", title: "SSD", quantity: 2, revision: 0, confirmedBy: "alice", confirmedAt: now, createdAt: now, updatedAt: now }).run();
+      await db.insert(qcImages).values({ id: "qc-legacy-image", externalItemId: "qc-legacy-external", sourceUrl: "https://scm.hubbuy.app/qc/legacy.png", sourceUrlHash: "legacy-source-hash", contentSha256: "a".repeat(64), r2Key: "qc/legacy/legacy.png", status: "ready", deleteState: "none", mimeType: "image/png", byteSize: 100, width: 10, height: 10, ordinal: 0, revision: 1, claimToken: null, claimExpiresAt: null, errorCode: null, createdBy: "alice", createdAt: now, updatedAt: now, deletedAt: null, deletedBy: null }).run();
+      await db.insert(qcImageSources).values({ id: "qc-legacy-source", importId: null, externalItemId: "qc-legacy-external", imageId: "qc-legacy-image", sourceUrl: "https://scm.hubbuy.app/qc/legacy.png", sourceUrlHash: "legacy-source-hash", ordinal: 0, state: "ready", attempts: 1, bytesReserved: 0, bytesConsumed: 100, errorCode: null, createdAt: now, updatedAt: now }).run();
+      await db.insert(qcEvents).values({ id: "qc-legacy-event", workspaceId: "workspace", purchaseId: "refund-history", actorId: "alice", eventType: "QC_IMPORT", resultCode: "CONFIRMED", contextJson: JSON.stringify({ importId: "legacy" }), createdAt: now }).run();
+
       const before = {
         tracking: await db.select().from(purchaseCostTrackings).orderBy(purchaseCostTrackings.id).all(),
         items: await db.select().from(purchaseItems).orderBy(purchaseItems.id).all(),
@@ -51,6 +56,9 @@ describe("QC migration from the refund baseline", () => {
         refunds: await db.select().from(purchaseCostRefunds).orderBy(purchaseCostRefunds.id).all(),
         participants: await db.select().from(purchaseCostRefundParticipants).all(),
         events: await db.select().from(purchaseCostRefundEvents).orderBy(purchaseCostRefundEvents.eventOrder).all(),
+        qcImages: await db.select().from(qcImages).all(),
+        qcSources: await db.select().from(qcImageSources).all(),
+        qcEvents: await db.select().from(qcEvents).all(),
       };
       expect(before.tracking.find(row => row.id === closed.id)?.status).toBe("closed");
       expect(before.tracking.find(row => row.id === open.id)?.status).toBe("open");
@@ -66,9 +74,13 @@ describe("QC migration from the refund baseline", () => {
         refunds: await db.select().from(purchaseCostRefunds).orderBy(purchaseCostRefunds.id).all(),
         participants: await db.select().from(purchaseCostRefundParticipants).all(),
         events: await db.select().from(purchaseCostRefundEvents).orderBy(purchaseCostRefundEvents.eventOrder).all(),
+        qcImages: await db.select().from(qcImages).all(),
+        qcSources: await db.select().from(qcImageSources).all(),
+        qcEvents: await db.select().from(qcEvents).all(),
       }).toEqual(before);
       expect(await db.select().from(qcImports).all()).toEqual([]);
-      expect(await db.select().from(qcImages).all()).toEqual([]);
+      expect(await db.select().from(qcPresentations).all()).toEqual([]);
+      expect(await db.select().from(qcImagePreviews).all()).toEqual([]);
       const reread = await packageCostServices(db, "alice").getTracking(closed.id);
       expect(detail.tracking.status).toBe("closed");
       expect(reread).toMatchObject({ tracking: { status: "closed" }, refunds: [{ status: "received", receivedProductCents: 19000, receivedChinaCents: 1800 }] });
