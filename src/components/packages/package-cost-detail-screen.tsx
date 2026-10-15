@@ -15,7 +15,7 @@ import { formatMoney } from "@/lib/domain/money";
 import { splitByWeights } from "@/lib/domain/package-cost-calculations";
 import { costRequest, percentFromBasisPoints, percentInputFromBasisPoints, basisPointsFromPercent, parseCostCents } from "./package-cost-client";
 import { RefundsSection } from "./refunds-section";
-import { QcCostCover, QcGalleryButton, QcImportPanel, useQcCostCovers } from "@/components/qc/qc-components";
+import { QcCostCover, QcCostPhotoStrip, QcImportPanel, useQcCostPresentations } from "@/components/qc/qc-components";
 
 type Detail = CostTrackingView;
 type DetailItem = Detail["items"][number];
@@ -292,14 +292,14 @@ function pendingDetails(item: DetailItem) {
 }
 
 function ProductCostsList({ detail, locked, onDetails, onEdit, onRefund }: { detail: Detail; locked: boolean; onDetails: (itemId: string) => void; onEdit: (item: DetailItem) => void; onRefund: (itemId: string) => void }) {
-  const qcCovers = useQcCostCovers(detail.purchase.id, detail.items.map(item => item.original.id));
+  const qcPresentations = useQcCostPresentations(detail.purchase.id, detail.items.map(item => item.original.id));
   const operationalItems = detail.items.filter(item => (item.calculation?.shippingQuantity ?? item.original.quantity) > 0);
   return <>
     {!!operationalItems.length && <>
     <div className="cost-table-wrap">
       <table className="cost-table"><thead><tr><th>Produto</th><th>Qtd.</th><th>Preço efetivo / un.</th><th>Frete China / un.</th><th>Taxa de pagamento</th><th>Frete Brasil</th><th>Receita</th><th>Total</th><th>Ações</th></tr></thead><tbody>
         {operationalItems.map(item => <tr key={item.id}>
-          <td data-label="Produto"><div className="cost-product-name"><QcCostCover purchaseId={detail.purchase.id} itemName={item.original.name} visualKey={item.original.visualKey} cover={qcCovers[item.original.id]}/><span><strong>{item.original.name}</strong><small>{item.original.variant || "Sem variação"}</small>{item.participants.length > 0 && <small className="cost-product-participants"><UsersRound size={12} aria-hidden="true"/><span>{item.participants.map(person => person.name).join(" · ")}</span></small>}<small className="cost-cell-pending">{item.calculation?.cancelledQuantity ? productUnitsSummary(item) : ""}</small></span></div></td>
+          <td data-label="Produto"><div className="cost-product-name"><QcCostCover purchaseId={detail.purchase.id} itemName={item.original.name} visualKey={item.original.visualKey} cover={qcPresentations[item.original.id]?.coverPreview ?? undefined}/><span><strong>{item.original.name}</strong><small>{item.original.variant || "Sem variação"}</small>{item.participants.length > 0 && <small className="cost-product-participants"><UsersRound size={12} aria-hidden="true"/><span>{item.participants.map(person => person.name).join(" · ")}</span></small>}<QcCostPhotoStrip purchaseId={detail.purchase.id} itemId={item.original.id} itemName={item.original.name} presentation={qcPresentations[item.original.id]}/><small className="cost-cell-pending">{item.calculation?.cancelledQuantity ? productUnitsSummary(item) : ""}</small></span></div></td>
           <td data-label="Quantidade"><span className="cost-quantity"><Hash size={12} aria-hidden="true"/>{item.original.quantity}</span></td>
           <td className={item.effectivePriceState === "pending" ? "cost-value-pending" : undefined} data-label="Preço efetivo / un.">{displayedValue(item.effectivePriceState, item.effectivePriceUnitCents)}</td>
           <td className={item.chinaFreightState === "pending" ? "cost-value-pending" : undefined} data-label="Frete China / un.">{displayedValue(item.chinaFreightState, item.chinaFreightUnitCents)}</td>
@@ -315,7 +315,7 @@ function ProductCostsList({ detail, locked, onDetails, onEdit, onRefund }: { det
       {operationalItems.map(item => {
         const pending = pendingDetails(item);
         return <article className="cost-product-mobile-card" key={item.id}>
-          <div className="cost-product-mobile-title"><QcCostCover purchaseId={detail.purchase.id} itemName={item.original.name} visualKey={item.original.visualKey} cover={qcCovers[item.original.id]}/><span><strong>{item.original.name}</strong><small>{item.original.variant || "Sem variação"}</small>{item.calculation?.cancelledQuantity ? <small>{productUnitsSummary(item)}</small> : null}{item.participants.length > 0 && <small className="cost-product-participants"><UsersRound size={12} aria-hidden="true"/><span>{item.participants.map(person => person.name).join(" · ")}</span></small>}</span></div>
+          <div className="cost-product-mobile-title"><QcCostCover purchaseId={detail.purchase.id} itemName={item.original.name} visualKey={item.original.visualKey} cover={qcPresentations[item.original.id]?.coverPreview ?? undefined}/><span><strong>{item.original.name}</strong><small>{item.original.variant || "Sem variação"}</small>{item.calculation?.cancelledQuantity ? <small>{productUnitsSummary(item)}</small> : null}{item.participants.length > 0 && <small className="cost-product-participants"><UsersRound size={12} aria-hidden="true"/><span>{item.participants.map(person => person.name).join(" · ")}</span></small>}<QcCostPhotoStrip purchaseId={detail.purchase.id} itemId={item.original.id} itemName={item.original.name} presentation={qcPresentations[item.original.id]}/></span></div>
           <dl className="cost-product-mobile-values">
             <div><dt>Quantidade</dt><dd>{unitsLabel(item.original.quantity)}</dd></div>
             <div><dt>Preço efetivo / un.</dt><dd>{displayedValue(item.effectivePriceState, item.effectivePriceUnitCents)}</dd></div>
@@ -327,7 +327,6 @@ function ProductCostsList({ detail, locked, onDetails, onEdit, onRefund }: { det
       })}
     </div>
     </>}
-    <section className="qc-cost-list" aria-label="Controle de qualidade por produto"><h3>Controle de qualidade</h3><p className="muted">Fotos permanecem associadas à ocorrência comprada, mesmo após reembolso ou divisão em pacotes.</p><div>{detail.items.map(item => <div className="qc-cost-row" key={item.id}><span>{item.original.name}{item.original.variant ? ` · ${item.original.variant}` : ""}</span><QcGalleryButton purchaseId={detail.purchase.id} itemId={item.original.id} itemName={item.original.name} canManageHere/></div>)}</div></section>
   </>;
 }
 

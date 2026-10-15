@@ -25,7 +25,7 @@ Only the specific QC gallery may currently render validated source photos from `
 
 ### Authorized cost-line presentation — QC Phase 3
 
-After the user's explicit authorization of Phase 3, only the selected shared QC cover and its persisted private reduced preview may appear in product cost lines/cards inside **Pacotes e custos**. A missing cover, missing preview, or failed private preview read keeps the functional category marker. Do not show other gallery photos, source URLs, or originals in these lines/cards. No other operational surface is included. Purchase snapshots, cost values, packages, payment state, refunds and totals remain independent. See [24 — HubBuy QC import](24_HUBBUY_QC_IMPORT_PLAN.md).
+After the user's explicit authorization of Phase 3, the selected shared QC cover and up to three persisted private reduced previews may appear in product cost lines/cards inside **Pacotes e custos**. The cover replaces the category marker at a slightly larger square size; thumbnails sit below the product owner with square borders. “Ver mais” opens the shared photo viewer directly, and each thumbnail opens its own image. The viewer uses a quiet dark stage, a small counter, overlaid arrows, a thumbnail strip and compact cover/delete actions; there is no intermediate gallery grid. The main viewer preserves the whole photo's aspect ratio. A missing cover, preview, or failed private preview read keeps the functional category marker or omits the failed thumbnail. Do not show source URLs or originals in cost lines/cards. No other operational surface is included. Purchase snapshots, cost values, packages, payment state, refunds and totals remain independent. See [24 — HubBuy QC import](24_HUBBUY_QC_IMPORT_PLAN.md).
 
 ## Initial categories
 

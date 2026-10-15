@@ -426,11 +426,12 @@ Esta evolução acrescenta uma apresentação compartilhada por item finalizado 
 
 Em 15/10/2026, o usuário autorizou esta fase. A entrega fica restrita às linhas de produto da tabela desktop e aos cartões responsivos de custos em **Pacotes e custos**:
 
-- Mostrar somente a capa QC compartilhada atualmente selecionada para o item, usando seu preview WebP privado já persistido. Não buscar o original, gerar preview durante leitura, emitir URL assinada ou usar `goodsList[].image`.
+- Mostrar a capa QC compartilhada atualmente selecionada no marcador do produto, usando seu preview WebP privado já persistido. Exibir também até três previews WebP privados em miniaturas quadradas com borda, sob o proprietário do produto; quando o cover selecionado não estiver entre os três previews iniciais, incluí-lo e completar a faixa com os dois primeiros. Não buscar o original, gerar preview durante leitura, emitir URL assinada ou usar `goodsList[].image`.
 - O lote de apresentações continua limitado a 20 IDs por requisição. A resposta inclui separadamente o preview da capa selecionada, mesmo quando ela não está entre as três primeiras imagens da galeria.
 - O preview mantém autorização de sessão/membership por item e é carregado pela rota binária privada, com `no-store` e `no-referrer`. Falta de capa, preview ausente/falho, remoção ou falha de leitura preservam o marcador funcional de categoria.
 - Seleção de capa, exclusão/fallback e correção de vínculo invalidam e recarregam a apresentação de custos. O usuário sem acesso QC continua vendo o mesmo gate de autorização da rota de preview.
-- Nenhuma foto é adicionada ao resumo/linha separada de Controle de qualidade, à Compra atual, Histórico, Favoritos, drawers de produto ou outros cartões/listas. A galeria e o visualizador continuam sendo as únicas superfícies que exibem fotos fora das linhas/cartões de custos explicitamente autorizadas.
+- O botão “Ver mais” abre diretamente a primeira foto no visualizador, sem uma grade intermediária. Cada miniatura abre sua própria imagem, inclusive quando estiver em uma página posterior. O visualizador prioriza a imagem inteira sobre fundo escuro, com contador discreto, setas sobrepostas, miniaturas e ações compactas de capa/exclusão. A seção separada “Controle de qualidade” foi removida. Nenhuma foto é adicionada à Compra atual, Histórico, Favoritos, drawers de produto ou outros cartões/listas. A galeria e o visualizador continuam sendo as únicas superfícies que exibem fotos fora das linhas/cartões de custos explicitamente autorizadas.
+- O visualizador mantém a proporção intrínseca da foto e limita largura/altura à área disponível, sem cortar o conteúdo para preencher o card.
 - Nenhum dado financeiro, snapshot, refund, pagamento, quantidade, alocação, estado logístico ou schema/migration é alterado por esta apresentação.
 
 ### Drawer de importação — refatoração visual de 15/10/2026
