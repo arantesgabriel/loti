@@ -3,8 +3,8 @@ import type { CostTrackingView } from "./package-cost-reading";
 export type CostSectionKey = "products" | "packages" | "people";
 export type CostNextAction = { label: string; section: CostSectionKey; target: string; packageId?: string };
 
-function unitsLabel(count: number) {
-  return `${count} ${count === 1 ? "unidade" : "unidades"}`;
+function countedUnits(count: number, singular: string, plural: string) {
+  return `${count} ${count === 1 ? singular : plural}`;
 }
 
 function packageLabel(name: string) {
@@ -90,8 +90,8 @@ export function packageCostPresentation(detail: CostTrackingView) {
     isPartial,
     productsSummary: [
       `${detail.items.length} ${detail.items.length === 1 ? "produto" : "produtos"}`,
-      unitsLabel(unitCount),
-      ...(detail.calculation.summary.cancelledUnits ? [`${unitsLabel(detail.calculation.summary.cancelledUnits)} canceladas`] : []),
+      countedUnits(unitCount, "unidade comprada", "unidades compradas"),
+      ...(detail.calculation.summary.cancelledUnits ? [countedUnits(detail.calculation.summary.cancelledUnits, "unidade cancelada", "unidades canceladas")] : []),
       ...(detail.refundsSummary.requestedCount ? [`${detail.refundsSummary.requestedCount} ${detail.refundsSummary.requestedCount === 1 ? "reembolso solicitado" : "reembolsos solicitados"}`] : []),
       ...(pricePending ? [missingValueLabel(pricePending, "preço efetivo", "preços efetivos")] : []),
       ...(chinaPending ? [missingValueLabel(chinaPending, "frete China", "fretes China")] : []),

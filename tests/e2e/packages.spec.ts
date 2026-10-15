@@ -5,10 +5,17 @@ import { login } from "./helpers";
 
 test("finalized purchase gets a separate cost tracking with payment, package, and reopen flow", async ({ page }) => {
   const screenshotDir = resolve(process.cwd(), "artifacts/qa/packages-costs-ux");
+  const mobileUxScreenshotDir = resolve(process.cwd(), "artifacts/qa/mobile-ux/after");
   async function capture(name: string, fullPage = false) {
     if (process.env.LOTI_CAPTURE_PACKAGES_QA !== "1") return;
     mkdirSync(screenshotDir, { recursive: true });
     await page.screenshot({ path: join(screenshotDir, `${name}.png`), fullPage });
+  }
+  async function captureMobileUx(name: string, fullPage = false) {
+    if (process.env.LOTI_CAPTURE_MOBILE_UX !== "1") return;
+    mkdirSync(mobileUxScreenshotDir, { recursive: true });
+    await page.locator("[data-sonner-toast]").first().waitFor({ state: "hidden", timeout: 5000 }).catch(() => undefined);
+    await page.screenshot({ path: join(mobileUxScreenshotDir, `${name}.png`), fullPage });
   }
 
   await login(page, "profile-qa", "Profile-QA-Old-2026!");
@@ -32,8 +39,22 @@ test("finalized purchase gets a separate cost tracking with payment, package, an
   await expect(page.getByRole("heading", { name: "Custos QA outubro" })).toBeVisible();
   await expect(page.getByText("Conta HubBuy: hubbuy-qa@example.test")).toBeVisible();
   await capture("initial-1440");
+  await captureMobileUx("packages-first-screen-1440");
   await page.setViewportSize({ width: 390, height: 844 });
   await capture("initial-390", false);
+  await captureMobileUx("packages-first-screen-390", false);
+  await page.setViewportSize({ width: 320, height: 640 });
+  await expect(page.locator(".cost-summary-card")).toBeInViewport();
+  await expect(page.locator('[data-cost-target="next-action"]')).toBeInViewport();
+  const firstViewport = await page.evaluate(() => {
+    const summary = document.querySelector(".cost-summary-card")!.getBoundingClientRect();
+    const action = document.querySelector('[data-cost-target="next-action"]')!.getBoundingClientRect();
+    return { width: window.innerWidth, height: window.innerHeight, scrollWidth: document.documentElement.scrollWidth, summaryBottom: summary.bottom, actionBottom: action.bottom };
+  });
+  expect(firstViewport.scrollWidth).toBeLessThanOrEqual(firstViewport.width);
+  expect(firstViewport.summaryBottom).toBeLessThanOrEqual(firstViewport.height);
+  expect(firstViewport.actionBottom).toBeLessThanOrEqual(firstViewport.height);
+  await captureMobileUx("packages-first-screen-320", false);
   await page.setViewportSize({ width: 1440, height: 1000 });
   const productsSection = page.getByRole("button", { name: /Produtos e pagamento/ });
   await expect(productsSection).toHaveAttribute("aria-expanded", "false");
@@ -45,18 +66,20 @@ test("finalized purchase gets a separate cost tracking with payment, package, an
   await packagesSection.click();
   await expect(page.getByRole("button", { name: /Divisão por pessoa/ })).toHaveAttribute("aria-expanded", "false");
   await page.getByRole("button", { name: /Informar frete China de Tênis/ }).click();
-  await expect(page.locator(".cost-table").getByRole("button", { name: "Editar valores", exact: true })).toBeFocused();
-  for (let column = 1; column <= 7; column++) await expect(page.locator(".cost-table thead th").nth(column)).toHaveCSS("text-align", "right");
+  await expect(page.locator(".cost-table").getByRole("button", { name: "Editar", exact: true })).toBeFocused();
+  for (let column = 1; column <= 6; column++) await expect(page.locator(".cost-table thead th").nth(column)).toHaveCSS("text-align", "right");
   await capture("products-1440");
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator(".cost-product-mobile-list")).toBeVisible();
   await expect(page.locator(".cost-table-wrap")).toBeHidden();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.locator(".cost-product-mobile-card").evaluate(element => element.scrollIntoView({ block: "start" }));
   await capture("products-390", false);
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.locator(".cost-table").getByRole("button", { name: "Ver composição", exact: true }).click();
   const composition = page.getByRole("dialog");
-  await expect(composition.getByRole("heading", { name: "Composição · Tênis de teste" })).toBeVisible();
+  await expect(composition.getByRole("heading", { name: "Composição dos custos" })).toBeVisible();
+  await expect(composition.getByText("Tênis de teste", { exact: true })).toBeVisible();
   await expect(composition.getByText("Preço efetivo", { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(composition).toHaveCSS("opacity", "1");
@@ -64,14 +87,40 @@ test("finalized purchase gets a separate cost tracking with payment, package, an
   await page.setViewportSize({ width: 1440, height: 1000 });
   await composition.getByRole("button", { name: "Fechar" }).click();
   await expect(page.locator(".cost-table").getByRole("button", { name: "Ver composição", exact: true })).toBeFocused();
-  await page.locator(".cost-table").getByRole("button", { name: "Editar valores", exact: true }).click();
+  await page.locator(".cost-table").getByRole("button", { name: "Editar", exact: true }).click();
   let dialog = page.getByRole("dialog");
   await dialog.getByLabel("Frete China por unidade").selectOption("known");
   await dialog.getByLabel("Valor em R$").nth(1).fill("10,00");
   await dialog.getByRole("button", { name: "Salvar custos", exact: true }).click();
   await page.locator(".cost-product-payment select").selectOption("pix");
   await page.getByRole("button", { name: "Marcar como pago", exact: true }).click();
-  await page.locator(".cost-table").getByRole("button", { name: "Editar valores", exact: true }).click();
+  const payment = page.locator(".cost-product-payment");
+  await expect(payment.locator(".cost-product-payment-summary > div")).toHaveCount(4);
+  await expect(payment.getByText("Pago", { exact: true })).toBeVisible();
+  await expect(payment.getByText("Parcial", { exact: true })).toBeVisible();
+  await expect(payment.getByRole("status", { name: "Pagamento pago" })).toBeVisible();
+  await expect(payment.getByRole("button", { name: "Pagamento confirmado", exact: true })).toHaveCount(0);
+  await expect(payment.getByText("Reembolso recebido", { exact: true })).toHaveCount(0);
+  await expect(payment.getByText("A receber", { exact: true })).toHaveCount(0);
+  await expect(payment.getByText("Informações de reembolso aparecem apenas quando houver itens reembolsados.")).toHaveCount(0);
+  await page.getByText("Custos do produto atualizados", { exact: true }).waitFor({ state: "hidden" });
+  for (const [width, height] of [[320, 640], [360, 800], [390, 844], [430, 932], [768, 1000], [1440, 1000]] as const) {
+    await page.setViewportSize({ width, height });
+    const dimensions = await payment.evaluate(element => ({
+      width: element.clientWidth,
+      content: element.scrollWidth,
+      offenders: [...element.querySelectorAll<HTMLElement>("*")].map(child => {
+        const bounds = child.getBoundingClientRect();
+        return { tag: child.tagName, className: child.className, text: child.innerText?.slice(0, 60), left: Math.round(bounds.left), right: Math.round(bounds.right), width: child.clientWidth, scrollWidth: child.scrollWidth };
+      }).filter(child => child.scrollWidth > child.width + 1 || child.right > element.getBoundingClientRect().right + 1 || child.left < element.getBoundingClientRect().left - 1).slice(0, 10),
+    }));
+    expect(dimensions.content, `Payment overflow at ${width}px: ${JSON.stringify(dimensions.offenders)}`).toBeLessThanOrEqual(dimensions.width);
+    if (process.env.LOTI_CAPTURE_PACKAGES_QA === "1") {
+      mkdirSync(screenshotDir, { recursive: true });
+      await payment.screenshot({ path: join(screenshotDir, `product-payment-${width}.png`) });
+    }
+  }
+  await page.locator(".cost-table").getByRole("button", { name: "Editar", exact: true }).click();
   dialog = page.getByRole("dialog");
   await dialog.getByLabel("Valor em R$").first().fill("101,00");
   await dialog.getByRole("button", { name: "Salvar custos", exact: true }).click();
@@ -88,7 +137,8 @@ test("finalized purchase gets a separate cost tracking with payment, package, an
   await page.locator(".cost-package-toggle").evaluate(element => element.scrollIntoView({ block: "start" }));
   await capture("package-open-390", false);
   await expect(page.getByLabel("Tênis de teste neste pacote")).toBeHidden();
-  await page.getByRole("button", { name: "Editar conteúdo", exact: true }).click();
+  await page.getByRole("button", { name: "Ações para Pacote 1", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Editar conteúdo", exact: true }).click();
   const contentEditor = page.getByRole("dialog");
   await contentEditor.getByLabel("Tênis de teste neste pacote").fill("0");
   await contentEditor.getByRole("button", { name: "Cancelar", exact: true }).click();
@@ -102,6 +152,7 @@ test("finalized purchase gets a separate cost tracking with payment, package, an
   await expect(dialog).toHaveCSS("opacity", "1");
   await dialog.evaluate(element => { element.scrollTop = 0; });
   await capture("charge-form-390", false);
+  await captureMobileUx("charge-form-390-after", false);
   await dialog.getByLabel("Estado do valor").selectOption("known");
   await dialog.getByLabel("Valor em R$").fill("25,00");
   await dialog.getByLabel("Método de pagamento").selectOption("pix");
@@ -114,12 +165,14 @@ test("finalized purchase gets a separate cost tracking with payment, package, an
   await page.getByRole("button", { name: "Encerrar custos", exact: true }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Encerrar custos", exact: true }).click();
   await expect(page.getByText("Custos encerrados", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Editar", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Mais ações para/ })).toHaveCount(0);
   await page.getByRole("button", { name: "Reabrir acompanhamento", exact: true }).click();
   await page.getByLabel("Motivo").fill("Ajuste solicitado na revisão QA");
   await page.getByRole("button", { name: "Confirmar reabertura", exact: true }).click();
   await expect(page.getByText("Custos abertos", { exact: true })).toBeVisible();
-  for (const width of [320, 390, 768, 1024, 1440]) {
-    await page.setViewportSize({ width, height: width <= 390 ? 844 : 1000 });
+  for (const [width, height] of [[320, 640], [360, 800], [390, 844], [430, 932], [768, 1000], [1440, 1000]] as const) {
+    await page.setViewportSize({ width, height });
     const dimensions = await page.evaluate(() => ({ viewport: window.innerWidth, content: document.documentElement.scrollWidth }));
     expect(dimensions.content, `Horizontal overflow at ${dimensions.viewport}px: ${dimensions.content}px`).toBeLessThanOrEqual(dimensions.viewport);
   }

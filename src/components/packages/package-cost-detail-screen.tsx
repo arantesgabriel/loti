@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, CalendarDays, ChevronDown, CircleCheck, CircleDollarSign, Clock3, Hash, LockKeyhole, Package, Plus, RotateCcw, UserRound, UsersRound } from "lucide-react";
+import { ArrowLeft, ArrowRight, CalendarDays, ChevronDown, CircleCheck, CircleDollarSign, Clock3, Hash, LockKeyhole, MoreVertical, Package, Pencil, Plus, RotateCcw, Trash2, UserRound, UsersRound } from "lucide-react";
 import { toast } from "sonner";
 import { Avatar, EmptyState } from "@/components/shared";
 import { Button } from "@/components/ui/button";
@@ -40,7 +41,12 @@ function calculatedTotal(total: number | null | undefined, partial: number | nul
   if (total !== null && total !== undefined) return formatMoney(total);
   return hasKnownAmount ? formatMoney(partial ?? 0) : "Falta informar";
 }
-function amountInput(value: number | null) { return value === null ? "" : (value / 100).toFixed(2); }
+function amountInput(value: number | null) { return value === null ? "" : (value / 100).toFixed(2).replace(".", ","); }
+function productUnitsSummary(item: DetailItem) {
+  const cancelled = item.calculation?.cancelledQuantity ?? 0;
+  const shipping = item.calculation?.shippingQuantity ?? item.original.quantity;
+  return `${item.original.quantity} ${item.original.quantity === 1 ? "unidade comprada" : "unidades compradas"} · ${cancelled} ${cancelled === 1 ? "unidade cancelada" : "unidades canceladas"} · ${shipping} ${shipping === 1 ? "unidade enviável" : "unidades enviáveis"}`;
+}
 export function PackageCostDetailScreen({ trackingId }: { trackingId: string }) {
   const router = useRouter();
   const [detail, setDetail] = useState<Detail | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState("");
@@ -205,54 +211,53 @@ export function PackageCostDetailScreen({ trackingId }: { trackingId: string }) 
     </div>
 
     <div className="cost-summary-card">
-      <div className="cost-summary-total"><span>{presentation.isPartial ? "Total parcial" : "Total final"}</span><strong>{presentation.hasKnownAmount ? formatMoney(presentation.totalCents) : "Falta informar"}</strong></div>
+      <div className="cost-summary-total"><div><span>Custo líquido atual</span><span className="cost-summary-status" role="status">{presentation.isPartial ? "Parcial" : "Final"}</span></div><strong>{presentation.hasKnownAmount ? formatMoney(presentation.totalCents) : "Falta informar"}</strong></div>
       {nextAction && <div className="cost-next-action"><span>Próxima tarefa</span><Button variant={nextAction.target === "close-costs" ? "default" : "outline"} data-cost-target="next-action" onClick={openNextAction}>{nextAction.label}</Button></div>}
     </div>
 
     <ProgressiveSection id="products" title="Produtos e pagamento" summary={presentation.productsSummary} open={openSections.products} onToggle={() => setOpenSections(current => ({ ...current, products: !current.products }))}>
     <div className="cost-section-content" aria-labelledby="product-payment-title">
-      <div className="cost-section-heading"><div><h2 id="product-payment-title"><CircleDollarSign size={19}/>Pagamento dos produtos</h2><p className="muted">Uma cobrança para o preço efetivo e o frete China de toda a compra.</p></div></div>
       <div className="cost-product-payment">
+        <div className="cost-product-payment-heading"><span className="cost-product-payment-icon" aria-hidden="true"><CircleDollarSign size={24}/></span><div><h2 id="product-payment-title">Pagamento dos produtos</h2><p className="muted">Uma cobrança para o preço efetivo e o frete China de toda a compra.</p></div></div>
         {products.baseCents === null && <p className="cost-payment-requirement">Para configurar e confirmar esta cobrança, informe os campos pendentes: {detail.items.flatMap(item => [item.effectivePriceState === "pending" ? `${item.original.name} · preço efetivo` : null, item.chinaFreightState === "pending" ? `${item.original.name} · frete China` : null].filter((value): value is string => value !== null)).join("; ") || "a composição dos produtos"}.</p>}
         <div className="cost-product-payment-summary" role="group" aria-label="Resumo da cobrança dos produtos">
           <div className="cost-product-payment-metric"><span className="cost-detail-label">Pagamento original · base</span><strong>{money(products.baseCents)}</strong></div>
           <div className="cost-product-payment-metric"><span className="cost-detail-label">Taxa {productsCharge?.feeBps === null || productsCharge?.feeBps === undefined ? "pendente" : `${percentFromBasisPoints(productsCharge.feeBps)}%`}</span><strong>{money(productsRate)}</strong></div>
-          <div className="cost-product-payment-metric total"><span className="cost-detail-label">Total a pagar</span><div className="cost-product-payment-total"><strong>{money(products.totalCents)}</strong><span className={`cost-products-payment-status ${productsPaid ? "paid" : "pending"}`} role="status" aria-label={productsPaid ? "Pagamento pago" : "Pagamento a pagar"}>{productsPaid ? <CircleCheck size={13} aria-hidden="true"/> : <Clock3 size={13} aria-hidden="true"/>}{productsPaid ? "Pago" : "A pagar"}</span></div></div>
+          <div className="cost-product-payment-metric total"><span className="cost-detail-label">{productsPaid ? "Total pago" : "Total a pagar"}</span><div className="cost-product-payment-total"><strong>{money(products.totalCents)}</strong><span className={`cost-products-payment-status ${productsPaid ? "paid" : "pending"}`} role="status" aria-label={productsPaid ? "Pagamento pago" : "Pagamento a pagar"}>{productsPaid ? <CircleCheck size={13} aria-hidden="true"/> : <Clock3 size={13} aria-hidden="true"/>}{productsPaid ? "Pago" : "A pagar"}</span></div></div>
+          <div className="cost-product-payment-metric"><span className="cost-detail-label">Custo líquido atual</span><div className="cost-product-payment-total"><strong>{formatMoney(detail.calculation.summary.totalCents ?? detail.calculation.summary.partialCents)}</strong>{detail.calculation.summary.totalCents === null && <span className="cost-products-payment-status pending"><Clock3 size={13} aria-hidden="true"/>Parcial</span>}</div></div>
         </div>
-        <div className="refund-financial-summary" aria-label="Composição atual dos custos de produtos">
-          <div><span>Custo bruto conhecido</span><strong>{formatMoney(detail.calculation.summary.grossPartialCents)}</strong></div>
-          <div><span>Reembolso recebido</span><strong>{formatMoney(detail.calculation.summary.receivedRefundCents)}</strong></div>
-          <div><span>A receber</span><strong>{formatMoney(detail.calculation.summary.requestedRefundCents)}</strong></div>
-          <div><span>Custo líquido atual</span><strong>{detail.calculation.summary.totalCents === null ? `Parcial ${formatMoney(detail.calculation.summary.partialCents)}` : formatMoney(detail.calculation.summary.totalCents)}</strong></div>
-        </div>
-        <p className="muted cost-hint">O pagamento original dos produtos permanece registrado como pago. Valores solicitados não reduzem o custo; apenas recebimentos confirmados geram crédito.</p>
+        <div className="cost-product-payment-settings">
+        <div className="cost-product-payment-metric cost-product-payment-gross"><span className="cost-detail-label">Custo bruto conhecido</span><strong>{formatMoney(detail.calculation.summary.grossPartialCents)}</strong></div>
         <div className={`cost-product-payment-controls ${locked ? "locked" : ""}`} role="group" aria-label="Ações do pagamento dos produtos">
           <label>Método<select data-cost-target="products-method" disabled={!!locked || busy || products.baseCents === null} value={productsCharge?.paymentMethod ?? ""} onChange={event => void saveProductMethod(event.target.value)}><option value="">Escolher método</option><option value="pix">Pix · padrão {percentFromBasisPoints(detail.settings.pixBps)}%</option><option value="card">Cartão · padrão {percentFromBasisPoints(detail.settings.cardBps)}%</option></select></label>
           {!locked && productsCharge && <Button className="cost-payment-edit" variant="outline" disabled={busy || products.baseCents === null} onClick={() => setChargeEditor({ id: productsCharge.id, type: "products", name: "Pagamento dos produtos" })}>Editar taxa</Button>}
-          {!locked && productsCharge && <Button className="cost-payment-confirm" data-cost-target="products-paid" variant={productsCharge.paymentStatus === "paid" ? "outline" : "default"} disabled={busy || productsCharge.paymentStatus === "paid" || products.totalCents === null || (products.baseCents ?? 0) > 0 && !productsCharge.paymentMethod} onClick={() => void markPaid(productsCharge.id)}>{productsCharge.paymentStatus === "paid" ? "Pagamento confirmado" : "Marcar como pago"}</Button>}
+          {!locked && productsCharge?.paymentStatus === "pending" && <Button className="cost-payment-confirm" data-cost-target="products-paid" disabled={busy || products.totalCents === null || (products.baseCents ?? 0) > 0 && !productsCharge.paymentMethod} onClick={() => void markPaid(productsCharge.id)}>Marcar como pago</Button>}
+          {productsPaid && <span className="cost-payment-readonly" role="status"><CircleCheck size={14} aria-hidden="true"/>Pagamento confirmado</span>}
         </div>
+        </div>
+        <p className="muted cost-hint">O percentual fica registrado nesta cobrança mesmo se o padrão do grupo mudar.</p>
+        {detail.calculation.summary.receivedRefundCents > 0 && <p className="cost-product-payment-credit" role="status"><span>Crédito recebido</span><strong>{formatMoney(detail.calculation.summary.receivedRefundCents)}</strong></p>}
       </div>
-      <p className="muted cost-hint">O percentual fica registrado nesta cobrança mesmo se o padrão do grupo mudar.</p>
     </div>
     {shippingUnits > 0 && <div className="cost-section-content" aria-labelledby="items-title">
-      <div className="cost-section-heading"><div><h2 id="items-title">Custos por produto</h2><p className="muted">Valores unitários de preço e frete China; os demais encargos são rateados pelas unidades.</p></div><strong>{detail.calculation.summary.totalCents === null ? "Total parcial " : "Total final "}{detail.calculation.summary.hasKnownAmount ? formatMoney(detail.calculation.summary.totalCents ?? detail.calculation.summary.partialCents) : "Falta informar"}</strong></div>
+      <div className="cost-section-heading"><div><h2 id="items-title">Custos por produto</h2><p className="muted">Valores unitários de preço e frete China; os demais encargos são rateados pelas unidades.</p></div><div className="cost-products-total"><span>{detail.calculation.summary.totalCents === null ? "Total parcial" : "Total final"}</span><strong>{detail.calculation.summary.hasKnownAmount ? formatMoney(detail.calculation.summary.totalCents ?? detail.calculation.summary.partialCents) : "Falta informar"}</strong></div></div>
       <ProductCostsList detail={detail} locked={!!locked} onDetails={setItemDetailId} onEdit={item => setItemEditor({ id: item.id, name: item.original.name })} onRefund={setRefundItemId}/>
     </div>}
     <RefundsSection key={refundItemId ?? "closed"} detail={detail} locked={!!locked} busy={busy} requestItemId={refundItemId} onRequestClose={() => setRefundItemId(null)} onDetails={setItemDetailId} mutate={mutate}/>
     </ProgressiveSection>
 
     <ProgressiveSection id="packages" title="Pacotes" summary={presentation.packagesSummary} open={openSections.packages} onToggle={() => setOpenSections(current => ({ ...current, packages: !current.packages }))}>
-    <div className="cost-section-content" aria-labelledby="packages-title">
-      <div className="cost-section-heading"><div><h2 id="packages-title"><Package size={19}/>Pacotes</h2><p className="muted">Unidades enviáveis atribuídas: {assignedUnits} de {shippingUnits}{remainingUnits ? ` · ${remainingUnits} sem pacote` : " · Tudo atribuído"}</p></div>{!locked && <Button data-cost-target="package-create" variant="outline" onClick={() => void startCreatePackage()} disabled={busy}><Plus size={16}/>Novo pacote</Button>}</div>
+    <div className="cost-section-content" aria-labelledby="cost-section-packages-title">
+      <div className="cost-section-heading"><div><p className="muted">Unidades enviáveis atribuídas: {assignedUnits} de {shippingUnits}{remainingUnits ? ` · ${remainingUnits} sem pacote` : " · Tudo atribuído"}</p></div>{!locked && <Button data-cost-target="package-create" variant="outline" onClick={() => void startCreatePackage()} disabled={busy}><Plus size={16}/>Novo pacote</Button>}</div>
       {!detail.packages.length ? <EmptyState icon={Package} title="Adicione um pacote" description="Separe os produtos como chegam em cada envio."/> : <div className="cost-package-list">{detail.packages.map(pkg => <PackageCard key={pkg.id} pkg={pkg} detail={detail} expanded={!!expandedPackages[pkg.id]} onExpandedChange={open => setExpandedPackages(current => ({ ...current, [pkg.id]: open }))} locked={!!locked} busy={busy} savePackage={savePackage} saveAllocations={draft => saveAllocations(pkg.id, draft)} openCharge={charge => setChargeEditor(charge)} markPaid={markPaid} mutate={mutate}/>)}</div>}
     </div>
     </ProgressiveSection>
 
     <ProgressiveSection id="people" title="Divisão por pessoa" summary={presentation.peopleSummary} open={openSections.people} onToggle={() => setOpenSections(current => ({ ...current, people: !current.people }))}>
-    <div className="cost-section-content" aria-labelledby="people-totals-title">
-      <div className="cost-section-heading"><div><h2 id="people-totals-title">Divisão por pessoa</h2><p className="muted">Parcelas dos produtos compartilhados e seus encargos.</p></div></div>
+    <div className="cost-section-content" aria-labelledby="cost-section-people-title">
+      <div className="cost-section-heading"><div><p className="muted">Parcelas dos produtos compartilhados e seus encargos.</p></div></div>
       {detail.calculation.summary.undistributedCents > 0 && <p className="cost-undistributed" role="status">Há {formatMoney(detail.calculation.summary.undistributedCents)} em valores conhecidos sem divisão definida. Os totais pessoais exibem apenas as parcelas que já podem ser calculadas.</p>}
-      <ul className="cost-people-list">{detail.memberTotals.map(person => <li key={person.personId}><Avatar name={person.name}/><span><strong>{person.name}</strong><small>{person.personalUnits} {person.personalUnits === 1 ? "unidade enviável pessoal" : "unidades enviáveis pessoais"}{person.sharedItems ? ` · ${person.sharedItems} compartilhado(s)` : ""} · Crédito ${formatMoney(person.receivedRefundCents)}{person.requestedRefundCents ? ` · A receber ${formatMoney(person.requestedRefundCents)}` : ""}</small></span><strong>{person.pending ? person.hasKnownAmount ? `Parcial ${formatMoney(person.totalCents)}` : "Falta informar" : formatMoney(person.totalCents)}</strong></li>)}</ul>
+      <ul className="cost-people-list">{detail.memberTotals.map(person => <li key={person.personId}><Avatar name={person.name}/><span><strong>{person.name}</strong><small>{person.personalUnits} {person.personalUnits === 1 ? "unidade enviável pessoal" : "unidades enviáveis pessoais"}{person.sharedItems ? ` · ${person.sharedItems} ${person.sharedItems === 1 ? "item compartilhado" : "itens compartilhados"}` : ""} · Crédito recebido: {formatMoney(person.receivedRefundCents)}{person.requestedRefundCents ? ` · A receber ${formatMoney(person.requestedRefundCents)}` : ""}</small></span><strong>{person.pending ? person.hasKnownAmount ? `Parcial ${formatMoney(person.totalCents)}` : "Falta informar" : formatMoney(person.totalCents)}</strong></li>)}</ul>
     </div>
     </ProgressiveSection>
 
@@ -260,7 +265,7 @@ export function PackageCostDetailScreen({ trackingId }: { trackingId: string }) 
     {itemDetailId && <ItemBreakdownSurface detail={detail} itemId={itemDetailId} onClose={() => setItemDetailId(null)} />}
     {chargeEditor && <ChargeSurface key={chargeEditor.id} detail={detail} editor={chargeEditor} busy={busy} onClose={() => setChargeEditor(null)} onSave={async input => { const ok = await mutate("charge.save", { chargeId: chargeEditor.id, input }, true); if (ok) { setChargeEditor(null); toast.success("Cobrança atualizada"); } }} />}
     <Confirm open={closeConfirm} title="Encerrar acompanhamento?" description="Os custos ficarão somente para leitura. Você poderá reabrir depois informando o motivo." label="Encerrar custos" busy={busy} onOpenChange={setCloseConfirm} onConfirm={() => void closeTracking()} />
-    <Surface open={reopenOpen} onOpenChange={value => { if (!busy) setReopenOpen(value); }} title="Reabrir acompanhamento" description="Informe por que os custos precisam de ajustes. A reabertura fica registrada no histórico."><form onSubmit={event => void reopenTracking(event)}><label>Motivo<textarea required maxLength={1000} rows={3} value={reopenReason} onChange={event => setReopenReason(event.target.value)} /></label><div className="form-actions"><Button type="button" variant="outline" onClick={() => setReopenOpen(false)} disabled={busy}>Cancelar</Button><Button type="submit" disabled={busy || !reopenReason.trim()}>{busy ? "Reabrindo…" : "Confirmar reabertura"}</Button></div></form></Surface>
+    <Surface open={reopenOpen} mobileFullScreen onOpenChange={value => { if (!busy) setReopenOpen(value); }} title="Reabrir acompanhamento" description="Informe por que os custos precisam de ajustes. A reabertura fica registrada no histórico."><form onSubmit={event => void reopenTracking(event)}><label>Motivo<textarea required maxLength={1000} rows={3} value={reopenReason} onChange={event => setReopenReason(event.target.value)} /></label><div className="form-actions"><Button type="button" variant="outline" onClick={() => setReopenOpen(false)} disabled={busy}>Cancelar</Button><Button type="submit" disabled={busy || !reopenReason.trim()}>{busy ? "Reabrindo…" : "Confirmar reabertura"}</Button></div></form></Surface>
     <Confirm open={!!resetConfirm} title="Voltar pagamento para pendente?" description="A edição altera o valor desta cobrança. Será preciso confirmar novamente o pagamento depois de salvar." label="Salvar e invalidar pagamento" danger busy={busy} onOpenChange={value => { if (!value && !busy) setResetConfirm(null); }} onConfirm={() => void confirmReset()} />
   </>;
 }
@@ -292,17 +297,17 @@ function ProductCostsList({ detail, locked, onDetails, onEdit, onRefund }: { det
   return <>
     {!!operationalItems.length && <>
     <div className="cost-table-wrap">
-      <table className="cost-table"><thead><tr><th>Produto</th><th>Qtd.</th><th>Preço efetivo / un.</th><th>Frete China / un.</th><th>Taxa de pagamento</th><th>Frete Brasil</th><th>Receita</th><th>Total</th><th><span className="sr-only">Ações</span></th></tr></thead><tbody>
+      <table className="cost-table"><thead><tr><th>Produto</th><th>Qtd.</th><th>Preço efetivo / un.</th><th>Frete China / un.</th><th>Taxa de pagamento</th><th>Frete Brasil</th><th>Receita</th><th>Total</th><th>Ações</th></tr></thead><tbody>
         {operationalItems.map(item => <tr key={item.id}>
-          <td data-label="Produto"><div className="cost-product-name"><QcCostCover purchaseId={detail.purchase.id} itemName={item.original.name} visualKey={item.original.visualKey} cover={qcCovers[item.original.id]}/><span><strong>{item.original.name}</strong><small>{item.original.variant || "Sem variação"}</small>{item.participants.length > 0 && <small className="cost-product-participants"><UsersRound size={12} aria-hidden="true"/><span>{item.participants.map(person => person.name).join(" · ")}</span></small>}</span></div></td>
-          <td data-label="Quantidade"><span className="cost-quantity"><Hash size={12} aria-hidden="true"/>{item.original.quantity}</span><small className="cost-cell-pending">{item.calculation?.cancelledQuantity ? `${item.original.quantity} compradas · ${item.calculation.cancelledQuantity} cancelada(s) · ${item.calculation.shippingQuantity} para envio` : ""}</small></td>
-          <td data-label="Preço efetivo / un.">{displayedValue(item.effectivePriceState, item.effectivePriceUnitCents)}</td>
-          <td data-label="Frete China / un.">{displayedValue(item.chinaFreightState, item.chinaFreightUnitCents)}</td>
-          <td data-label="Taxa de pagamento">{money(sumComponents(item, "Taxa"))}</td>
-          <td data-label="Frete Brasil">{money(sumComponents(item, "Frete Brasil"))}</td>
-          <td data-label="Receita">{money(sumComponents(item, "Receita"))}</td>
-          <td data-label="Total">{item.calculation?.totalCents === null && <small className="cost-cell-pending">Parcial</small>}<strong>{calculatedTotal(item.calculation?.totalCents, item.calculation?.partialCents, item.calculation?.hasKnownAmount)}</strong></td>
-          <td data-label="Ações"><div className="cost-row-actions"><Button variant="ghost" size="sm" onClick={() => onDetails(item.id)}>Ver composição</Button>{!locked && <><Button data-cost-target={`item-cost-${item.id}`} variant="outline" size="sm" onClick={() => onEdit(item)}>Editar valores</Button>{detail.productsCharge?.paymentStatus === "paid" && <Button size="sm" variant="outline" onClick={() => onRefund(item.id)} disabled={item.effectivePriceState === "pending" || item.chinaFreightState === "pending" || item.participants.every(person => person.weight === 0)}>Registrar reembolso</Button>}</>}</div></td>
+          <td data-label="Produto"><div className="cost-product-name"><QcCostCover purchaseId={detail.purchase.id} itemName={item.original.name} visualKey={item.original.visualKey} cover={qcCovers[item.original.id]}/><span><strong>{item.original.name}</strong><small>{item.original.variant || "Sem variação"}</small>{item.participants.length > 0 && <small className="cost-product-participants"><UsersRound size={12} aria-hidden="true"/><span>{item.participants.map(person => person.name).join(" · ")}</span></small>}<small className="cost-cell-pending">{item.calculation?.cancelledQuantity ? productUnitsSummary(item) : ""}</small></span></div></td>
+          <td data-label="Quantidade"><span className="cost-quantity"><Hash size={12} aria-hidden="true"/>{item.original.quantity}</span></td>
+          <td className={item.effectivePriceState === "pending" ? "cost-value-pending" : undefined} data-label="Preço efetivo / un.">{displayedValue(item.effectivePriceState, item.effectivePriceUnitCents)}</td>
+          <td className={item.chinaFreightState === "pending" ? "cost-value-pending" : undefined} data-label="Frete China / un.">{displayedValue(item.chinaFreightState, item.chinaFreightUnitCents)}</td>
+          <td className={sumComponents(item, "Taxa") === null ? "cost-value-pending" : undefined} data-label="Taxa de pagamento">{money(sumComponents(item, "Taxa"))}</td>
+          <td className={sumComponents(item, "Frete Brasil") === null ? "cost-value-pending" : undefined} data-label="Frete Brasil">{money(sumComponents(item, "Frete Brasil"))}</td>
+          <td className={sumComponents(item, "Receita") === null ? "cost-value-pending" : undefined} data-label="Receita">{money(sumComponents(item, "Receita"))}</td>
+          <td data-label="Total"><ProductCostTotal item={item} onDetails={onDetails}/></td>
+          <td data-label="Ações">{!locked && <ProductCostActions item={item} allowRefund={detail.productsCharge?.paymentStatus === "paid"} refundDisabled={item.effectivePriceState === "pending" || item.chinaFreightState === "pending" || item.participants.every(person => person.weight === 0)} onEdit={onEdit} onRefund={onRefund}/>}</td>
         </tr>)}
       </tbody></table>
     </div>
@@ -310,15 +315,14 @@ function ProductCostsList({ detail, locked, onDetails, onEdit, onRefund }: { det
       {operationalItems.map(item => {
         const pending = pendingDetails(item);
         return <article className="cost-product-mobile-card" key={item.id}>
-          <div className="cost-product-mobile-title"><QcCostCover purchaseId={detail.purchase.id} itemName={item.original.name} visualKey={item.original.visualKey} cover={qcCovers[item.original.id]}/><span><strong>{item.original.name}</strong><small>{item.original.variant || "Sem variação"}</small>{item.calculation?.cancelledQuantity ? <small>{item.original.quantity} compradas · {item.calculation.cancelledQuantity} cancelada(s) · {item.calculation.shippingQuantity} para envio</small> : null}{item.participants.length > 0 && <small className="cost-product-participants"><UsersRound size={12} aria-hidden="true"/><span>{item.participants.map(person => person.name).join(" · ")}</span></small>}</span></div>
+          <div className="cost-product-mobile-title"><QcCostCover purchaseId={detail.purchase.id} itemName={item.original.name} visualKey={item.original.visualKey} cover={qcCovers[item.original.id]}/><span><strong>{item.original.name}</strong><small>{item.original.variant || "Sem variação"}</small>{item.calculation?.cancelledQuantity ? <small>{productUnitsSummary(item)}</small> : null}{item.participants.length > 0 && <small className="cost-product-participants"><UsersRound size={12} aria-hidden="true"/><span>{item.participants.map(person => person.name).join(" · ")}</span></small>}</span></div>
           <dl className="cost-product-mobile-values">
             <div><dt>Quantidade</dt><dd>{unitsLabel(item.original.quantity)}</dd></div>
             <div><dt>Preço efetivo / un.</dt><dd>{displayedValue(item.effectivePriceState, item.effectivePriceUnitCents)}</dd></div>
             <div><dt>Frete China / un.</dt><dd>{displayedValue(item.chinaFreightState, item.chinaFreightUnitCents)}</dd></div>
-            <div className="total"><dt>{item.calculation?.totalCents === null ? "Total parcial" : "Total final"}</dt><dd>{calculatedTotal(item.calculation?.totalCents, item.calculation?.partialCents, item.calculation?.hasKnownAmount)}</dd></div>
           </dl>
           {pending.length > 0 && <p className="cost-mobile-pending">Falta informar: {pending.join(", ")}</p>}
-          <div className="cost-row-actions"><Button variant="ghost" size="sm" onClick={() => onDetails(item.id)}>Ver composição</Button>{!locked && <><Button data-cost-target={`item-cost-${item.id}`} variant="outline" size="sm" onClick={() => onEdit(item)}>Editar valores</Button>{detail.productsCharge?.paymentStatus === "paid" && <Button size="sm" variant="outline" onClick={() => onRefund(item.id)}>Registrar reembolso</Button>}</>}</div>
+          <div className="cost-product-mobile-footer"><ProductCostTotal item={item} onDetails={onDetails} showFinalLabel/>{!locked && <ProductCostActions item={item} allowRefund={detail.productsCharge?.paymentStatus === "paid"} onEdit={onEdit} onRefund={onRefund}/>}</div>
         </article>;
       })}
     </div>
@@ -327,14 +331,40 @@ function ProductCostsList({ detail, locked, onDetails, onEdit, onRefund }: { det
   </>;
 }
 
+function ProductCostTotal({ item, onDetails, showFinalLabel = false }: { item: DetailItem; onDetails: (itemId: string) => void; showFinalLabel?: boolean }) {
+  return <div className="cost-line-total" aria-label={item.calculation?.totalCents === null ? "Total parcial" : "Total final"}>
+    {item.calculation?.totalCents === null ? <span className="cost-total-status">Parcial</span> : showFinalLabel && <span className="cost-total-label">Total final</span>}
+    <strong>{calculatedTotal(item.calculation?.totalCents, item.calculation?.partialCents, item.calculation?.hasKnownAmount)}</strong>
+    <Button className="cost-composition-link" variant="ghost" size="sm" onClick={() => onDetails(item.id)}>Ver composição<ArrowRight size={14} aria-hidden="true"/></Button>
+  </div>;
+}
+
+function ProductCostActions({ item, allowRefund, refundDisabled = false, onEdit, onRefund }: { item: DetailItem; allowRefund: boolean; refundDisabled?: boolean; onEdit: (item: DetailItem) => void; onRefund: (itemId: string) => void }) {
+  const menuTrigger = useRef<HTMLButtonElement>(null);
+  const refundSelected = useRef(false);
+  return <div className="cost-row-actions">
+    <Button data-cost-target={`item-cost-${item.id}`} variant="outline" size="sm" onClick={() => onEdit(item)}><Pencil size={14} aria-hidden="true"/>Editar</Button>
+    {allowRefund && <DropdownMenu.Root><DropdownMenu.Trigger asChild><Button ref={menuTrigger} className="cost-row-overflow" variant="outline" size="icon" aria-label={`Mais ações para ${item.original.name}`}><MoreVertical size={18} aria-hidden="true"/></Button></DropdownMenu.Trigger><DropdownMenu.Portal><DropdownMenu.Content className="dropdown cost-product-menu" align="end" sideOffset={8} onCloseAutoFocus={event => {
+      if (!refundSelected.current) return;
+      // Open the sheet after the menu releases focus, and retain its trigger for return focus.
+      event.preventDefault();
+      refundSelected.current = false;
+      menuTrigger.current?.focus();
+      onRefund(item.id);
+    }}><DropdownMenu.Item disabled={refundDisabled} onSelect={() => { refundSelected.current = true; }}>Registrar reembolso</DropdownMenu.Item></DropdownMenu.Content></DropdownMenu.Portal></DropdownMenu.Root>}
+  </div>;
+}
+
 function ItemBreakdownSurface({ detail, itemId, onClose }: { detail: Detail; itemId: string; onClose: () => void }) {
   const item = detail.items.find(value => value.id === itemId);
   if (!item) return null;
   const calculation = item.calculation;
-  return <Surface sheet open title={`Composição · ${item.original.name}`} description={`${item.original.quantity} ${item.original.quantity === 1 ? "unidade física" : "unidades físicas"}. O produto permanece como uma única linha da compra.`} onOpenChange={open => { if (!open) onClose(); }}>
+  return <Surface sheet open title="Composição dos custos" subtitle={item.original.name} description="Valores originais, encargos, créditos recebidos e divisão atual desta linha." onOpenChange={open => { if (!open) onClose(); }}>
     <div className="cost-breakdown-list">
       <h3>Unidades e valor líquido</h3>
-      <div><span>Compradas · canceladas · para envio</span><strong>{item.original.quantity} · {calculation?.cancelledQuantity ?? 0} · {calculation?.shippingQuantity ?? item.original.quantity}</strong></div>
+      <div><span>Unidades compradas</span><strong>{item.original.quantity}</strong></div>
+      <div><span>Unidades canceladas</span><strong>{calculation?.cancelledQuantity ?? 0}</strong></div>
+      <div><span>Unidades enviáveis</span><strong>{calculation?.shippingQuantity ?? item.original.quantity}</strong></div>
       <div><span>Custo bruto conhecido</span><strong>{money(calculation?.grossPartialCents)}</strong></div>
       <div><span>Reembolso recebido</span><strong>{money(calculation?.receivedRefundCents)}</strong></div>
       <div><span>A receber</span><strong>{money(calculation?.requestedRefundCents)}</strong></div>
@@ -356,16 +386,16 @@ function PackageCard({ pkg, detail, expanded, onExpandedChange, locked, busy, sa
   openCharge: (charge: ChargeEditor) => void; markPaid: (chargeId: string) => Promise<void>;
   mutate: (operation: string, rest: Record<string, unknown>, mayInvalidatePayment?: boolean) => Promise<boolean>;
 }) {
-  const [packageEditorOpen, setPackageEditorOpen] = useState(false), [allocationEditorOpen, setAllocationEditorOpen] = useState(false);
+  const [packageEditorOpen, setPackageEditorOpen] = useState(false), [allocationEditorOpen, setAllocationEditorOpen] = useState(false), [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
   const [name, setName] = useState(pkg.name), [logistics, setLogistics] = useState(pkg.logisticsStatus);
   const [allocationDraft, setAllocationDraft] = useState<Record<string, number>>({});
   const freight = pkg.brazilFreightCharge, customs = pkg.customsCharge;
   const assigned = pkg.calculation?.unitCount ?? 0;
   const pendingText = [
-    freight?.valueState === "pending" ? "Falta informar frete Brasil" : null,
-    freight?.valueState === "known" && freight.paymentStatus === "pending" ? "Frete Brasil a pagar" : null,
-    customs?.valueState === "pending" ? "Falta informar receita" : null,
-    customs?.valueState === "known" && customs.paymentStatus === "pending" ? "Receita a pagar" : null,
+    freight?.valueState === "pending" ? "Frete Brasil: valor pendente" : null,
+    freight?.valueState === "known" && freight.paymentStatus === "pending" ? "Frete Brasil: pagamento pendente" : null,
+    customs?.valueState === "pending" ? "Receita: valor pendente" : null,
+    customs?.valueState === "known" && customs.paymentStatus === "pending" ? "Receita: pagamento pendente" : null,
   ].filter((value): value is string => value !== null);
   const headingId = `cost-package-${pkg.id}-content`;
 
@@ -394,9 +424,18 @@ function PackageCard({ pkg, detail, expanded, onExpandedChange, locked, busy, sa
     if (ok) setAllocationEditorOpen(false);
   }
 
+  function updateAllocation(itemId: string, maximum: number, value: string) {
+    setAllocationDraft(current => ({ ...current, [itemId]: Math.min(maximum, Math.max(0, Number(value) || 0)) }));
+  }
+
   const chargeMethod = (charge: NonNullable<typeof freight>) => charge.paymentMethod === "pix" ? "Pix" : charge.paymentMethod === "card" ? "Cartão" : null;
   const packageFreight = pkg.calculation?.freightPaymentTotalCents;
   const packageCustoms = pkg.calculation?.customsPaymentTotalCents;
+  const canDeleteEmptyPackage = !assigned && pkg.logisticsStatus === "preparing" && freight?.valueState === "pending" && customs?.valueState === "pending";
+  async function deleteEmptyPackage() {
+    const ok = await mutate("package.delete", { packageId: pkg.id, input: { expectedRevision: detail.tracking.revision } });
+    if (ok) setRemoveConfirmOpen(false);
+  }
   return <article className="cost-package">
     <button className="cost-package-toggle" type="button" aria-expanded={expanded} aria-controls={headingId} onClick={() => onExpandedChange(!expanded)}>
       <span className="cost-package-icon"><Package size={20}/></span>
@@ -413,21 +452,21 @@ function PackageCard({ pkg, detail, expanded, onExpandedChange, locked, busy, sa
           const people = item.participants.map(person => person.name).join(" · ");
           return <li key={row.costItemId}><span><strong>{item.original.name}</strong><small>{item.original.variant || "Sem variação"}{people ? ` · ${people}` : ""}</small></span><strong>{unitsLabel(row.quantity)}</strong></li>;
         })}</ul> : <p className="muted">Nenhuma unidade neste pacote.</p>}</div>
-        {!locked && <div className="cost-package-actions"><Button variant="outline" size="sm" disabled={busy} onClick={editPackage}>Editar pacote</Button><Button data-cost-target={`package-content-${pkg.id}`} variant="outline" size="sm" disabled={busy} onClick={editContent}>Editar conteúdo</Button>{!assigned && pkg.logisticsStatus === "preparing" && <Button variant="ghost" size="sm" disabled={busy || freight?.valueState !== "pending" || customs?.valueState !== "pending"} onClick={() => void mutate("package.delete", { packageId: pkg.id, input: { expectedRevision: detail.tracking.revision } })}>Excluir pacote vazio</Button>}</div>}
         <div className="cost-package-charges">
           <ChargeSummary label="Frete Brasil" target={`package-freight-${pkg.id}`} paidTarget={`package-freight-paid-${pkg.id}`} charge={freight} base={pkg.calculation?.freight.base} fee={pkg.calculation?.freight.fee} total={packageFreight} feeBps={freight?.feeBps ?? null} method={freight ? chargeMethod(freight) : null} showFee onEdit={() => freight && openCharge({ id: freight.id, type: "brazil_freight", name: `${pkg.name} · Frete Brasil` })} onPaid={() => freight && void markPaid(freight.id)} locked={locked} busy={busy}/>
           <ChargeSummary label="Receita" target={`package-customs-${pkg.id}`} paidTarget={`package-customs-paid-${pkg.id}`} charge={customs} base={pkg.calculation?.customs.base} fee={0} total={packageCustoms} feeBps={null} method={null} onEdit={() => customs && openCharge({ id: customs.id, type: "customs", name: `${pkg.name} · Receita` })} onPaid={() => customs && void markPaid(customs.id)} locked={locked} busy={busy}/>
         </div>
+        {!locked && <div className="cost-package-actions"><DropdownMenu.Root><DropdownMenu.Trigger asChild><Button variant="outline" size="sm" aria-label={`Ações para ${pkg.name}`} disabled={busy}><MoreVertical size={16}/><span>Ações do pacote</span></Button></DropdownMenu.Trigger><DropdownMenu.Portal><DropdownMenu.Content className="dropdown" align="end" sideOffset={6}><DropdownMenu.Item onSelect={editPackage}><Pencil size={15}/>Editar pacote</DropdownMenu.Item><DropdownMenu.Item onSelect={editContent}><Package size={15}/>Editar conteúdo</DropdownMenu.Item>{canDeleteEmptyPackage && <><DropdownMenu.Separator/><DropdownMenu.Item className="danger-text" onSelect={() => setRemoveConfirmOpen(true)}><Trash2 size={15}/>Excluir pacote vazio</DropdownMenu.Item></>}</DropdownMenu.Content></DropdownMenu.Portal></DropdownMenu.Root></div>}
       </div>}
     </div>
-    <Surface sheet open={packageEditorOpen} title={`Editar ${pkg.name}`} description="Atualize o nome e a etapa logística. A etapa não altera o estado financeiro." onOpenChange={value => { if (!busy) setPackageEditorOpen(value); }}>
+    <Surface sheet open={packageEditorOpen} title="Editar pacote" subtitle={pkg.name} description="Atualize o nome e a etapa logística. A etapa não altera os valores financeiros." onOpenChange={value => { if (!busy) setPackageEditorOpen(value); }}>
       <form onSubmit={event => void savePackageForm(event)}>
         <label>Nome do pacote<input required maxLength={80} value={name} onChange={event => setName(event.target.value)}/></label>
         <label>Etapa logística<select value={logistics} onChange={event => setLogistics(event.target.value as typeof logistics)}><option value="preparing">Em preparação</option><option value="sent">Enviado</option><option value="received">Recebido</option></select></label>
         <div className="form-actions"><Button type="button" variant="outline" disabled={busy} onClick={() => setPackageEditorOpen(false)}>Cancelar</Button><Button type="submit" disabled={busy || !name.trim()}>{busy ? "Salvando…" : "Salvar pacote"}</Button></div>
       </form>
     </Surface>
-    <Surface sheet open={allocationEditorOpen} title={`Conteúdo · ${pkg.name}`} description="Distribua as unidades físicas entre os pacotes. O restante continua disponível nos outros pacotes." onOpenChange={value => { if (!busy) setAllocationEditorOpen(value); }}>
+    <Surface sheet open={allocationEditorOpen} title="Editar conteúdo" subtitle={pkg.name} description="Distribua as unidades físicas. O restante continua disponível nos outros pacotes." onOpenChange={value => { if (!busy) setAllocationEditorOpen(value); }}>
       <form onSubmit={event => void saveContent(event)}>
         <div className="cost-allocation-edit-list">{detail.items.map(item => {
           const inOtherPackages = detail.packages.filter(other => other.id !== pkg.id).reduce((sum, other) => sum + (other.items.find(row => row.costItemId === item.id)?.quantity ?? 0), 0);
@@ -435,7 +474,7 @@ function PackageCard({ pkg, detail, expanded, onExpandedChange, locked, busy, sa
           const maximum = Math.max(0, shippingQuantity - inOtherPackages);
           const saved = pkg.items.find(row => row.costItemId === item.id)?.quantity ?? 0;
           const quantity = allocationDraft[item.id] ?? saved;
-          return <div className="cost-allocation-edit-row" key={item.id}><span><strong>{item.original.name}</strong><small>{item.original.variant || "Sem variação"} · Comprado: {item.original.quantity} · Cancelado: {item.calculation?.cancelledQuantity ?? 0} · Neste pacote: {saved} · Nos outros: {inOtherPackages} · Disponível: {maximum - quantity}</small></span><label>Unidades neste pacote<input aria-label={`${item.original.name} neste pacote`} type="number" min="0" max={maximum} step="1" disabled={busy} value={quantity} onChange={event => setAllocationDraft(current => ({ ...current, [item.id]: Math.min(maximum, Math.max(0, Number(event.target.value) || 0)) }))}/></label></div>;
+          return <div className="cost-allocation-edit-row" key={item.id}><span><strong>{item.original.name}</strong><small>{item.original.variant || "Sem variação"} · Unidades compradas: {item.original.quantity} · Unidades canceladas: {item.calculation?.cancelledQuantity ?? 0} · Neste pacote: {saved} · Em outros: {inOtherPackages} · Disponíveis: {maximum - quantity}</small></span><label>Unidades neste pacote<input aria-label={`${item.original.name} neste pacote`} type="number" min="0" max={maximum} step="1" disabled={busy} value={quantity} onChange={event => updateAllocation(item.id, maximum, event.target.value)}/></label></div>;
         })}</div>
         <Button className="cost-allocate-remaining" type="button" variant="ghost" size="sm" disabled={busy} onClick={() => setAllocationDraft(Object.fromEntries(detail.items.map(item => {
           const used = detail.packages.filter(other => other.id !== pkg.id).reduce((sum, other) => sum + (other.items.find(row => row.costItemId === item.id)?.quantity ?? 0), 0);
@@ -444,6 +483,7 @@ function PackageCard({ pkg, detail, expanded, onExpandedChange, locked, busy, sa
         <div className="form-actions"><Button type="button" variant="outline" disabled={busy} onClick={() => setAllocationEditorOpen(false)}>Cancelar</Button><Button type="submit" disabled={busy}>{busy ? "Salvando…" : "Salvar conteúdo"}</Button></div>
       </form>
     </Surface>
+    <Confirm open={removeConfirmOpen} onOpenChange={value => { if (!busy) setRemoveConfirmOpen(value); }} title="Excluir pacote vazio?" description="Este pacote ainda não contém unidades nem cobranças informadas. A exclusão ficará registrada no acompanhamento." danger label="Excluir pacote" busy={busy} onConfirm={() => void deleteEmptyPackage()} />
   </article>;
 }
 
@@ -455,16 +495,20 @@ function ChargeSummary({ label, target, paidTarget, charge, base, fee, total, fe
   if (!charge) return null;
   const valueIsPaid = charge.paymentStatus === "paid";
   const noCharge = charge.valueState === "no_charge";
-  const pending = charge.valueState === "pending";
+  const pending = charge.valueState === "pending" || charge.valueState == null;
   const status = noCharge ? "Sem cobrança" : valueIsPaid ? "Pago" : pending ? "Falta informar" : "A pagar";
+  if (pending) return <div className="cost-charge-summary cost-charge-pending">
+    <div className="cost-charge-top"><span><strong>{label}</strong><small role="status">Valor não informado</small></span></div>
+    {!locked && <div className="cost-charge-bottom"><div><Button data-cost-target={target} size="sm" variant="outline" disabled={busy} onClick={onEdit}>Informar {label}</Button></div></div>}
+  </div>;
   return <div className="cost-charge-summary">
-    <div className="cost-charge-top"><span><strong>{label}</strong><small>{status}</small></span></div>
-    <div className="cost-charge-breakdown">
+    <div className="cost-charge-top"><span><strong>{label}</strong></span>{!noCharge && <small role="status">{status}</small>}</div>
+    {noCharge ? <p className="cost-charge-no-charge" role="status">Sem cobrança</p> : <div className="cost-charge-breakdown">
       <div><span>Base</span><strong>{displayedValue(charge.valueState ?? "pending", base ?? null)}</strong></div>
       {showFee && <div><span>Taxa de pagamento{feeBps === null ? "" : ` · ${method ?? "Método pendente"} ${percentFromBasisPoints(feeBps)}%`}</span><strong>{money(fee)}</strong></div>}
-      <div className="total"><span>Total a pagar</span><strong>{noCharge ? "Sem cobrança" : money(total)}</strong></div>
-    </div>
-    {!locked && <div className="cost-charge-bottom"><span className={`cost-payment-state ${noCharge ? "free" : valueIsPaid ? "paid" : "pending"}`}>{status}</span><div><Button data-cost-target={target} size="sm" variant="outline" disabled={busy} onClick={onEdit}>{pending ? `Informar ${label}` : `Editar ${label}`}</Button>{!noCharge && !pending && !valueIsPaid && <Button data-cost-target={paidTarget} size="sm" disabled={busy || total === null || total === undefined} onClick={onPaid}>Marcar como pago</Button>}</div></div>}
+      <div className="total"><span>{valueIsPaid ? "Total pago" : "Total a pagar"}</span><strong>{money(total)}</strong></div>
+    </div>}
+    {!locked && <div className="cost-charge-bottom"><div><Button data-cost-target={target} size="sm" variant="outline" disabled={busy} onClick={onEdit}>Editar {label}</Button>{!noCharge && !valueIsPaid && <Button data-cost-target={paidTarget} size="sm" disabled={busy || total === null || total === undefined} onClick={onPaid}>Marcar como pago</Button>}</div></div>}
   </div>;
 }
 
@@ -501,7 +545,7 @@ function ItemCostSurface({ detail, editor, busy, onClose, onSave }: { detail: De
   }
 
   const canSave = (priceState !== "known" || priceCents !== null) && (chinaState !== "known" || chinaCents !== null) && compositionValid;
-  return <Surface sheet open title={`Custos · ${editor.name}`} description="O preço e o frete China são valores por unidade. O histórico da compra permanece intacto." onOpenChange={value => { if (!value && !busy) onClose(); }}>
+  return <Surface sheet open title="Custos do produto" subtitle={editor.name} description="Preço e frete China são valores por unidade. O histórico da compra permanece intacto." onOpenChange={value => { if (!value && !busy) onClose(); }}>
     <form onSubmit={event => { event.preventDefault(); void onSave({ expectedRevision: detail.tracking.revision, itemId: item.id, effectivePriceState: priceState, effectivePriceUnitCents: priceState === "known" ? priceCents : null, chinaFreightState: chinaState, chinaFreightUnitCents: chinaState === "known" ? chinaCents : null, ...(compositionChanged ? { composition: { mode: compositionMode, participants: item.participants.map(person => ({ personId: person.personId, weight: compositionMode === "equal" ? 1 : Number(weights[person.personId]) || 0 })) } } : {}) }); }}>
       <div className="form-row"><label>Preço efetivo por unidade<select value={priceState} onChange={event => setPriceState(event.target.value as typeof priceState)}><option value="pending">Falta informar</option><option value="known">Informado</option><option value="no_charge">Sem cobrança</option></select></label>{priceState === "known" && <label>Valor em R$<input required inputMode="decimal" value={price} onChange={event => setPrice(event.target.value)} placeholder="0,00"/></label>}</div>
       <div className="form-row"><label>Frete China por unidade<select value={chinaState} onChange={event => setChinaState(event.target.value as typeof chinaState)}><option value="pending">Falta informar</option><option value="known">Informado</option><option value="no_charge">Sem cobrança</option></select></label>{chinaState === "known" && <label>Valor em R$<input required inputMode="decimal" value={china} onChange={event => setChina(event.target.value)} placeholder="0,00"/></label>}</div>
@@ -550,7 +594,10 @@ function ChargeSurface({ detail, editor, busy, onClose, onSave }: { detail: Deta
     }
   }
 
-  return <Surface sheet open title={editor.name} description="Confira a composição antes de registrar o valor. A confirmação de pagamento é manual." onOpenChange={value => { if (!value && !busy) onClose(); }}>
+  const chargeLabel = editor.type === "products" ? "pagamento dos produtos" : editor.type === "brazil_freight" ? "frete Brasil" : "Receita";
+  const title = editor.type === "products" ? "Editar pagamento" : state === "pending" ? `Informar ${chargeLabel}` : `Editar ${chargeLabel}`;
+  const description = editor.type === "customs" ? "Informe o valor da Receita. Ela não tem taxa de transação." : "Confira o valor, a taxa e o método antes de salvar. O pagamento continua manual.";
+  return <Surface sheet open title={title} subtitle={editor.name} description={description} onOpenChange={value => { if (!value && !busy) onClose(); }}>
     <form onSubmit={save}>
       {editor.type !== "products" && <label>Estado do valor<select value={state} onChange={event => setState(event.target.value as typeof state)}><option value="pending">Falta informar</option><option value="known">Informado</option><option value="no_charge">Sem cobrança</option></select></label>}
       {editor.type !== "products" && state === "known" && <label>Valor em R$<input required inputMode="decimal" value={amount} onChange={event => setAmount(event.target.value)} placeholder="0,00"/></label>}
