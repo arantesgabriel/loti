@@ -203,3 +203,24 @@ As oito capturas da jornada foram inspecionadas em `artifacts/qa/package-refunds
 ### Handoff de migração e publicação
 
 Antes de publicar, faça backup/snapshot recuperável do alvo aprovado, aplique explicitamente `npm run db:migrate`, confira `npm run db:verify` e publique o código compatível sem escritores antigos concorrentes. Execute smoke test autenticado em ambiente isolado. A migração, deploy e registro de reembolsos reais continuam pendentes de autorização específica; nenhum banco remoto foi acessado ou alterado nesta tarefa.
+
+## Refatoração de UX mobile — 15 de outubro de 2026
+
+Concluída a refatoração do handoff [Mobile UX](25_MOBILE_UX_REFACTOR_HANDOFF.md), com a auditoria original preservada e o contrato de superfícies móveis registrado em [Design](06_DESIGN.md#mobile-surfaces). Formulários de coleção, compra, convite, item e reabertura usam superfície completa no mobile; detalhes longos e reembolso seguem a mesma estrutura rolável com safe areas e ações alcançáveis. Confirmações breves continuam compactas, e o desktop mantém a largura e o comportamento de diálogo/gaveta existentes.
+
+Favoritos simplifica as ações no vazio global sem remover o FAB. Pacotes e custos destaca total líquido e próxima tarefa, organiza ações administrativas QC e distingue status pago/pedente de ações de edição. Resumos do reembolso mantêm valores monetários em uma linha, com o botão de detalhes abaixo; a gaveta longa usa cabeçalho e ações preservados enquanto o conteúdo rola. A mudança de apresentação mantém fórmulas, snapshots, taxas, regras de crédito, permissões e armazenamento atuais.
+
+### Verificações desta refatoração
+
+| Verificação | Resultado |
+| --- | --- |
+| `npm run typecheck` | Passou |
+| `npm run lint` | Passou sem avisos |
+| `npm test -- --maxWorkers=1 --testTimeout=30000` | **226 testes passaram**, 7 ignorados; 29 arquivos passaram e 1 foi ignorado |
+| `npm run test:e2e -- --reporter=line` | **35 cenários Chromium passaram** |
+| `npm run build` | Passou; compilação, TypeScript, páginas e traces concluídos |
+| Banco/schema/deploy | Nenhuma migração ou alteração de banco feita nesta refatoração; sem deploy ou publicação |
+
+O E2E cobre 320×640, 360×800, 390×844, 430×932, 768 px e 1440 px; verifica superfície completa, foco, retorno, ausência de overflow e rodapé abaixo do último campo. As evidências antes/depois estão em [`artifacts/qa/mobile-ux/`](../artifacts/qa/mobile-ux/), incluindo resumo do reembolso em 320 px, formulário longo em 320/768/1440 px, coleção/compra e primeira tela de Pacotes e custos. A [auditoria de conclusão](audits/2026-10-15_MOBILE_UX_REFACTOR.md) relaciona os fluxos e limitações.
+
+Na primeira passagem da suíte unitária/integrada, um dos testes de corrida entre processos recebeu `SQLITE_BUSY` ao confirmar a transação; o arquivo de concorrência passou isoladamente (5/5) e a repetição integral passou (226 testes). A validação visual usou Chromium com viewports emulados; dispositivo físico e teclado virtual do sistema não foram testados. A skill `frontend-design` não estava instalada, conforme registrado na auditoria inicial.

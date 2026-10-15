@@ -208,3 +208,7 @@ The approved structure combines A (QuickSuite financial table) and B (shipment l
 Desktop separates cost-by-product tables from package lists. Drawers place a clear base/fee/total preview before payment confirmation. Mobile uses compact rows and contextual detail, rather than squeezing all cost columns into the viewport. Distinguish financial pending/paid states from manual package stages, and use text alongside color. In this approved extension, the floating navigation island has **four** destinations: Favorites, Purchase, Pacotes e custos and History; use the short selected label `Pacotes` and preserve touch targets and safe areas.
 
 The earlier three-destination rule describes the original MVP; this extension explicitly adds the fourth. Sources/images and boundaries: [approved reference sheet](design/PACKAGES_AND_COSTS_REFERENCES.md). Concrete layout and visual QA: [implementation plan, section 7](21_PACKAGES_AND_COSTS_PLAN.md#7-experiência-de-uso).
+
+## Mobile surfaces
+
+On mobile, creation/editing forms and long financial or item details use a contextual surface that fills the dynamic viewport. Keep a compact header, one scrollable content area, safe-area spacing and reachable actions; long forms may keep their action row sticky inside that scroll area. Brief confirmations remain compact dialogs. Desktop keeps the existing centered-dialog and side-sheet sizing. Preserve Escape, focus containment and return focus, while keeping the floating navigation island outside modal interaction.

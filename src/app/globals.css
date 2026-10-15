@@ -508,6 +508,15 @@ p {
     font-size: 13px;
 }
 
+.surface-subtitle {
+    margin: 5px 0 0;
+    color: var(--foreground);
+    font-size: 14px;
+    font-weight: 550;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+}
+
 .surface-body {
     padding: 24px;
 }
@@ -833,7 +842,74 @@ details .details-fields {
 
     .sheet {
         border-radius: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
     }
+
+    .dialog.mobile-full-surface {
+        inset: 0;
+        width: 100%;
+        height: 100dvh;
+        max-height: 100dvh;
+        transform: none;
+        border-radius: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .sheet .surface-head,
+    .mobile-full-surface .surface-head {
+        flex: 0 0 auto;
+        align-items: center;
+        padding: max(12px, env(safe-area-inset-top)) 16px 12px;
+    }
+
+    .sheet .surface-head h2,
+    .mobile-full-surface .surface-head h2 {
+        font-size: 18px;
+        line-height: 1.3;
+    }
+
+    .sheet .surface-body,
+    .mobile-full-surface .surface-body {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding: 16px 16px 0;
+    }
+
+    .sheet form,
+    .mobile-full-surface form {
+        display: flex;
+        flex-direction: column;
+        flex: 1 0 auto;
+        min-height: 100%;
+    }
+
+    .sheet form .form-actions,
+    .mobile-full-surface form .form-actions {
+        position: sticky;
+        bottom: 0;
+        z-index: 1;
+        margin-top: auto;
+        padding: 12px 0 max(12px, env(safe-area-inset-bottom));
+        border-top: 1px solid var(--border);
+        background: var(--surface);
+    }
+
+    .sheet form .refund-request-actions {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+        margin: 0;
+        padding: 16px 0 max(16px, env(safe-area-inset-bottom));
+    }
+
+    .sheet form .refund-request-actions>.button { width: 100%; }
 
     .surface-head,
     .surface-body {
@@ -1772,7 +1848,8 @@ details .details-fields {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 11px 10px;
+    min-height: 44px;
+    padding: 10px;
     border-radius: 6px;
     font-size: 13px;
     cursor: pointer;
@@ -3113,6 +3190,10 @@ details .details-fields {
     }
 
     .favorites-heading-add {
+        display: none;
+    }
+
+    .favorites-empty-create {
         display: none;
     }
 
