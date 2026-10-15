@@ -494,3 +494,92 @@ test("QC transfer interruption stays partial, surfaces the error and refreshes c
   await dialog.getByRole("button", { name: "Fechar" }).click();
   await expect(page.locator(".qc-cost-photo-strip").getByRole("button", { name: "Ver mais fotos QC de QC Marker Product" })).toHaveText("Ver mais");
 });
+
+test("a fresh confirmation reimports all included photos after QC deletion", async ({ page }) => {
+  await login(page);
+  const purchase = await createFinalizedPurchase(page, "QC delete and reimport E2E");
+  const photoIds = Array.from({ length: 4 }, (_, index) => `qc-photo-${index + 1}`);
+  const importedIds = new Set<string>();
+  let batches = 0, prepareCount = 0, confirmCount = 0, coverId: string | null = null, coverRevision = 0, transferActive = false, lastRestoreCount = 0;
+  const imported = () => photoIds.filter(id => importedIds.has(id));
+  await page.route(`**/api/purchases/${purchase.purchaseId}/qc**`, async route => {
+    const request = route.request();
+    if (request.method() === "GET") {
+      const params = new URL(request.url()).searchParams;
+      if (params.has("itemIds")) return response(route, { purchaseId: purchase.purchaseId, items: (params.get("itemIds")?.split(",") ?? []).map(purchaseItemId => ({ purchaseItemId, qcCount: purchaseItemId === purchase.firstItemId ? imported().length : 0, primaryImageId: purchaseItemId === purchase.firstItemId ? coverId : null, presentationRevision: purchaseItemId === purchase.firstItemId ? coverRevision : 0, coverPreview: purchaseItemId === purchase.firstItemId && coverId ? { imageId: coverId, previewUrl: `/api/qc/images/${coverId}/preview`, width: 160, height: 107, occurrence: "Blue / 40" } : null, canSetCover: true, previews: purchaseItemId === purchase.firstItemId ? imported().slice(0, 3).map(id => ({ imageId: id, previewUrl: `/api/qc/images/${id}/preview`, width: 160, height: 107, occurrence: "Blue / 40" })) : [], remainingCount: purchaseItemId === purchase.firstItemId ? Math.max(0, imported().length - 3) : 0 })) });
+      const itemId = params.get("itemId");
+      return response(route, itemId ? { itemId, pageOffset: 0, totalCount: imported().length, presentationRevision: coverRevision, primaryImageId: coverId, canSetCover: true, images: imported().map(id => ({ id, previewUrl: `/api/qc/images/${id}/preview`, width: 1, height: 1, occurrence: "Blue / 40" })), nextOffset: null } : { purchaseId: purchase.purchaseId, canManage: true, counts: [{ itemId: purchase.firstItemId, count: imported().length }], pendingMatching: 0, pendingRows: [], pendingTransfers: transferActive ? 4 - imported().length : 0, pendingDeletes: 0, pendingPreviews: 0 });
+    }
+    const body = request.postDataJSON() as { operation: string };
+    if (body.operation === "prepare") {
+      prepareCount++;
+      return response(route, { importId: "mock-import-reimport", revision: 0, partial: false, orderCount: 1, photoCount: 4, rows: [{ externalKey: "QC-E2E-REIMPORT:id:QC-GOODS-REIMPORT", orderNo: "QC-E2E-REIMPORT", orderGoodsId: "QC-GOODS-REIMPORT", orderGoodsNo: null, offerId: null, skuInfo: "Blue / 40", title: "QC Marker Product", quantity: 1, photoCount: 4, match: { status: "MATCHED", targetItemId: purchase.firstItemId, candidates: [] }, existingItemId: prepareCount > 1 ? purchase.firstItemId : null, conflict: null }] });
+    }
+    throw new Error(`Unexpected QC operation ${body.operation}`);
+  });
+  await page.route("**/api/qc/imports/mock-import-reimport", async route => {
+    if (route.request().method() === "GET") return response(route, transferSnapshot(imported().length));
+    const body = route.request().postDataJSON() as { operation: string; expectedRevision: number };
+    if (body.operation === "confirm") {
+      confirmCount++;
+      batches = 0;
+      transferActive = true;
+      lastRestoreCount = confirmCount === 2 ? 4 : 0;
+      return response(route, { importId: "mock-import-reimport", revision: 1, linked: 1, pendingMatching: 0, ignored: 0, sources: 4, eligibleSources: 4, restored: lastRestoreCount });
+    }
+    if (body.operation === "batch") {
+      const id = photoIds[batches]!;
+      batches++;
+      importedIds.add(id);
+      if (!coverId) { coverId = id; coverRevision++; }
+      const remaining = 4 - batches;
+      transferActive = remaining > 0;
+      return response(route, { imported: 1, existing: 0, failed: 0, pending: 0, processed: 1, remaining, hasMore: remaining > 0, complete: remaining === 0, partial: remaining > 0, revision: body.expectedRevision + 1, results: [{ sourceId: `source-${batches}`, status: "imported" }] });
+    }
+    throw new Error(`Unexpected import operation ${body.operation}`);
+  });
+  await page.route(url => new URL(url).pathname.match(/^\/api\/qc\/images\/qc-photo-\d+$/) !== null, async route => {
+    const id = new URL(route.request().url()).pathname.split("/").pop()!;
+    if (route.request().method() !== "DELETE") throw new Error(`Unexpected QC image request ${route.request().method()}`);
+    importedIds.delete(id);
+    if (coverId === id) { coverId = imported()[0] ?? null; coverRevision++; }
+    return response(route, { status: "deleted" });
+  });
+  await mockQcMedia(page);
+  await page.goto(`/packages/${purchase.trackingId}`);
+  await page.getByRole("button", { name: /Produtos e pagamento/ }).click();
+  const json = { code: 0, data: { count: 1, list: [{ orderNo: "QC-E2E-REIMPORT", goodsList: [{ orderGoodsId: "QC-GOODS-REIMPORT", offerUrl: "https://weidian.com/item.html?itemID=987654321", skuInfo: "Blue / 40", goodsName: "QC Marker Product", quantity: 1, freePhotos: ["https://scm.hubbuy.app/a", "https://scm.hubbuy.app/b", "https://scm.hubbuy.app/c", "https://scm.hubbuy.app/d"] }] }] } };
+  const confirmImport = async () => {
+    await page.getByRole("button", { name: "Importar QC", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByLabel("JSON HubBuy").fill(JSON.stringify(json));
+    await dialog.getByRole("button", { name: "Analisar JSON" }).click();
+    await dialog.getByRole("button", { name: "Confirmar vínculos" }).click();
+    await expect(dialog.getByRole("status")).toContainText("Importação concluída");
+    await dialog.getByRole("button", { name: "Fechar" }).click();
+  };
+  await confirmImport();
+  expect(prepareCount).toBe(1);
+  expect(confirmCount).toBe(1);
+  expect(batches).toBe(4);
+  await page.locator(".qc-cost-photo-strip").getByRole("button", { name: "Ver mais fotos QC de QC Marker Product" }).click();
+  await expect(page.locator(".qc-viewer-thumb")).toHaveCount(4);
+  for (let index = 0; index < 4; index++) {
+    await page.getByRole("button", { name: "Excluir foto QC" }).click();
+    const confirm = page.getByRole("dialog").filter({ has: page.getByRole("heading", { name: "Excluir foto QC?" }) });
+    await confirm.getByRole("button", { name: "Excluir foto" }).click();
+    if (index < 3) await expect(page.locator(".qc-viewer-toolbar")).toContainText(`de ${3 - index}`);
+  }
+  expect(imported()).toHaveLength(0);
+  // The cost photo strip unmounts its viewer when no photos remain.
+  await expect(page.locator(".qc-viewer-surface")).toHaveCount(0);
+
+  await confirmImport();
+  expect(prepareCount).toBe(2);
+  expect(confirmCount).toBe(2);
+  expect(lastRestoreCount).toBe(4);
+  expect(batches).toBe(4);
+  await expect(page.locator(".qc-cost-photo-strip").getByRole("button", { name: "Ver mais fotos QC de QC Marker Product" })).toHaveText("Ver mais");
+  await page.locator(".qc-cost-photo-strip").getByRole("button", { name: "Ver mais fotos QC de QC Marker Product" }).click();
+  await expect(page.locator(".qc-viewer-thumb")).toHaveCount(4);
+});

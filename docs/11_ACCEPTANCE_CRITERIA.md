@@ -192,7 +192,7 @@ Exact implementation contract: [17_LOGIN_ORBITAL_MOTION.md](17_LOGIN_ORBITAL_MOT
 - Only `freePhotos` are considered. Downloads reject redirects and non-allowlisted hosts, private/reserved DNS results, DNS rebinding, MIME/magic-byte mismatch, unsupported images, truncation, animation, excessive stream size, timeout and oversized pixels/dimensions before R2 PUT.
 - R2 keys never come from clients; Turso reservation/claim precedes PUT, retries are idempotent, ready-only photos are visible, and mocked storage/transport failures remain recoverable.
 - The manager can resume/reconcile known pending operations. Quotas persist across connections; at most one active transfer/cleanup claim exists per manager/workspace.
-- Deletion atomically hides the image and writes an audit tombstone before R2 DELETE. Retry handles absent objects, failed deletion and concurrent/late upload without resurrection.
+- Deletion atomically hides the image and writes an audit tombstone before R2 DELETE. Retry handles absent objects, failed deletion and concurrent/late upload without resurrection; only a fresh analysis and explicit confirmation can restore an included photo after cleanup succeeds.
 - Private fallback checks the image's active authorized record on each request, rate-limits, and emits only a short-lived GET URL; no signatures or storage keys are persisted or logged.
 - QC is visible from package item context and finalized History; financial close/reopen does not control it. Images never become list/card thumbnails.
 - Reimport, rematching, package division, refund/cancellation, or QC deletion does not change snapshots, amounts, rates, allocations, refunds, payment status, quantity or logistics.

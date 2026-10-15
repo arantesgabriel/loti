@@ -19,14 +19,14 @@ Importar manualmente o JSON de pedidos HubBuy, associar suas ocorrências compra
 | Propriedade | QC pertence ao `purchaseItem` por meio de suas ocorrências HubBuy; não pertence a pacote, participante ou favorito |
 | Cardinalidade | Várias ocorrências HubBuy podem apontar para um item Loti; uma ocorrência tem um destino Loti por vez |
 | Reimportação | Aditiva, idempotente; ausência de foto no JSON não remove uma foto existente |
-| Exclusão | Oculta imediatamente após persistir tombstone; remove backup R2 e permite retry seguro; não restaura automaticamente |
+| Exclusão | Oculta imediatamente após persistir tombstone; remove backup R2 e permite retry seguro; nova análise + confirmação explícita restaura apenas fotos incluídas após a limpeza completa |
 | Armazenamento | Turso cataloga e controla estados; R2 guarda bytes; nunca descobrir imagens com `ListObjects` |
 | Renderização | `sourceUrl` pública HubBuy primeiro; fallback R2 privado apenas depois de autorização |
 | Imutabilidade | Não alterar campos do snapshot, favoritos, participantes, carrinho, pagamentos, reembolsos ou cálculos |
 
 A regra de Histórico acima consolida a revisão mais recente do usuário e substitui a proposta anterior de esperar o primeiro pacote enviado. Reorganizar/dividir pacotes não move, duplica ou exclui arquivos. Reembolso/cancelamento de unidades não apaga QCs; eles continuam documentando a ocorrência comprada, sem inferir qual unidade física aparece na foto.
 
-Fora do escopo: autenticação HubBuy, scraping, bookmarklet, extensão, sincronização automática, IA/LLM, notificações, filas distribuídas, workers, uploads arbitrários, fotos de anúncios como thumbnails, restauração automática de exclusões e identificação visual de unidades físicas. Não criar seção primária de navegação.
+Fora do escopo: autenticação HubBuy, scraping, bookmarklet, extensão, sincronização automática, IA/LLM, notificações, filas distribuídas, workers, uploads arbitrários, fotos de anúncios como thumbnails, restauração automática de exclusões e identificação visual de unidades físicas. A restauração é somente consequência de uma nova análise e confirmação explícita do JSON. Não criar seção primária de navegação.
 
 ## 2. Instruções ao executor
 
@@ -189,6 +189,7 @@ QCLimit  → contadores persistentes
 
 - Importação: ID, compra/workspace, ator, manifest JSON normalizado estritamente limitado, datas/expiração, progresso/resultados, orçamento de bytes e claim do lote.
 - Manifest contém apenas campos necessários e identidades de origem; não é o response original. Não constitui fila distribuída: processamento é iniciado explicitamente pelo administrador em requests limitados.
+- Ao preparar uma ocorrência conhecida, o manifest registra no servidor as revisões/chaves das fotos e previews já tombstonados. Só uma confirmação nova pode autorizar fotos incluídas; manifest antigo ou preparado antes da exclusão não concede restauração.
 - Persistir lease/versão e contador de tentativas suficientes para reconhecer execução interrompida; nunca confiar num status enviado pelo browser.
 - A exclusividade de lote por administrador/workspace deve usar uma linha de lock compartilhada nesse escopo, adquirida por CAS/transação, não apenas uma lease por importação. Usar lease inicial de 180 s para request de até 120 s; requests antigos não podem confirmar estado após perder a versão. Expiração permite recuperação, mas não comprova conclusão de PUT remoto.
 - Eventos administrativos e limites têm namespace próprio. Ajustar granularidade de tabelas se necessário, sem acrescentar framework de jobs ou ledger financeiro.
@@ -213,9 +214,9 @@ Matching não autentica a informação HubBuy: dados colados são afirmações n
 ### Importação e retomada
 
 - Depois da confirmação, cada lote usa somente fontes/associações persistidas e autorizadas. Limitar um lote ativo por administrador/workspace com claim atômico; IDs/URLs novos não entram via endpoint de lote.
-- Verificar identidade de URL/tombstone antes de baixar. Se repetida/pronta, ignorar sem PUT; se excluída, informar exclusão preservada.
+- Verificar identidade de URL/tombstone antes de baixar. Se repetida/pronta, ignorar sem PUT; se excluída, restaurar somente com autorização de uma preparação nova que registrou a revisão tombstonada e cuja confirmação inclua a foto.
 - Baixar/validar/calcular hash fora da transação. Consultar hash dentro da ocorrência, inclusive tombstones. Alias de conteúdo existente não cria objeto.
-- Reservar metadados/chave e claim no Turso antes de qualquer PUT. Upload usa chave determinística do conteúdo; depois marcar pronta por atualização condicional de revisão/claim, com tombstone ausente. Somente `ready` entra na galeria.
+- Reservar metadados/chave e claim no Turso antes de qualquer PUT. Upload usa chave de geração nova ao restaurar; depois marcar pronta por atualização condicional de revisão/claim, com tombstone ausente. Somente `ready` entra na galeria.
 - Retries SDK automáticos ficam desabilitados/limitados dentro do prazo. Retry da interface repete apenas faltantes/falhas, não toda a importação já concluída. Ordem existente é preservada; fotos novas são anexadas em ordem determinística, não conforme velocidade dos downloads.
 - Verificar sessão/autorização em cada request de retomada. Manifest expirado exige nova preparação; ocorrências, fotos, tombstones e resultados anteriores não desaparecem.
 
@@ -244,7 +245,7 @@ Fornecer reconciliação manual restrita ao administrador, acionada pela interfa
 5. Falha mantém tombstone e chave de limpeza; informar que a imagem saiu do Loti mas o backup aguarda remoção. Retry não repete efeitos financeiros nem restaura visibilidade.
 6. Tentativa de upload que observa exclusão após PUT deve remover seu objeto e manter/registrar pendência se essa compensação falhar. Recuperação futura verifica chaves de tombstones para resolver gravações tardias.
 
-Tombstone mínimo preserva identidades de origem/hash, contexto e auditoria para bloquear restauração. Não oferecer restauração nesta versão. URL HubBuy pública e cópias já carregadas por navegador permanecem fora do controle de exclusão do Loti; não prometer revogá-las.
+Uma restauração explícita só pode ocorrer após uma nova preparação e confirmação que inclua a foto. A preparação registra a revisão e a chave do original e do preview privado; confirmação exige que ambas permaneçam iguais, excluídas e com remoção física concluída. Fotos omitidas continuam excluídas. Se uma PUT/DELETE ainda estiver incerta ou pendente, a confirmação falha com uma pendência recuperável. Cada restauração usa chaves de geração novas e de tamanho limitado; retry antigo, alias não incluído e escrita tardia só podem limpar a chave/claim da geração que observaram. URL HubBuy pública e cópias já carregadas por navegador permanecem fora do controle de exclusão do Loti; não prometer revogá-las.
 
 ## 8. Contrato de API e leitura
 
@@ -314,7 +315,7 @@ Implementar clientes servidores separados e storage testável, reserva antes de 
 
 Implementar tombstone, DELETE/retry, concorrência com upload/rematch e reconciliação das chaves conhecidas. Implementar emissão de fallback sob demanda com ID, autorização, quota e TTL. Garantir logs/respostas sanitizados.
 
-**Gate:** tombstone nunca é reativado por reimportação/upload tardio; falha de DELETE mantém pendência recuperável; fallback nega IDs cruzados, pendentes e excluídos; browser não controla chaves.
+**Gate:** upload tardio e retry antigo nunca reativam um tombstone; uma preparação nova + confirmação explícita restaura somente as fotos incluídas depois da limpeza integral; falha de DELETE mantém pendência recuperável; fallback nega IDs cruzados, pendentes e excluídos; browser não controla chaves.
 
 ### Fase 6 — interface Pacotes/Histórico
 
@@ -347,7 +348,7 @@ Após autorização de configuração externa, validar bucket de desenvolvimento
 | Transferência | Sem Content-Length; tamanho declarado falso; stream/decompressão excessivos; timeout/abort; HTTP não 200; concorrência e orçamento acumulado |
 | Idempotência | Mesmo JSON; ordem diferente; alias de URL com mesmos bytes; dois requests/conexões; pronto não sofre PUT repetido |
 | Falhas parciais | Reserva falha; upload falha; upload OK/confirmar banco falha; PUT incerto; crash; compensation falha; recuperar por chave conhecida |
-| Exclusão | Só administrador; ID interno; objeto ausente; DELETE falha; retry; tombstone por URL/hash; upload tardio; rematch concorrente; sem ressurreição |
+| Exclusão/restauração | Só administrador; ID interno; objeto ausente; DELETE falha; retry; reimportação explícita após limpeza; foto omitida segue excluída; manifest antigo; tombstone por URL/hash; upload tardio; rematch concorrente; geração antiga não apaga nova |
 | Fallback | CDN falha; autorização por imagem; expiração curta; sem assinatura persistida/logada; imagem pendente/excluída; R2 indisponível; sem loops |
 | Rate limit | Limites combinados; 429/retry; persistência entre conexões/instâncias; novo manifest não contorna quota; uma lease ativa |
 | Auditoria/secrets | Ator/contexto/resultado corretos; eventos atômicos; erros SDK redigidos; nenhuma chave/cookie/assinatura completa em DTO/log/bundle |
