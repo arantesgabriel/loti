@@ -6,6 +6,7 @@ const userId = process.env.LOTI_REFUND_USER_ID ?? "alice";
 const action = process.env.LOTI_REFUND_ACTION!;
 const input = JSON.parse(process.env.LOTI_REFUND_INPUT!);
 const refundId = process.env.LOTI_REFUND_ID;
+const orderId = process.env.LOTI_REFUND_ORDER_ID;
 const { db, client } = openDatabase(process.env.LOTI_REFUND_DATABASE_URL!);
 
 try {
@@ -18,8 +19,10 @@ try {
   else if (action === "allocate") result = await service.saveAllocations(trackingId, input);
   else if (action === "ship") result = await service.savePackage(trackingId, process.env.LOTI_REFUND_PACKAGE_ID!, input);
   else if (action === "close") result = await service.closeTracking(trackingId, input);
+  else if (action === "mixed-payment") result = await service.recordAdditionalOrderMixedPayment(trackingId, orderId!, input);
   else throw new Error(`Unknown refund race action: ${action}`);
-  process.stdout.write(JSON.stringify({ ok: true, tracking: result.tracking }));
+  void result;
+  process.stdout.write(JSON.stringify({ ok: true }));
 } catch (error) {
   const row = error as { message?: string; code?: string };
   process.stdout.write(JSON.stringify({ ok: false, message: row.message ?? "Unknown error", code: row.code ?? null }));

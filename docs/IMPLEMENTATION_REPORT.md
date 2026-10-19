@@ -224,3 +224,64 @@ Favoritos simplifica as ações no vazio global sem remover o FAB. Pacotes e cus
 O E2E cobre 320×640, 360×800, 390×844, 430×932, 768 px e 1440 px; verifica superfície completa, foco, retorno, ausência de overflow e rodapé abaixo do último campo. As evidências antes/depois estão em [`artifacts/qa/mobile-ux/`](../artifacts/qa/mobile-ux/), incluindo resumo do reembolso em 320 px, formulário longo em 320/768/1440 px, coleção/compra e primeira tela de Pacotes e custos. A [auditoria de conclusão](audits/2026-10-15_MOBILE_UX_REFACTOR.md) relaciona os fluxos e limitações.
 
 Na primeira passagem da suíte unitária/integrada, um dos testes de corrida entre processos recebeu `SQLITE_BUSY` ao confirmar a transação; o arquivo de concorrência passou isoladamente (5/5) e a repetição integral passou (226 testes). A validação visual usou Chromium com viewports emulados; dispositivo físico e teclado virtual do sistema não foram testados. A skill `frontend-design` não estava instalada, conforme registrado na auditoria inicial.
+
+## Saldo HubBuy, pagamentos mistos e pedidos adicionais — 17 de outubro de 2026
+
+Implementada localmente a evolução do [plano faseado de saldo HubBuy e pagamentos mistos](26_HUBBUY_BALANCE_AND_MIXED_PAYMENTS_PLAN.md), com as decisões D1–D3 confirmadas pelo usuário: (1) os créditos mantêm direitos proporcionais individuais mesmo com a compra consolidada em uma conta HubBuy; (2) o saldo de outra pessoa pode financiar custo com adiantamento explícito em CNY e baixa manual do acerto feito fora do app; (3) pedidos adicionais e pacote permanecem no mesmo acompanhamento/conta.
+
+O esquema agora registra contas CNY, ledger e direitos por membro, conciliações, consumo FIFO, origens dos pagamentos, alocações financeiras, posições de adiantamento e pedidos adicionais com snapshots próprios. Pagamento misto usa saldo + PIX/cartão, cobra taxa somente no complemento externo e preserva bases históricas BRL. Refund só gera crédito após recebimento confirmado; correções, anulações e abatimentos de adiantamentos ficam auditáveis. Pedidos adicionais entram no pacote aberto elegível com ordem de itens estável. O QC associa esses itens ao pedido correspondente e mantém fotos somente na galeria; a exibição em linhas/cartões de custo da Phase 3 continua sem autorização e sem implementação.
+
+As migrações aditivas `0008`–`0017` e seus snapshots/journal foram gerados. A suíte de migração cria schema prévio, aplica as atualizações em bancos descartáveis, verifica preservação de dados antigos, `foreign_key_check` e reaplicação idempotente. Não foi executado `db:migrate` contra produção ou qualquer alvo remoto.
+
+### Verificações desta implementação
+
+| Verificação | Resultado |
+| --- | --- |
+| `npm run typecheck` | Passou |
+| `npm run lint` | Passou sem erros ou avisos |
+| `npm test -- --maxWorkers=1 --no-file-parallelism --no-isolate --pool=threads --testTimeout=45000` | **253 testes passaram; 7 foram pulados** (35 arquivos passaram, 1 foi pulado) |
+| `npx playwright test tests/e2e/hubbuy-balance.spec.ts --reporter=list` | **1 cenário Chromium passou:** reconciliação sintética, consumo de saldo CNY, complemento PIX, inclusão no mesmo pacote e ausência de overflow em 320 px |
+| `npm run build` | Passou; compilação, TypeScript, páginas e traces concluídos |
+| `npm run db:migrate` + `npm run db:verify` em SQLite descartável explícito | Passou; 47 tabelas, 32 triggers de ledger, zero violações FK; arquivo temporário removido |
+| `git diff --check` | Passou |
+| Evidência visual | [Desktop](../artifacts/qa/hubbuy-balance/mixed-payment-desktop.png) e [320 px](../artifacts/qa/hubbuy-balance/mixed-payment-320.png), capturadas com `LOTI_CAPTURE_HUBBUY_QA=1` |
+
+A primeira suíte completa encontrou contenção SQLite entre recebimento e encerramento; o retry limitado para `SQLITE_BUSY` foi ampliado e a repetição integral passou. O E2E identificou também uma colisão de `allocationOrder` ao atribuir itens do pedido original e de um pedido adicional ao mesmo pacote. O serviço agora cria uma sequência única e determinística, coberta pela integração e pela jornada do navegador.
+
+### Handoff operacional
+
+Esta implementação não registrou saldos, refunds, RAMs/Elixir, cotações, acertos ou conteúdo de pacote reais. Nenhum banco remoto foi acessado ou alterado, nenhum deploy/publicação ocorreu e nenhum recurso R2/Cloudflare ou secret foi configurado. Antes de uso real, os responsáveis precisam fornecer e conferir o histórico e saldo CNY, escolher reconstrução cronológica ou abertura do remanescente coberto, validar direitos individuais e só então autorizar separadamente backup, migração explícita, publicação e smoke test. O código local está pronto para revisão operacional, mas uma conta não deve ser ativada com dados reais antes dessa conciliação.
+
+## Cadastro simples de contas HubBuy — 17 de outubro de 2026
+
+Implementado localmente o [plano de simplificação da criação de contas HubBuy](27_HUBBUY_ACCOUNT_CREATION_UX_PLAN.md). “Contas HubBuy” agora é uma página própria em `/packages/accounts` e um item independente na navbar lateral, imediatamente abaixo de “Pacotes e custos”, com ícone de carteira. Não há abas “Acompanhamentos” e “Contas HubBuy” nas páginas; a ilha mobile continua com quatro destinos.
+
+O cadastro independente cria conta ativa com saldo ¥0 e sem crédito ou direitos artificiais. O recebimento de um reembolso pode criar a conta e lançar o primeiro crédito na mesma transação; retries mantêm o mesmo resultado, e CNY zero não cria conta. Contas legadas só podem ser ativadas com confirmação explícita quando o servidor comprova ledger, direitos e histórico vazios; contas com histórico continuam exigindo conciliação. A lista mostra resumos e concentra extrato, direitos, conciliação e arquivamento na conta selecionada.
+
+### Verificações desta implementação
+
+| Verificação | Resultado |
+| --- | --- |
+| `npm run typecheck` | Passou |
+| `npm run lint` | Passou sem erros ou avisos |
+| `npx vitest run --maxWorkers=1 --no-file-parallelism --no-isolate --pool=threads --testTimeout=45000` | **259 testes passaram; 7 foram pulados** (35 arquivos passaram, 1 foi pulado) |
+| `npx playwright test tests/e2e/hubbuy-balance.spec.ts --reporter=list` | **1 cenário Chromium passou:** item independente na sidebar, conta independente com saldo zero, primeiro crédito de refund criado inline, direitos por pessoa, conta reutilizada em pedido adicional e overflow em 320 px |
+| `npm run build` | Passou; compilação, TypeScript, rotas e traces concluídos |
+| `git diff --check` | Passou |
+
+O Playwright usou arquivos SQLite descartáveis exclusivos, todos removidos ao concluir a validação. Nenhuma migração foi aplicada a banco remoto, nenhum dado financeiro real foi inserido e não houve publicação ou deploy.
+## Exclusão de contas HubBuy — 17/10/2026
+
+Plano [28](28_HUBBUY_ACCOUNT_DELETION_PLAN.md) executado localmente após a fase inicial apenas documental. Em Contas HubBuy → Gerenciar, cadastros nunca usados podem ser excluídos com confirmação e motivo. A exclusão é lógica, retém auditoria e impede qualquer novo vínculo; saldo, ledger, conciliação, pedidos/pacotes/pagamentos/refunds e referências históricas bloqueiam a operação. Arquivamento permanece para contas com histórico, quando elegível. Nenhum encerramento externo é executado.
+
+Entrega: migration aditiva `0018_amused_mikhail_rasputin.sql` e snapshot, 19 novos triggers de ciclo de vida, comando/DTO/API/UI, proteção dos leitores/escritores e recuperação idempotente após commit incerto. Alterações locais anteriores foram preservadas. Testes históricos de migration usam as colunas do schema correspondente; o harness E2E oferece servidor de build local por `LOTI_E2E_PRODUCTION=1`.
+
+Validação: TypeScript, lint e build passaram; suíte completa serializada com threads teve **278 aprovados e 7 skips** (38 arquivos aprovados, 1 ignorado); sete corridas em processos independentes incluídas. **Dois E2Es Chromium passaram**, incluindo cancelamento, perda de resposta/retry, foco e criação/refund/pedido misto. Migration/verify em destino SQLite descartável: 47 tabelas verificadas, 51 triggers requeridos, zero violações FK. Capturas de confirmação 320/1440 px inspecionadas em `artifacts/qa/hubbuy-account-deletion/`. O runner paralelo e o Next dev apresentaram falhas de cache/manifests no Windows; o gate final usou threads serializadas e build de produção local. Não houve acesso financeiro real, migration remota, deploy ou alteração de serviços externos.
+
+Handoff: backup e alvo autorizados → corte coordenado de escritores antigos → migration explícita até `0018` → verify → deploy autorizado → smoke sintético. Detalhes, limites e recuperação estão no plano 28.
+
+### Aditivo — cadastro conciliado por engano
+
+Após o usuário esclarecer que informou saldo apenas para tentar excluir uma conta, foi implementado **Corrigir cadastro e excluir**. A confirmação exige motivo e declaração explícita de valores incorretos. O serviço `discardIncorrectAccount` aceita apenas conciliação ainda sem uso ou vínculo operacional, estorna integralmente créditos e direitos CNY/BRL por lançamentos vinculados e mantém os originais antes de persistir o tombstone na mesma transação. Não existe movimentação financeira externa nem correção automática da conta real mostrada pelo usuário.
+
+Migration `0019_discard_incorrect_hubbuy_registration.sql` mantém as proteções anteriores e exige auditoria e compensação integral para a exceção; um marcador isolado não libera a exclusão. Handoff atualizado: aplicar até `0019` somente no alvo especificamente autorizado. Validação local: **290 testes passaram e 7 foram ignorados**, incluindo nove corridas em processos independentes; **3 cenários Chromium passaram**; TypeScript, lint, build e migration/verify em banco descartável passaram (47 tabelas verificadas, 51 triggers requeridos, zero violações FK). Capturas desktop/mobile do aditivo foram inspecionadas em `artifacts/qa/hubbuy-account-deletion/discard-{320,1440}.png`. A limpeza de bancos de corrida no Windows ocorre após a saída do runner porque libSQL pode reter handles nativos durante o teardown. Nenhuma publicação, migração remota ou alteração da conta do usuário foi realizada.

@@ -11,6 +11,10 @@ export type CostLineInput = {
   effectivePrice: CostValue;
   chinaFreight: CostValue;
   participants: CostWeight[];
+  /** Captured BRL basis for an additional order; excludes the legacy product-charge calculation. */
+  capturedProductCents?: number;
+  capturedChinaCents?: number;
+  capturedFeeCents?: number;
   shippingQuantity?: number;
   refunds?: {
     status: "requested" | "received" | "voided";
@@ -118,6 +122,30 @@ function valueTotal(value: CostValue, quantity: number) {
   return checkedCents(BigInt(value.amountCents) * BigInt(quantity));
 }
 
+function lineProductTotal(line: CostLineInput) {
+  if (line.capturedProductCents !== undefined || line.capturedChinaCents !== undefined || line.capturedFeeCents !== undefined) {
+    if (line.capturedProductCents === undefined || line.capturedChinaCents === undefined || line.capturedFeeCents === undefined) throw new Error("A base BRL capturada do pedido adicional está incompleta.");
+    validCents(line.capturedProductCents, "Base BRL do produto inválida.");
+    validCents(line.capturedChinaCents, "Base BRL do frete China inválida.");
+    validCents(line.capturedFeeCents, "Taxa BRL capturada inválida.");
+    return line.capturedProductCents;
+  }
+  return valueTotal(line.effectivePrice, line.quantity);
+}
+
+function lineChinaTotal(line: CostLineInput) {
+  if (line.capturedProductCents !== undefined || line.capturedChinaCents !== undefined || line.capturedFeeCents !== undefined) {
+    if (line.capturedProductCents === undefined || line.capturedChinaCents === undefined || line.capturedFeeCents === undefined) throw new Error("A base BRL capturada do pedido adicional está incompleta.");
+    validCents(line.capturedChinaCents, "Base BRL do frete China inválida.");
+    return line.capturedChinaCents;
+  }
+  return valueTotal(line.chinaFreight, line.quantity);
+}
+
+function isCapturedLine(line: CostLineInput) {
+  return line.capturedProductCents !== undefined || line.capturedChinaCents !== undefined || line.capturedFeeCents !== undefined;
+}
+
 function packageChargeTotal(charge: PackageChargeInput, packageUnits: number) {
   if (charge.value.state === "pending") return { base: null, fee: null, total: null };
   if (charge.value.state === "no_charge") return { base: 0, fee: 0, total: 0 };
@@ -145,16 +173,17 @@ export function calculateCostTracking(input: { items: CostLineInput[]; packages:
     purchasedQuantities.set(line.id, line.quantity);
     shippingQuantities.set(line.id, shippingQuantity);
     cancelledQuantities.set(line.id, cancelledQuantity);
-    const price = valueTotal(line.effectivePrice, line.quantity);
-    const china = valueTotal(line.chinaFreight, line.quantity);
+    const price = lineProductTotal(line);
+    const china = lineChinaTotal(line);
     components.set(line.id, [
       { name: "Preço efetivo", value: price ?? 0, pending: price === null },
       { name: "Frete China", value: china ?? 0, pending: china === null },
     ]);
   }
 
-  const productBases = lines.map(line => {
-    const price = valueTotal(line.effectivePrice, line.quantity), china = valueTotal(line.chinaFreight, line.quantity);
+  const legacyLines = lines.filter(line => !isCapturedLine(line));
+  const productBases = legacyLines.map(line => {
+    const price = lineProductTotal(line), china = lineChinaTotal(line);
     return { line, base: price === null || china === null ? null : checkedCents(BigInt(price) + BigInt(china)) };
   });
   const productsBaseKnown = productBases.every(entry => entry.base !== null);
@@ -164,15 +193,15 @@ export function calculateCostTracking(input: { items: CostLineInput[]; packages:
   if (productsBaseKnown) {
     if (productsBaseCents === 0) {
       productsFeeCents = 0;
-      productsFeeByLine = new Map(lines.map(line => [line.id, 0]));
+      productsFeeByLine = new Map(legacyLines.map(line => [line.id, 0]));
     } else if (input.productsCharge.feeBps !== null && input.productsCharge.paymentMethod !== null) {
       productsFeeCents = roundFeeCents(productsBaseCents, input.productsCharge.feeBps);
       const feeShares = splitByWeights(productsFeeCents, productBases.map((entry, index) => ({ personId: entry.line.id, allocationOrder: index, weight: entry.base ?? 0 })));
-      productsFeeByLine = new Map(lines.map((line, index) => [line.id, feeShares?.[index] ?? 0]));
+      productsFeeByLine = new Map(legacyLines.map((line, index) => [line.id, feeShares?.[index] ?? 0]));
     }
   }
   for (const line of lines) {
-    const fee = productsFeeByLine.get(line.id);
+    const fee = isCapturedLine(line) ? line.capturedFeeCents! : productsFeeByLine.get(line.id);
     components.get(line.id)!.push({ name: "Taxa dos produtos", value: fee ?? 0, pending: fee === undefined });
   }
 
@@ -232,8 +261,8 @@ export function calculateCostTracking(input: { items: CostLineInput[]; packages:
     requestedRefundCount += refunds.filter(refund => refund.status === "requested").length;
     requestedRefundCents = checkedCents(BigInt(requestedRefundCents) + BigInt(requestedForLine));
     receivedRefundCents = checkedCents(BigInt(receivedRefundCents) + BigInt(receivedForLine));
-    const priceTotal = valueTotal(line.effectivePrice, line.quantity);
-    const chinaTotal = valueTotal(line.chinaFreight, line.quantity);
+    const priceTotal = lineProductTotal(line);
+    const chinaTotal = lineChinaTotal(line);
     const originalProductShares = priceTotal === null ? null : splitByWeights(priceTotal, line.participants);
     const originalChinaShares = chinaTotal === null ? null : splitByWeights(chinaTotal, line.participants);
     const snapshot = activeSnapshots[0] ?? [];

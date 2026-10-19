@@ -1,0 +1,1 @@
+ALTER TABLE `purchase_cost_refunds` ADD `receipt_operation_id` text REFERENCES financial_operations(id);

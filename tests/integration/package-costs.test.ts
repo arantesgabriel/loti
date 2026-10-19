@@ -115,13 +115,8 @@ describe("package and cost tracking", () => {
     detail = await service.createPackage(tracking.id, { expectedRevision: detail.tracking.revision, name: "Pacote 2" });
     const packages = await f.db.select().from(purchasePackages).where(eq(purchasePackages.trackingId, tracking.id)).all();
     const secondPackage = packages.find(pkg => pkg.name === "Pacote 2")!;
-    detail = await service.saveAllocations(tracking.id, {
-      expectedRevision: detail.tracking.revision,
-      allocations: [
-        { packageId: firstPackage.id, costItemId: costItem.id, quantity: 1 },
-        { packageId: secondPackage.id, costItemId: costItem.id, quantity: 2 },
-      ],
-    });
+    detail = await service.saveAllocations(tracking.id, { expectedRevision: detail.tracking.revision, packageId: firstPackage.id, allocations: [{ costItemId: costItem.id, quantity: 1 }] });
+    detail = await service.saveAllocations(tracking.id, { expectedRevision: detail.tracking.revision, packageId: secondPackage.id, allocations: [{ costItemId: costItem.id, quantity: 2 }] });
     expect(detail.calculation.summary.assignedUnits).toBe(3);
     expect(detail.packages.find(pkg => pkg.id === firstPackage.id)?.items[0]?.quantity).toBe(1);
     expect(detail.packages.find(pkg => pkg.id === secondPackage.id)?.items[0]?.quantity).toBe(2);
@@ -146,5 +141,33 @@ describe("package and cost tracking", () => {
     await expect(service.savePackage(tracking.id, firstPackage.id, { expectedRevision: 0, name: "Stale", logisticsStatus: "sent" })).rejects.toThrow(/outra sessão/);
     expect((await f.alice.getData()).items.find(row => row.id === item.id)?.unitPriceCents).toBe(1_000);
     expect(initialPackage.id).toBe(firstPackage.id);
+  });
+
+  it("limits allocation edits to one package and audits seal and pre-send unseal", async () => {
+    const { purchase } = await finalizedPurchase(4, 1_000);
+    const service = packageCostServices(f.db, "alice"), tracking = await service.startTracking(purchase!.id);
+    let detail = await service.getTracking(tracking.id);
+    const item = detail.items[0], firstPackage = detail.packages[0];
+    detail = await service.createPackage(tracking.id, { expectedRevision: detail.tracking.revision, name: "Pacote preservado" });
+    const secondPackage = detail.packages.find(pkg => pkg.name === "Pacote preservado")!;
+    detail = await service.saveAllocations(tracking.id, { expectedRevision: detail.tracking.revision, packageId: firstPackage.id, allocations: [{ costItemId: item.id, quantity: 2 }] });
+    detail = await service.saveAllocations(tracking.id, { expectedRevision: detail.tracking.revision, packageId: secondPackage.id, allocations: [{ costItemId: item.id, quantity: 2 }] });
+    detail = await service.saveAllocations(tracking.id, { expectedRevision: detail.tracking.revision, packageId: firstPackage.id, allocations: [{ costItemId: item.id, quantity: 1 }] });
+    expect(detail.packages.find(pkg => pkg.id === secondPackage.id)?.items[0]?.quantity).toBe(2);
+    expect(detail.packages.find(pkg => pkg.id === firstPackage.id)?.contentEvents.map(event => event.eventType)).toEqual(["content_changed", "content_changed"]);
+
+    detail = await service.savePackage(tracking.id, firstPackage.id, { expectedRevision: detail.tracking.revision, name: firstPackage.name, logisticsStatus: "sent" });
+    expect(detail.packages.find(pkg => pkg.id === firstPackage.id)?.contentSealSource).toBe("user");
+    await expect(service.saveAllocations(tracking.id, { expectedRevision: detail.tracking.revision, packageId: firstPackage.id, allocations: [{ costItemId: item.id, quantity: 0 }] })).rejects.toMatchObject({ code: "PACKAGE_CONTENT_SEALED" });
+    await expect(service.unsealPackageContent(tracking.id, firstPackage.id, { expectedRevision: detail.tracking.revision, reason: "Conferir uma unidade devolvida" })).rejects.toThrow(/preparação/);
+    detail = await service.savePackage(tracking.id, firstPackage.id, { expectedRevision: detail.tracking.revision, name: firstPackage.name, logisticsStatus: "preparing" });
+    expect(detail.packages.find(pkg => pkg.id === firstPackage.id)?.contentSealSource).toBe("user");
+    detail = await service.unsealPackageContent(tracking.id, firstPackage.id, { expectedRevision: detail.tracking.revision, reason: "Reabertura de conferência antes do envio" });
+    const reopened = detail.packages.find(pkg => pkg.id === firstPackage.id)!;
+    expect(reopened.contentSealSource).toBeNull();
+    expect(reopened.contentEvents.at(-1)).toMatchObject({ eventType: "content_unsealed", reason: "Reabertura de conferência antes do envio", actorId: "alice" });
+    detail = await service.saveAllocations(tracking.id, { expectedRevision: detail.tracking.revision, packageId: firstPackage.id, allocations: [{ costItemId: item.id, quantity: 2 }] });
+    expect(detail.packages.find(pkg => pkg.id === firstPackage.id)?.items[0]?.quantity).toBe(2);
+    expect(detail.packages.find(pkg => pkg.id === secondPackage.id)?.items[0]?.quantity).toBe(2);
   });
 });

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { sqliteTable, text, integer, index, uniqueIndex, check, primaryKey } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, index, uniqueIndex, check, primaryKey, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 const timestamp = (name: string) => integer(name, { mode: "timestamp_ms" }).notNull();
 const dates = () => ({ createdAt: timestamp("created_at"), updatedAt: timestamp("updated_at") });
 // Better Auth's canonical field contract; passwords and sessions are managed by its adapter.
@@ -104,21 +104,67 @@ export const purchaseCostTrackings = sqliteTable("purchase_cost_trackings", {
   check("cost_tracking_revision", sql`typeof(${t.revision}) = 'integer' AND ${t.revision} >= 0`),
 ]);
 
+export const purchaseCostOrders = sqliteTable("purchase_cost_orders", {
+  id: text("id").primaryKey(), trackingId: text("tracking_id").notNull().references(() => purchaseCostTrackings.id),
+  kind: text("kind", { enum: ["original", "additional"] }).notNull(),
+  accountId: text("account_id").references((): AnySQLiteColumn => hubbuyAccounts.id),
+  externalReference: text("external_reference"), state: text("state", { enum: ["draft", "recorded", "voided"] }).notNull(),
+  revision: integer("revision").notNull().default(0), createdBy: text("created_by").notNull().references(() => user.id),
+  createdAt: timestamp("created_at"), updatedBy: text("updated_by").notNull().references(() => user.id), updatedAt: timestamp("updated_at"),
+  occurredAt: integer("occurred_at", { mode: "timestamp_ms" }), recordedAt: integer("recorded_at", { mode: "timestamp_ms" }),
+  operationId: text("operation_id").references((): AnySQLiteColumn => financialOperations.id),
+}, t => [
+  uniqueIndex("cost_order_original_idx").on(t.trackingId).where(sql`${t.kind} = 'original'`),
+  uniqueIndex("cost_order_external_reference_idx").on(t.accountId, t.externalReference).where(sql`${t.externalReference} IS NOT NULL`),
+  index("cost_order_tracking_idx").on(t.trackingId, t.state, t.createdAt),
+  check("cost_order_kind", sql`${t.kind} IN ('original','additional')`),
+  check("cost_order_state", sql`(${t.kind} = 'original' AND ${t.state} = 'recorded') OR (${t.kind} = 'additional' AND ${t.state} IN ('draft','recorded','voided'))`),
+  check("cost_order_revision", sql`typeof(${t.revision}) = 'integer' AND ${t.revision} >= 0`),
+  check("cost_order_external_reference", sql`${t.externalReference} IS NULL OR length(trim(${t.externalReference})) BETWEEN 1 AND 200`),
+  check("cost_order_recorded", sql`(${t.state} = 'recorded' AND (${t.recordedAt} IS NOT NULL OR (${t.kind} = 'original' AND ${t.accountId} IS NULL AND ${t.operationId} IS NULL))) OR (${t.state} != 'recorded' AND ${t.recordedAt} IS NULL)`),
+]);
+
+export const purchaseAdditionalOrderItems = sqliteTable("purchase_additional_order_items", {
+  id: text("id").primaryKey(), orderId: text("order_id").notNull().references(() => purchaseCostOrders.id),
+  sourceFavoriteId: text("source_favorite_id").references(() => favorites.id, { onDelete: "set null" }),
+  name: text("name").notNull(), url: text("url").notNull(), platform: text("platform").notNull(), visualKey: text("visual_key").notNull(),
+  variant: text("variant"), notes: text("notes"), quantity: integer("quantity").notNull(), itemOrder: integer("item_order").notNull(),
+  createdBy: text("created_by").notNull().references(() => user.id), createdAt: timestamp("created_at"),
+}, t => [
+  uniqueIndex("additional_order_item_order_idx").on(t.orderId, t.itemOrder),
+  index("additional_order_item_favorite_idx").on(t.sourceFavoriteId),
+  check("additional_order_item_name", sql`length(trim(${t.name})) BETWEEN 1 AND 200`),
+  check("additional_order_item_quantity", sql`typeof(${t.quantity}) = 'integer' AND ${t.quantity} BETWEEN 1 AND 10000`),
+  check("additional_order_item_order", sql`typeof(${t.itemOrder}) = 'integer' AND ${t.itemOrder} >= 0`),
+]);
+
 export const purchaseItemCosts = sqliteTable("purchase_item_costs", {
   id: text("id").primaryKey(),
   trackingId: text("tracking_id").notNull().references(() => purchaseCostTrackings.id),
-  purchaseItemId: text("purchase_item_id").notNull().references(() => purchaseItems.id),
+  orderId: text("order_id").notNull().references(() => purchaseCostOrders.id),
+  purchaseItemId: text("purchase_item_id").references(() => purchaseItems.id),
+  additionalOrderItemId: text("additional_order_item_id").references((): AnySQLiteColumn => purchaseAdditionalOrderItems.id),
   itemOrder: integer("item_order").notNull(),
   effectivePriceState: text("effective_price_state", { enum: ["pending", "known", "no_charge"] }).notNull(),
   effectivePriceUnitCents: integer("effective_price_unit_cents"),
   chinaFreightState: text("china_freight_state", { enum: ["pending", "known", "no_charge"] }).notNull().default("pending"),
   chinaFreightUnitCents: integer("china_freight_unit_cents"),
+  nativeProductState: text("native_product_state", { enum: ["unknown", "known", "no_charge"] }).notNull().default("unknown"),
+  nativeProductCnyMinor: integer("native_product_cny_minor"),
+  nativeChinaState: text("native_china_state", { enum: ["unknown", "known", "no_charge"] }).notNull().default("unknown"),
+  nativeChinaCnyMinor: integer("native_china_cny_minor"), valuationVersion: integer("valuation_version").notNull().default(1),
 }, t => [
-  uniqueIndex("cost_item_tracking_item_idx").on(t.trackingId, t.purchaseItemId),
-  index("cost_item_tracking_order_idx").on(t.trackingId, t.itemOrder),
+  uniqueIndex("cost_item_tracking_item_idx").on(t.trackingId, t.purchaseItemId).where(sql`${t.purchaseItemId} IS NOT NULL`),
+  uniqueIndex("cost_item_additional_order_idx").on(t.trackingId, t.additionalOrderItemId).where(sql`${t.additionalOrderItemId} IS NOT NULL`),
+  index("cost_item_tracking_order_idx").on(t.trackingId, t.orderId, t.itemOrder),
+  index("cost_item_order_idx").on(t.orderId, t.itemOrder),
+  check("cost_item_origin", sql`(${t.purchaseItemId} IS NOT NULL AND ${t.additionalOrderItemId} IS NULL) OR (${t.purchaseItemId} IS NULL AND ${t.additionalOrderItemId} IS NOT NULL)`),
   check("cost_item_order", sql`typeof(${t.itemOrder}) = 'integer' AND ${t.itemOrder} >= 0`),
   check("cost_item_effective_price_state", sql`(${t.effectivePriceState} = 'known' AND typeof(${t.effectivePriceUnitCents}) = 'integer' AND ${t.effectivePriceUnitCents} BETWEEN 0 AND 1000000000000) OR (${t.effectivePriceState} IN ('pending','no_charge') AND ${t.effectivePriceUnitCents} IS NULL)`),
   check("cost_item_china_freight_state", sql`(${t.chinaFreightState} = 'known' AND typeof(${t.chinaFreightUnitCents}) = 'integer' AND ${t.chinaFreightUnitCents} BETWEEN 0 AND 1000000000000) OR (${t.chinaFreightState} IN ('pending','no_charge') AND ${t.chinaFreightUnitCents} IS NULL)`),
+  check("cost_item_native_product_state", sql`(${t.nativeProductState} = 'known' AND typeof(${t.nativeProductCnyMinor}) = 'integer' AND ${t.nativeProductCnyMinor} BETWEEN 0 AND 1000000000000) OR (${t.nativeProductState} IN ('unknown','no_charge') AND ${t.nativeProductCnyMinor} IS NULL)`),
+  check("cost_item_native_china_state", sql`(${t.nativeChinaState} = 'known' AND typeof(${t.nativeChinaCnyMinor}) = 'integer' AND ${t.nativeChinaCnyMinor} BETWEEN 0 AND 1000000000000) OR (${t.nativeChinaState} IN ('unknown','no_charge') AND ${t.nativeChinaCnyMinor} IS NULL)`),
+  check("cost_item_valuation_version", sql`typeof(${t.valuationVersion}) = 'integer' AND ${t.valuationVersion} IN (1,2)`),
 ]);
 
 export const purchaseCostParticipants = sqliteTable("purchase_cost_participants", {
@@ -142,6 +188,10 @@ export const purchasePackages = sqliteTable("purchase_packages", {
   name: text("name").notNull(),
   packageOrder: integer("package_order").notNull(),
   logisticsStatus: text("logistics_status", { enum: ["preparing", "sent", "received"] }).notNull().default("preparing"),
+  accountId: text("account_id").references((): AnySQLiteColumn => hubbuyAccounts.id),
+  contentRevision: integer("content_revision").notNull().default(0),
+  contentSealedAt: integer("content_sealed_at", { mode: "timestamp_ms" }), contentSealedBy: text("content_sealed_by").references(() => user.id),
+  contentSealSource: text("content_seal_source", { enum: ["user", "legacy_locked"] }),
   createdAt: timestamp("created_at"),
   updatedAt: timestamp("updated_at"),
 }, t => [
@@ -149,6 +199,23 @@ export const purchasePackages = sqliteTable("purchase_packages", {
   check("cost_package_name", sql`length(trim(${t.name})) > 0`),
   check("cost_package_order", sql`typeof(${t.packageOrder}) = 'integer' AND ${t.packageOrder} >= 0`),
   check("cost_package_logistics", sql`${t.logisticsStatus} IN ('preparing','sent','received')`),
+  check("cost_package_content_revision", sql`typeof(${t.contentRevision}) = 'integer' AND ${t.contentRevision} >= 0`),
+  check("cost_package_content_seal", sql`(${t.contentSealSource} IS NULL AND ${t.contentSealedAt} IS NULL AND ${t.contentSealedBy} IS NULL) OR (${t.contentSealSource} = 'legacy_locked' AND ${t.contentSealedAt} IS NULL AND ${t.contentSealedBy} IS NULL) OR (${t.contentSealSource} = 'user' AND ${t.contentSealedAt} IS NOT NULL AND ${t.contentSealedBy} IS NOT NULL)`),
+]);
+
+export const purchaseCostPackageEvents = sqliteTable("purchase_cost_package_events", {
+  id: text("id").primaryKey(), trackingId: text("tracking_id").notNull().references(() => purchaseCostTrackings.id),
+  packageId: text("package_id").notNull().references(() => purchasePackages.id), eventOrder: integer("event_order").notNull(),
+  eventType: text("event_type", { enum: ["content_sealed", "content_changed", "content_unsealed"] }).notNull(),
+  contentRevision: integer("content_revision").notNull(), actorId: text("actor_id").notNull().references(() => user.id),
+  reason: text("reason"), createdAt: timestamp("created_at"),
+}, t => [
+  uniqueIndex("cost_package_event_order_idx").on(t.packageId, t.eventOrder),
+  index("cost_package_event_tracking_idx").on(t.trackingId, t.packageId, t.eventOrder),
+  check("cost_package_event_type", sql`${t.eventType} IN ('content_sealed','content_changed','content_unsealed')`),
+  check("cost_package_event_order", sql`typeof(${t.eventOrder}) = 'integer' AND ${t.eventOrder} >= 0`),
+  check("cost_package_event_revision", sql`typeof(${t.contentRevision}) = 'integer' AND ${t.contentRevision} >= 0`),
+  check("cost_package_event_reason", sql`(${t.eventType} = 'content_unsealed' AND length(trim(${t.reason})) BETWEEN 1 AND 1000) OR (${t.eventType} != 'content_unsealed' AND ${t.reason} IS NULL)`),
 ]);
 
 export const purchasePackageItems = sqliteTable("purchase_package_items", {
@@ -167,8 +234,10 @@ export const purchasePackageItems = sqliteTable("purchase_package_items", {
 export const purchaseCostCharges = sqliteTable("purchase_cost_charges", {
   id: text("id").primaryKey(),
   trackingId: text("tracking_id").notNull().references(() => purchaseCostTrackings.id),
+  orderId: text("order_id").references(() => purchaseCostOrders.id),
   packageId: text("package_id").references(() => purchasePackages.id),
   chargeType: text("charge_type", { enum: ["products", "brazil_freight", "customs"] }).notNull(),
+  paymentModel: text("payment_model", { enum: ["legacy_single", "components_v1"] }).notNull().default("legacy_single"),
   valueState: text("value_state", { enum: ["pending", "known", "no_charge"] }),
   amountCents: integer("amount_cents"),
   paymentMethod: text("payment_method", { enum: ["pix", "card"] }),
@@ -179,14 +248,52 @@ export const purchaseCostCharges = sqliteTable("purchase_cost_charges", {
   createdAt: timestamp("created_at"),
   updatedAt: timestamp("updated_at"),
 }, t => [
-  uniqueIndex("cost_charge_products_idx").on(t.trackingId).where(sql`${t.chargeType} = 'products'`),
+  uniqueIndex("cost_charge_products_order_idx").on(t.orderId).where(sql`${t.chargeType} = 'products'`),
   uniqueIndex("cost_charge_package_type_idx").on(t.packageId, t.chargeType).where(sql`${t.chargeType} IN ('brazil_freight','customs')`),
   index("cost_charge_tracking_idx").on(t.trackingId, t.chargeType),
-  check("cost_charge_package_scope", sql`(${t.chargeType} = 'products' AND ${t.packageId} IS NULL AND ${t.valueState} IS NULL AND ${t.amountCents} IS NULL) OR (${t.chargeType} IN ('brazil_freight','customs') AND ${t.packageId} IS NOT NULL)`),
+  check("cost_charge_package_scope", sql`(${t.chargeType} = 'products' AND ${t.orderId} IS NOT NULL AND ${t.packageId} IS NULL AND ${t.valueState} IS NULL AND ${t.amountCents} IS NULL) OR (${t.chargeType} IN ('brazil_freight','customs') AND ${t.orderId} IS NULL AND ${t.packageId} IS NOT NULL)`),
   check("cost_charge_value_state", sql`${t.chargeType} = 'products' OR (${t.valueState} = 'known' AND typeof(${t.amountCents}) = 'integer' AND ${t.amountCents} BETWEEN 0 AND 1000000000000) OR (${t.valueState} IN ('pending','no_charge') AND ${t.amountCents} IS NULL)`),
   check("cost_charge_fee", sql`(${t.feeBps} IS NULL AND ${t.paymentMethod} IS NULL) OR (typeof(${t.feeBps}) = 'integer' AND ${t.feeBps} BETWEEN 0 AND 10000 AND ${t.paymentMethod} IN ('pix','card'))`),
   check("cost_charge_customs_fee", sql`${t.chargeType} != 'customs' OR (${t.feeBps} IS NULL AND ${t.paymentMethod} IS NULL)`),
   check("cost_charge_paid", sql`(${t.paymentStatus} = 'pending' AND ${t.paidAt} IS NULL AND ${t.paidBy} IS NULL) OR (${t.paymentStatus} = 'paid' AND ${t.paidAt} IS NOT NULL AND ${t.paidBy} IS NOT NULL)`),
+]);
+
+export const purchasePaymentComponents = sqliteTable("purchase_payment_components", {
+  id: text("id").primaryKey(), orderId: text("order_id").notNull().references(() => purchaseCostOrders.id),
+  chargeId: text("charge_id").notNull().references(() => purchaseCostCharges.id), operationId: text("operation_id").notNull().references((): AnySQLiteColumn => financialOperations.id),
+  componentOrder: integer("component_order").notNull(), sourceType: text("source_type", { enum: ["balance", "pix", "card"] }).notNull(),
+  sourceCurrency: text("source_currency", { enum: ["CNY", "BRL"] }).notNull(), sourceAccountId: text("source_account_id").references((): AnySQLiteColumn => hubbuyAccounts.id),
+  principalAmountMinor: integer("principal_amount_minor").notNull(), cnyMinor: integer("cny_minor").notNull(), principalBrlCents: integer("principal_brl_cents").notNull(),
+  feeBps: integer("fee_bps").notNull(), feeBrlCents: integer("fee_brl_cents").notNull(),
+  conversionCnyMinor: integer("conversion_cny_minor"), conversionBrlCents: integer("conversion_brl_cents"),
+  confirmedBy: text("confirmed_by").notNull().references(() => user.id), confirmedAt: integer("confirmed_at", { mode: "timestamp_ms" }).notNull(),
+  createdAt: timestamp("created_at"),
+}, t => [
+  uniqueIndex("payment_component_order_idx").on(t.orderId, t.componentOrder),
+  index("payment_component_charge_idx").on(t.chargeId, t.componentOrder),
+  index("payment_component_operation_idx").on(t.operationId),
+  check("payment_component_order", sql`typeof(${t.componentOrder}) = 'integer' AND ${t.componentOrder} >= 0`),
+  check("payment_component_source", sql`${t.sourceType} IN ('balance','pix','card')`),
+  check("payment_component_source_amount", sql`typeof(${t.principalAmountMinor}) = 'integer' AND ${t.principalAmountMinor} BETWEEN 1 AND 1000000000000 AND typeof(${t.cnyMinor}) = 'integer' AND ${t.cnyMinor} BETWEEN 1 AND 1000000000000`),
+  check("payment_component_brl", sql`typeof(${t.principalBrlCents}) = 'integer' AND ${t.principalBrlCents} BETWEEN 0 AND 1000000000000 AND typeof(${t.feeBrlCents}) = 'integer' AND ${t.feeBrlCents} BETWEEN 0 AND 1000000000000`),
+  check("payment_component_fee", sql`typeof(${t.feeBps}) = 'integer' AND ${t.feeBps} BETWEEN 0 AND 10000`),
+  check("payment_component_conversion", sql`(${t.conversionCnyMinor} IS NULL AND ${t.conversionBrlCents} IS NULL) OR (typeof(${t.conversionCnyMinor}) = 'integer' AND ${t.conversionCnyMinor} BETWEEN 1 AND 1000000000000 AND typeof(${t.conversionBrlCents}) = 'integer' AND ${t.conversionBrlCents} BETWEEN 1 AND 1000000000000)`),
+  check("payment_component_balance", sql`(${t.sourceType} = 'balance' AND ${t.sourceCurrency} = 'CNY' AND ${t.sourceAccountId} IS NOT NULL AND ${t.feeBps} = 0 AND ${t.feeBrlCents} = 0 AND ${t.principalAmountMinor} = ${t.cnyMinor}) OR (${t.sourceType} IN ('pix','card') AND ${t.sourceCurrency} = 'BRL' AND ${t.sourceAccountId} IS NULL AND ${t.principalAmountMinor} = ${t.principalBrlCents} AND (${t.conversionCnyMinor} IS NOT NULL))`),
+]);
+
+export const purchasePaymentAllocations = sqliteTable("purchase_payment_allocations", {
+  id: text("id").primaryKey(), componentId: text("component_id").notNull().references(() => purchasePaymentComponents.id),
+  costItemId: text("cost_item_id").notNull().references(() => purchaseItemCosts.id),
+  costComponent: text("cost_component", { enum: ["product", "china"] }).notNull(), personId: text("person_id").notNull().references(() => user.id),
+  allocationOrder: integer("allocation_order").notNull(), cnyMinor: integer("cny_minor").notNull(), principalBrlCents: integer("principal_brl_cents").notNull(),
+  feeBrlCents: integer("fee_brl_cents").notNull(), historicalBrlCents: integer("historical_brl_cents").notNull(),
+}, t => [
+  uniqueIndex("payment_allocation_person_idx").on(t.componentId, t.costItemId, t.costComponent, t.personId),
+  uniqueIndex("payment_allocation_order_idx").on(t.componentId, t.allocationOrder),
+  index("payment_allocation_cost_item_idx").on(t.costItemId, t.costComponent),
+  check("payment_allocation_order", sql`typeof(${t.allocationOrder}) = 'integer' AND ${t.allocationOrder} >= 0`),
+  check("payment_allocation_cny", sql`typeof(${t.cnyMinor}) = 'integer' AND ${t.cnyMinor} BETWEEN 1 AND 1000000000000`),
+  check("payment_allocation_brl", sql`typeof(${t.principalBrlCents}) = 'integer' AND ${t.principalBrlCents} BETWEEN 0 AND 1000000000000 AND typeof(${t.feeBrlCents}) = 'integer' AND ${t.feeBrlCents} BETWEEN 0 AND 1000000000000 AND typeof(${t.historicalBrlCents}) = 'integer' AND ${t.historicalBrlCents} BETWEEN 0 AND 1000000000000`),
 ]);
 
 export const purchaseCostReopenings = sqliteTable("purchase_cost_reopenings", {
@@ -210,7 +317,15 @@ export const purchaseCostRefunds = sqliteTable("purchase_cost_refunds", {
   requestedChinaCents: integer("requested_china_cents").notNull(),
   receivedProductCents: integer("received_product_cents"),
   receivedChinaCents: integer("received_china_cents"),
+  refundDestination: text("refund_destination", { enum: ["hubbuy", "external"] }),
+  hubbuyAccountId: text("hubbuy_account_id").references((): AnySQLiteColumn => hubbuyAccounts.id),
+  receivedProductCnyMinor: integer("received_product_cny_minor"),
+  receivedChinaCnyMinor: integer("received_china_cny_minor"),
+  nativeEvidence: text("native_evidence"),
+  creditOperationId: text("credit_operation_id").references((): AnySQLiteColumn => financialOperations.id),
+  receiptOperationId: text("receipt_operation_id").references((): AnySQLiteColumn => financialOperations.id),
   reason: text("reason").notNull(),
+  unitStart: integer("unit_start").notNull().default(0),
   originalItemQuantity: integer("original_item_quantity").notNull(),
   originalProductUnitCents: integer("original_product_unit_cents").notNull(),
   originalChinaUnitCents: integer("original_china_unit_cents").notNull(),
@@ -236,13 +351,37 @@ export const purchaseCostRefunds = sqliteTable("purchase_cost_refunds", {
   index("cost_refund_item_status_idx").on(t.costItemId, t.status),
   index("cost_refund_requested_order_idx").on(t.trackingId, t.requestedAt, t.id),
   check("cost_refund_status", sql`${t.status} IN ('requested','received','voided')`),
+  check("cost_refund_destination", sql`(${t.refundDestination} IS NULL AND ${t.hubbuyAccountId} IS NULL AND ${t.receivedProductCnyMinor} IS NULL AND ${t.receivedChinaCnyMinor} IS NULL AND ${t.nativeEvidence} IS NULL AND ${t.creditOperationId} IS NULL) OR (${t.refundDestination} = 'external' AND ${t.hubbuyAccountId} IS NULL AND ${t.receivedProductCnyMinor} IS NULL AND ${t.receivedChinaCnyMinor} IS NULL AND ${t.nativeEvidence} IS NULL AND ${t.creditOperationId} IS NULL) OR (${t.refundDestination} = 'hubbuy' AND ${t.hubbuyAccountId} IS NOT NULL AND typeof(${t.receivedProductCnyMinor}) = 'integer' AND ${t.receivedProductCnyMinor} BETWEEN 0 AND 1000000000000 AND typeof(${t.receivedChinaCnyMinor}) = 'integer' AND ${t.receivedChinaCnyMinor} BETWEEN 0 AND 1000000000000 AND length(trim(${t.nativeEvidence})) BETWEEN 3 AND 1000 AND ((${t.receivedProductCnyMinor} + ${t.receivedChinaCnyMinor} = 0 AND ${t.creditOperationId} IS NULL) OR (${t.receivedProductCnyMinor} + ${t.receivedChinaCnyMinor} > 0 AND ${t.creditOperationId} IS NOT NULL)))`),
   check("cost_refund_quantity", sql`typeof(${t.quantity}) = 'integer' AND ${t.quantity} BETWEEN 1 AND 10000`),
   check("cost_refund_requested_amounts", sql`typeof(${t.requestedProductCents}) = 'integer' AND ${t.requestedProductCents} BETWEEN 0 AND 1000000000000 AND typeof(${t.requestedChinaCents}) = 'integer' AND ${t.requestedChinaCents} BETWEEN 0 AND 1000000000000 AND ${t.requestedProductCents} + ${t.requestedChinaCents} > 0`),
   check("cost_refund_received_state", sql`(${t.status} = 'requested' AND ${t.receivedProductCents} IS NULL AND ${t.receivedChinaCents} IS NULL AND ${t.receivedAt} IS NULL AND ${t.receivedBy} IS NULL) OR (${t.status} IN ('received','voided') AND ((${t.receivedProductCents} IS NULL AND ${t.receivedChinaCents} IS NULL AND ${t.receivedAt} IS NULL AND ${t.receivedBy} IS NULL) OR (typeof(${t.receivedProductCents}) = 'integer' AND ${t.receivedProductCents} BETWEEN 0 AND 1000000000000 AND typeof(${t.receivedChinaCents}) = 'integer' AND ${t.receivedChinaCents} BETWEEN 0 AND 1000000000000 AND ${t.receivedAt} IS NOT NULL AND ${t.receivedBy} IS NOT NULL)))`),
   check("cost_refund_void_state", sql`(${t.status} = 'voided' AND ${t.voidedAt} IS NOT NULL AND ${t.voidedBy} IS NOT NULL AND length(trim(${t.voidReason})) > 0) OR (${t.status} != 'voided' AND ${t.voidedAt} IS NULL AND ${t.voidedBy} IS NULL AND ${t.voidReason} IS NULL)`),
   check("cost_refund_original_values", sql`typeof(${t.originalItemQuantity}) = 'integer' AND ${t.originalItemQuantity} BETWEEN 1 AND 10000 AND typeof(${t.originalProductUnitCents}) = 'integer' AND ${t.originalProductUnitCents} BETWEEN 0 AND 1000000000000 AND typeof(${t.originalChinaUnitCents}) = 'integer' AND ${t.originalChinaUnitCents} BETWEEN 0 AND 1000000000000`),
+  check("cost_refund_unit_range", sql`typeof(${t.unitStart}) = 'integer' AND ${t.unitStart} >= 0 AND ${t.unitStart} + ${t.quantity} <= ${t.originalItemQuantity}`),
   check("cost_refund_fee_snapshot", sql`(${t.originalPaymentMethod} IS NULL AND ${t.originalFeeBps} IS NULL) OR (${t.originalPaymentMethod} IN ('pix','card') AND typeof(${t.originalFeeBps}) = 'integer' AND ${t.originalFeeBps} BETWEEN 0 AND 10000)`),
   check("cost_refund_reason", sql`length(trim(${t.reason})) BETWEEN 1 AND 1000`),
+]);
+
+export const purchaseRefundPaymentAllocations = sqliteTable("purchase_refund_payment_allocations", {
+  id: text("id").primaryKey(), refundId: text("refund_id").notNull().references(() => purchaseCostRefunds.id),
+  operationId: text("operation_id").notNull().references((): AnySQLiteColumn => financialOperations.id),
+  paymentAllocationId: text("payment_allocation_id").references((): AnySQLiteColumn => purchasePaymentAllocations.id),
+  balanceConsumptionId: text("balance_consumption_id").references((): AnySQLiteColumn => hubbuyBalanceConsumptions.id),
+  costComponent: text("cost_component", { enum: ["product", "china"] }).notNull(),
+  sourceType: text("source_type", { enum: ["legacy_single", "balance", "pix", "card"] }).notNull(),
+  personId: text("person_id").notNull().references(() => user.id), allocationOrder: integer("allocation_order").notNull(),
+  cnyMinor: integer("cny_minor").notNull(), principalBrlCents: integer("principal_brl_cents").notNull(),
+  feeBrlCents: integer("fee_brl_cents").notNull(), historicalBrlCents: integer("historical_brl_cents").notNull(),
+}, t => [
+  uniqueIndex("refund_payment_allocation_order_idx").on(t.refundId, t.operationId, t.allocationOrder),
+  index("refund_payment_allocation_source_idx").on(t.paymentAllocationId, t.costComponent),
+  index("refund_payment_allocation_operation_idx").on(t.operationId, t.refundId),
+  index("refund_payment_allocation_person_idx").on(t.refundId, t.personId, t.costComponent),
+  check("refund_payment_allocation_order", sql`typeof(${t.allocationOrder}) = 'integer' AND ${t.allocationOrder} >= 0`),
+  check("refund_payment_allocation_cny", sql`typeof(${t.cnyMinor}) = 'integer' AND ${t.cnyMinor} BETWEEN 0 AND 1000000000000`),
+  check("refund_payment_allocation_brl", sql`typeof(${t.principalBrlCents}) = 'integer' AND ${t.principalBrlCents} BETWEEN 0 AND 1000000000000 AND typeof(${t.feeBrlCents}) = 'integer' AND ${t.feeBrlCents} BETWEEN 0 AND 1000000000000 AND typeof(${t.historicalBrlCents}) = 'integer' AND ${t.historicalBrlCents} BETWEEN 0 AND 1000000000000`),
+  check("refund_payment_allocation_origin", sql`(${t.sourceType} = 'legacy_single' AND ${t.paymentAllocationId} IS NULL) OR (${t.sourceType} != 'legacy_single' AND ${t.paymentAllocationId} IS NOT NULL)`),
+  check("refund_payment_allocation_consumption", sql`${t.balanceConsumptionId} IS NULL OR (${t.sourceType} = 'balance' AND ${t.paymentAllocationId} IS NOT NULL)`),
 ]);
 
 export const purchaseCostRefundParticipants = sqliteTable("purchase_cost_refund_participants", {
@@ -292,10 +431,10 @@ export const qcImports = sqliteTable("qc_imports", {
 
 export const hubbuyExternalItems = sqliteTable("hubbuy_external_items", {
   id: text("id").primaryKey(), workspaceId: text("workspace_id").notNull().references(() => workspaces.id), purchaseId: text("purchase_id").notNull().references(() => purchases.id),
-  purchaseItemId: text("purchase_item_id").references(() => purchaseItems.id), orderGoodsId: text("order_goods_id"), orderGoodsNo: text("order_goods_no"),
+  purchaseItemId: text("purchase_item_id").references(() => purchaseItems.id), additionalOrderItemId: text("additional_order_item_id").references(() => purchaseAdditionalOrderItems.id), orderGoodsId: text("order_goods_id"), orderGoodsNo: text("order_goods_no"),
   orderNo: text("order_no"), offerId: text("offer_id"), channel: text("channel"), offerUrl: text("offer_url"), skuInfo: text("sku_info"), title: text("title"), quantity: integer("quantity"),
   revision: integer("revision").notNull().default(0), confirmedBy: text("confirmed_by").references(() => user.id), confirmedAt: integer("confirmed_at", { mode: "timestamp_ms" }), createdAt: timestamp("created_at"), updatedAt: timestamp("updated_at"),
-}, t => [uniqueIndex("qc_external_purchase_order_goods_idx").on(t.purchaseId, t.orderNo, t.orderGoodsId).where(sql`${t.orderGoodsId} IS NOT NULL`), uniqueIndex("qc_external_purchase_goods_no_idx").on(t.purchaseId, t.orderNo, t.orderGoodsNo).where(sql`${t.orderGoodsNo} IS NOT NULL`), index("qc_external_purchase_item_idx").on(t.purchaseItemId), check("qc_external_revision", sql`typeof(${t.revision}) = 'integer' AND ${t.revision} >= 0`), check("qc_external_quantity", sql`${t.quantity} IS NULL OR (typeof(${t.quantity}) = 'integer' AND ${t.quantity} BETWEEN 0 AND 10000)`)]);
+}, t => [uniqueIndex("qc_external_purchase_order_goods_idx").on(t.purchaseId, t.orderNo, t.orderGoodsId).where(sql`${t.orderGoodsId} IS NOT NULL`), uniqueIndex("qc_external_purchase_goods_no_idx").on(t.purchaseId, t.orderNo, t.orderGoodsNo).where(sql`${t.orderGoodsNo} IS NOT NULL`), index("qc_external_purchase_item_idx").on(t.purchaseItemId), index("qc_external_additional_item_idx").on(t.additionalOrderItemId), check("qc_external_target_origin", sql`NOT (${t.purchaseItemId} IS NOT NULL AND ${t.additionalOrderItemId} IS NOT NULL)`), check("qc_external_revision", sql`typeof(${t.revision}) = 'integer' AND ${t.revision} >= 0`), check("qc_external_quantity", sql`${t.quantity} IS NULL OR (typeof(${t.quantity}) = 'integer' AND ${t.quantity} BETWEEN 0 AND 10000)`)]);
 
 export const qcImages = sqliteTable("qc_images", {
   id: text("id").primaryKey(), externalItemId: text("external_item_id").notNull().references(() => hubbuyExternalItems.id),
@@ -315,6 +454,14 @@ export const qcPresentations = sqliteTable("qc_presentations", {
   updatedBy: text("updated_by").references(() => user.id),
   updatedAt: timestamp("updated_at"),
 }, t => [check("qc_presentation_revision", sql`typeof(${t.revision}) = 'integer' AND ${t.revision} >= 0`)]);
+
+export const qcAdditionalPresentations = sqliteTable("qc_additional_presentations", {
+  additionalOrderItemId: text("additional_order_item_id").primaryKey().references(() => purchaseAdditionalOrderItems.id),
+  primaryImageId: text("primary_image_id").references(() => qcImages.id),
+  revision: integer("revision").notNull().default(0),
+  updatedBy: text("updated_by").references(() => user.id),
+  updatedAt: timestamp("updated_at"),
+}, t => [check("qc_additional_presentation_revision", sql`typeof(${t.revision}) = 'integer' AND ${t.revision} >= 0`)]);
 
 // Private, generated, versioned 160px previews. The object key is generated
 // server-side and is never exposed to clients.
@@ -347,3 +494,125 @@ export const qcRateLimits = sqliteTable("qc_rate_limits", {
 export const qcTransferLocks = sqliteTable("qc_transfer_locks", {
   scope: text("scope").primaryKey(), ownerId: text("owner_id").notNull(), version: integer("version").notNull(), leaseUntil: integer("lease_until").notNull(), updatedAt: timestamp("updated_at"),
 }, t => [check("qc_transfer_lock_version", sql`typeof(${t.version}) = 'integer' AND ${t.version} >= 0`)]);
+
+export const hubbuyAccounts = sqliteTable("hubbuy_accounts", {
+  id: text("id").primaryKey(), workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+  label: text("label").notNull(), email: text("email"), currency: text("currency", { enum: ["CNY"] }).notNull().default("CNY"),
+  status: text("status", { enum: ["reconciling", "active", "archived"] }).notNull().default("reconciling"),
+  balanceCnyMinor: integer("balance_cny_minor").notNull().default(0), revision: integer("revision").notNull().default(0),
+  createdBy: text("created_by").notNull().references(() => user.id), createdAt: timestamp("created_at"),
+  updatedBy: text("updated_by").notNull().references(() => user.id), updatedAt: timestamp("updated_at"),
+  reconciledBy: text("reconciled_by").references(() => user.id), reconciledAt: integer("reconciled_at", { mode: "timestamp_ms" }),
+  // Paired tombstone and retained audit identity; enforced by lifecycle triggers.
+  deletedAt: integer("deleted_at", { mode: "timestamp_ms" }), deletedBy: text("deleted_by").references(() => user.id),
+}, t => [
+  index("hubbuy_account_workspace_idx").on(t.workspaceId, t.status, t.createdAt),
+  check("hubbuy_account_label", sql`length(trim(${t.label})) BETWEEN 1 AND 100`),
+  check("hubbuy_account_currency", sql`${t.currency} = 'CNY'`),
+  check("hubbuy_account_status", sql`${t.status} IN ('reconciling','active','archived')`),
+  check("hubbuy_account_balance", sql`typeof(${t.balanceCnyMinor}) = 'integer' AND ${t.balanceCnyMinor} BETWEEN 0 AND 1000000000000`),
+  check("hubbuy_account_revision", sql`typeof(${t.revision}) = 'integer' AND ${t.revision} >= 0`),
+  check("hubbuy_account_reconciled", sql`(${t.status} = 'active' AND ${t.reconciledAt} IS NOT NULL AND ${t.reconciledBy} IS NOT NULL) OR (${t.status} != 'active')`),
+]);
+
+export const hubbuyReconciliationRuns = sqliteTable("hubbuy_reconciliation_runs", {
+  accountId: text("account_id").primaryKey().references(() => hubbuyAccounts.id),
+  mode: text("mode", { enum: ["chronological", "remainder"] }).notNull(),
+  priorActivityDescription: text("prior_activity_description"), priorActivityOccurredAt: integer("prior_activity_occurred_at", { mode: "timestamp_ms" }),
+  startedBy: text("started_by").notNull().references(() => user.id), startedAt: timestamp("started_at"),
+}, t => [
+  check("hubbuy_reconciliation_mode", sql`(${t.mode} = 'chronological' AND ${t.priorActivityDescription} IS NULL) OR (${t.mode} = 'remainder' AND length(trim(${t.priorActivityDescription})) BETWEEN 1 AND 1000)`),
+]);
+
+export const financialOperations = sqliteTable("financial_operations", {
+  id: text("id").primaryKey(), workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+  operationType: text("operation_type").notNull(), idempotencyKey: text("idempotency_key").notNull(), payloadHash: text("payload_hash").notNull(),
+  actorId: text("actor_id").notNull().references(() => user.id), occurredAt: integer("occurred_at", { mode: "timestamp_ms" }),
+  recordedAt: timestamp("recorded_at"), reason: text("reason"), reversalOfId: text("reversal_of_id"), contextJson: text("context_json").notNull(),
+}, t => [
+  uniqueIndex("financial_operation_idempotency_idx").on(t.workspaceId, t.idempotencyKey),
+  index("financial_operation_type_idx").on(t.workspaceId, t.operationType, t.recordedAt),
+  check("financial_operation_key", sql`length(trim(${t.idempotencyKey})) BETWEEN 1 AND 200`),
+  check("financial_operation_hash", sql`length(${t.payloadHash}) = 64`),
+  check("financial_operation_context", sql`json_valid(${t.contextJson})`),
+  check("financial_operation_reason", sql`${t.reason} IS NULL OR length(trim(${t.reason})) BETWEEN 1 AND 1000`),
+]);
+
+export const hubbuyBalanceEntries = sqliteTable("hubbuy_balance_entries", {
+  id: text("id").primaryKey(), accountId: text("account_id").notNull().references(() => hubbuyAccounts.id),
+  operationId: text("operation_id").notNull().references(() => financialOperations.id), sequence: integer("sequence").notNull(),
+  direction: text("direction", { enum: ["credit", "debit"] }).notNull(), amountCnyMinor: integer("amount_cny_minor").notNull(),
+  historicalBrlCents: integer("historical_brl_cents"), sourceType: text("source_type", { enum: ["refund_received", "manual_adjustment", "opening_balance", "purchase_payment", "refund_offset", "reversal"] }).notNull(), sourceId: text("source_id").notNull(),
+  reversalOfEntryId: text("reversal_of_entry_id").references((): AnySQLiteColumn => hubbuyBalanceEntries.id), createdAt: timestamp("created_at"),
+}, t => [
+  uniqueIndex("hubbuy_balance_sequence_idx").on(t.accountId, t.sequence),
+  uniqueIndex("hubbuy_balance_operation_source_idx").on(t.operationId, t.accountId, t.direction, t.sourceType, t.sourceId),
+  index("hubbuy_balance_account_order_idx").on(t.accountId, t.sequence),
+  check("hubbuy_balance_entry_sequence", sql`typeof(${t.sequence}) = 'integer' AND ${t.sequence} >= 0`),
+  check("hubbuy_balance_entry_direction", sql`${t.direction} IN ('credit','debit')`),
+  check("hubbuy_balance_entry_amount", sql`typeof(${t.amountCnyMinor}) = 'integer' AND ${t.amountCnyMinor} BETWEEN 1 AND 1000000000000`),
+  check("hubbuy_balance_entry_basis", sql`${t.historicalBrlCents} IS NULL OR (typeof(${t.historicalBrlCents}) = 'integer' AND ${t.historicalBrlCents} BETWEEN 0 AND 1000000000000)`),
+  check("hubbuy_balance_entry_source", sql`${t.sourceType} IN ('refund_received','manual_adjustment','opening_balance','purchase_payment','refund_offset','reversal') AND length(trim(${t.sourceId})) BETWEEN 1 AND 200`),
+]);
+
+export const hubbuyReconciliationEvents = sqliteTable("hubbuy_reconciliation_events", {
+  id: text("id").primaryKey(), accountId: text("account_id").notNull().references(() => hubbuyAccounts.id),
+  operationId: text("operation_id").notNull().references(() => financialOperations.id), balanceEntryId: text("balance_entry_id").notNull().references(() => hubbuyBalanceEntries.id),
+  eventType: text("event_type", { enum: ["legacy_receipt", "synthetic_use"] }).notNull(), sourceReference: text("source_reference"), description: text("description").notNull(),
+  amountCnyMinor: integer("amount_cny_minor").notNull(), historicalBrlCents: integer("historical_brl_cents").notNull(), occurredAt: integer("occurred_at", { mode: "timestamp_ms" }).notNull(),
+  createdBy: text("created_by").notNull().references(() => user.id), recordedAt: timestamp("recorded_at"),
+}, t => [
+  uniqueIndex("hubbuy_reconciliation_event_operation_idx").on(t.operationId),
+  uniqueIndex("hubbuy_reconciliation_event_entry_idx").on(t.balanceEntryId),
+  uniqueIndex("hubbuy_reconciliation_source_reference_idx").on(t.accountId, t.sourceReference).where(sql`${t.sourceReference} IS NOT NULL`),
+  index("hubbuy_reconciliation_event_order_idx").on(t.accountId, t.occurredAt, t.recordedAt),
+  check("hubbuy_reconciliation_event_type", sql`${t.eventType} IN ('legacy_receipt','synthetic_use')`),
+  check("hubbuy_reconciliation_event_description", sql`length(trim(${t.description})) BETWEEN 1 AND 1000`),
+  check("hubbuy_reconciliation_event_reference", sql`${t.sourceReference} IS NULL OR length(trim(${t.sourceReference})) BETWEEN 1 AND 200`),
+  check("hubbuy_reconciliation_event_amount", sql`typeof(${t.amountCnyMinor}) = 'integer' AND ${t.amountCnyMinor} BETWEEN 1 AND 1000000000000`),
+  check("hubbuy_reconciliation_event_basis", sql`typeof(${t.historicalBrlCents}) = 'integer' AND ${t.historicalBrlCents} BETWEEN 0 AND 1000000000000`),
+]);
+
+export const hubbuyBalanceCreditShares = sqliteTable("hubbuy_balance_credit_shares", {
+  id: text("id").primaryKey(), creditEntryId: text("credit_entry_id").notNull().references(() => hubbuyBalanceEntries.id),
+  personId: text("person_id").notNull().references(() => user.id), allocationOrder: integer("allocation_order").notNull(),
+  amountCnyMinor: integer("amount_cny_minor").notNull(), historicalBrlCents: integer("historical_brl_cents").notNull(),
+}, t => [
+  uniqueIndex("hubbuy_credit_share_person_idx").on(t.creditEntryId, t.personId),
+  uniqueIndex("hubbuy_credit_share_order_idx").on(t.creditEntryId, t.allocationOrder),
+  index("hubbuy_credit_share_person_order_idx").on(t.personId, t.creditEntryId),
+  check("hubbuy_credit_share_order", sql`typeof(${t.allocationOrder}) = 'integer' AND ${t.allocationOrder} >= 0`),
+  check("hubbuy_credit_share_cny", sql`typeof(${t.amountCnyMinor}) = 'integer' AND ${t.amountCnyMinor} BETWEEN 1 AND 1000000000000`),
+  check("hubbuy_credit_share_brl", sql`typeof(${t.historicalBrlCents}) = 'integer' AND ${t.historicalBrlCents} BETWEEN 0 AND 1000000000000`),
+]);
+
+export const hubbuyBalanceConsumptions = sqliteTable("hubbuy_balance_consumptions", {
+  id: text("id").primaryKey(), debitEntryId: text("debit_entry_id").notNull().references(() => hubbuyBalanceEntries.id),
+  creditShareId: text("credit_share_id").notNull().references(() => hubbuyBalanceCreditShares.id), allocationOrder: integer("allocation_order").notNull(),
+  amountCnyMinor: integer("amount_cny_minor").notNull(), historicalBrlCents: integer("historical_brl_cents").notNull(),
+  paymentAllocationId: text("payment_allocation_id").references((): AnySQLiteColumn => purchasePaymentAllocations.id), createdAt: timestamp("created_at"),
+}, t => [
+  uniqueIndex("hubbuy_consumption_order_idx").on(t.debitEntryId, t.allocationOrder),
+  index("hubbuy_consumption_share_idx").on(t.creditShareId),
+  check("hubbuy_consumption_order", sql`typeof(${t.allocationOrder}) = 'integer' AND ${t.allocationOrder} >= 0`),
+  check("hubbuy_consumption_cny", sql`typeof(${t.amountCnyMinor}) = 'integer' AND ${t.amountCnyMinor} BETWEEN 1 AND 1000000000000`),
+  check("hubbuy_consumption_brl", sql`typeof(${t.historicalBrlCents}) = 'integer' AND ${t.historicalBrlCents} BETWEEN 0 AND 1000000000000`),
+]);
+
+export const memberBalanceFinancingEntries = sqliteTable("member_balance_financing_entries", {
+  id: text("id").primaryKey(), operationId: text("operation_id").notNull().references(() => financialOperations.id),
+  consumptionId: text("consumption_id").notNull().references(() => hubbuyBalanceConsumptions.id),
+  entryType: text("entry_type", { enum: ["advance", "settlement", "refund_offset", "reversal"] }).notNull(),
+  lenderId: text("lender_id").notNull().references(() => user.id), beneficiaryId: text("beneficiary_id").notNull().references(() => user.id),
+  amountCnyMinor: integer("amount_cny_minor").notNull(), historicalBrlCents: integer("historical_brl_cents").notNull(),
+  settledAmountCents: integer("settled_amount_cents"), settledCurrency: text("settled_currency", { enum: ["BRL", "CNY"] }),
+  occurredAt: integer("occurred_at", { mode: "timestamp_ms" }), recordedAt: timestamp("recorded_at"),
+}, t => [
+  index("member_financing_people_idx").on(t.lenderId, t.beneficiaryId, t.recordedAt),
+  index("member_financing_consumption_idx").on(t.consumptionId, t.entryType),
+  check("member_financing_type", sql`${t.entryType} IN ('advance','settlement','refund_offset','reversal')`),
+  check("member_financing_people", sql`${t.lenderId} != ${t.beneficiaryId}`),
+  check("member_financing_cny", sql`typeof(${t.amountCnyMinor}) = 'integer' AND ${t.amountCnyMinor} BETWEEN 1 AND 1000000000000`),
+  check("member_financing_basis", sql`typeof(${t.historicalBrlCents}) = 'integer' AND ${t.historicalBrlCents} BETWEEN 0 AND 1000000000000`),
+  check("member_financing_settlement", sql`(${t.settledAmountCents} IS NULL AND ${t.settledCurrency} IS NULL) OR (typeof(${t.settledAmountCents}) = 'integer' AND ${t.settledAmountCents} BETWEEN 0 AND 1000000000000 AND ${t.settledCurrency} IN ('BRL','CNY'))`),
+]);

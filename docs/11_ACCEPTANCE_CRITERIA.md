@@ -131,6 +131,12 @@
 - browser cannot directly query DB;
 - critical authorization is server-enforced.
 
+## HubBuy account deletion
+
+For HubBuy account deletion, an authorized member can remove an unused local account record with confirmation and reason. The record and audit remain retained; deleted accounts disappear from management and financial selectors. Balance, any ledger history (even net zero), started reconciliation, draft/voided orders, packages, payment sources, refunds including zero receipts, and historical audit references block deletion. Stale revisions, foreign workspaces, late writers and conflicting idempotency payloads are rejected. A lost response can be retried with the same key without duplicate deletion. External HubBuy accounts are unaffected. Full contract: [28](28_HUBBUY_ACCOUNT_DELETION_PLAN.md).
+
+An incorrect registration containing only unused reconciliation data can be annulled through a separate explicit confirmation and reason. The server reverses its original credits and rights exactly in CNY and historical BRL, retains the originals and deletes the registration atomically. Any operational link, real refund receipt, legacy receipt reference, debit or balance consumption blocks this path; cancellation writes nothing, retry cannot duplicate reversals, and failures roll back every part. See plan 28, section 7.
+
 ## Overall MVP DoD
 
 A group can do the entire workflow without the legacy spreadsheet:
@@ -210,3 +216,7 @@ Complete cases and numerical limits: [24 — HubBuy QC import](24_HUBBUY_QC_IMPO
 - Preview/original reads are session-bound and private. Client state is scoped by user and purchase; reopening revalidates and logout/user change clears scope. Original and preview fallback state is component-local, with no document-wide source swapping.
 - Responsive Playwright coverage includes 320, 390, 768, 1024 and 1440px, focus return, Escape, previous/next, cover conflict, deletion fallback and image failure recovery.
 - Phase 3 shows the selected shared cover and up to three private bounded QC previews on desktop product cost lines and responsive mobile product cost cards in Pacotes e custos. Square thumbnails appear below the owner; clicking a thumbnail opens that exact image directly, and “Ver mais” opens the first photo without an intermediate gallery grid. Missing covers/previews and failed reads retain the functional category marker or omit the unavailable thumbnail. Cover changes and deletion fallback refresh the presentation. The main viewer shows the whole photo with its aspect ratio preserved. History, Favorites, Purchase and every other surface stay photo-free outside the QC gallery/viewer, and the separate QC cost list is absent.
+
+## HubBuy balance, mixed payments and additional orders
+
+Acceptance fixtures F1–F16, authorization, idempotency, migration, ledger immutability, FIFO, cross-member advance settlement, refund source allocation, same-tracking/account package seal and preserved legacy snapshots are defined in [26 — HubBuy balance and mixed payments](26_HUBBUY_BALANCE_AND_MIXED_PAYMENTS_PLAN.md#8-fixtures-numéricas-e-matriz-de-aceite). The selected QC gallery may resolve an additional order item as a target under the same existing authorization; this does not authorize photography in cost lines or cards.

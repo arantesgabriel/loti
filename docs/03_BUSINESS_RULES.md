@@ -153,3 +153,17 @@ The finalized purchase remains immutable. A separate workspace-authorized follow
 10. QC galleries are the only surfaces allowed to display product photography. QC changes do not mutate finalized snapshots, package rows, refund records, payments, quantities or calculations. Closing/reopening costs does not govern QC access or management.
 
 See [24 — HubBuy QC import](24_HUBBUY_QC_IMPORT_PLAN.md) for limits, state transitions, SSRF/image validation, routes and race handling.
+
+## Approved HubBuy balance and additional orders — 17 October 2026
+
+The user's approved post-MVP decisions are recorded in [26 — HubBuy balance and mixed payments](26_HUBBUY_BALANCE_AND_MIXED_PAYMENTS_PLAN.md): the group normally uses one HubBuy account for the shared order, while CNY credit shares retain proportional individual rights; another member's share may fund a beneficiary's order only as an explicit advance in CNY; additional orders and package admission stay within the same open tracking and verified account.
+
+The account's physical CNY balance, each member's credit rights, historical BRL cost, external payment principal/fee, and any advance are separate values. Only confirmed HubBuy receipts create CNY credits. Consuming a share preserves its historical BRL basis and uses FIFO among that member's eligible lots. A mixed payment charges fees only on the external principal. A recorded settlement documents what members report; Loti never executes a transfer.
+
+## HubBuy account deletion
+
+Any workspace member may logically delete an unused HubBuy account with a reason and current revision. The account must have no balance, ledger entries, reconciliation, order/package/payment/refund references or operational audit history; a net zero balance alone is insufficient. Creation, explicit activation at known zero and unused archival audit may remain. Deleted accounts retain their ID and audit, leave operational lists/selectors and reject new use. Accounts with history keep the archival flow when eligible. This never closes an account at the external HubBuy service. See [28 — account deletion](28_HUBBUY_ACCOUNT_DELETION_PLAN.md).
+
+A separately confirmed incorrect-registration correction may compensate reconciliation-only credits and remove the local registration when those values were entered by mistake and there has been no operational use, consumption, linked legacy refund, order, package or payment. It retains the original audit and records exact CNY/historical-BRL reversals atomically with deletion; it cannot erase real receipts or spent credits. See section 7 of plan 28.
+
+Additional orders are separate financial snapshots attached to an existing tracking. They do not create or edit a finalized purchase. Draft orders do not add purchasable units. Only a complete payment record makes their units allocatable. A package accepts additional units only while its contents are open and only from that same tracking/account; sending seals the contents. Legacy calculations, paid snapshots, purchase participants, product photos and existing refund meaning remain unchanged.

@@ -14,6 +14,10 @@ Substituir o controle financeiro da antiga planilha: registrar progressivamente 
 
 Criar a guia **Pacotes e custos**, acima de Histórico. Finalizar uma compra continua preservando seus produtos e liberando a próxima compra. O acompanhamento financeiro tem encerramento próprio.
 
+### Aditivo aprovado — 17 de outubro de 2026
+
+O usuário autorizou a extensão pós-MVP de saldo HubBuy CNY, pagamentos com múltiplas fontes, pedidos adicionais e inclusão no pacote existente. O contrato atualizado, decisões D1–D3 e aceitação substitutiva estão em [`26_HUBBUY_BALANCE_AND_MIXED_PAYMENTS_PLAN.md`](26_HUBBUY_BALANCE_AND_MIXED_PAYMENTS_PLAN.md). As regras desta fase continuam para cobranças legadas de fonte única; pagamentos novos usam snapshots por pedido/componente e nunca alteram cobranças ou compras finalizadas. A admissão de novos itens fica limitada ao mesmo acompanhamento e à conta HubBuy verificada.
+
 ## 2. Instruções ao executor
 
 1. Ler `AGENTS.md`, a documentação na ordem indicada, `PROMPT_ONE_SHOT.md`, planos 18–20 e este plano. Conferir o estado real do rateio, schema, migrações e testes antes de trabalhar.

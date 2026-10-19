@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 type RouteContext = { params: Promise<{ importId: string }> };
 const revision = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
-const choice = z.object({ externalKey: z.string().min(1).max(500), purchaseItemId: z.string().min(1).nullable(), correctExisting: z.boolean().optional(), expectedItemId: z.string().min(1).nullable().optional() }).strict();
+const choice = z.object({ externalKey: z.string().min(1).max(500), targetKey: z.string().min(1).nullable(), correctExisting: z.boolean().optional(), expectedTargetKey: z.string().min(1).nullable().optional() }).strict();
 const postSchema = z.discriminatedUnion("operation", [
   z.object({ operation: z.literal("confirm"), expectedRevision: revision, choices: z.array(choice).max(500) }).strict(),
   z.object({ operation: z.literal("batch"), expectedRevision: revision }).strict(),

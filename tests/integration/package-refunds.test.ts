@@ -67,7 +67,8 @@ describe("package product refunds", () => {
     let detail = await service.createPackage(tracking.id, { expectedRevision: initial.tracking.revision, name: "Pacote 2" });
     let pkg = detail.packages[0], secondPackage = detail.packages[1];
     const item = detail.items[0];
-    detail = await service.saveAllocations(tracking.id, { expectedRevision: detail.tracking.revision, allocations: [{ packageId: pkg.id, costItemId: item.id, quantity: 2 }, { packageId: secondPackage.id, costItemId: item.id, quantity: 2 }] });
+    detail = await service.saveAllocations(tracking.id, { expectedRevision: detail.tracking.revision, packageId: pkg.id, allocations: [{ costItemId: item.id, quantity: 2 }] });
+    detail = await service.saveAllocations(tracking.id, { expectedRevision: detail.tracking.revision, packageId: secondPackage.id, allocations: [{ costItemId: item.id, quantity: 2 }] });
     detail = await service.createPackage(tracking.id, { expectedRevision: detail.tracking.revision, name: "Não afetado" });
     pkg = detail.packages[0]; secondPackage = detail.packages[1];
     for (const affected of [pkg, secondPackage]) {
@@ -80,11 +81,10 @@ describe("package product refunds", () => {
       requestedProductCents: 20_000, requestedChinaCents: 0, reason: "Cancelamento com fretes pagos",
       packageRemovals: [{ packageId: pkg.id, quantity: 1 }, { packageId: secondPackage.id, quantity: 1 }], unassignedQuantity: 0,
     };
-    await expect(service.requestRefund(tracking.id, request)).rejects.toMatchObject({ code: "REFUND_PACKAGE_PAYMENT_RESET_REQUIRED" });
-    detail = await service.requestRefund(tracking.id, { ...request, confirmPackagePaymentReset: true });
+    detail = await service.requestRefund(tracking.id, request);
     expect(detail.productsCharge?.paymentStatus).toBe("paid");
-    expect(detail.packages[0].brazilFreightCharge?.paymentStatus).toBe("pending");
-    expect(detail.packages[1].brazilFreightCharge?.paymentStatus).toBe("pending");
+    expect(detail.packages[0].brazilFreightCharge?.paymentStatus).toBe("paid");
+    expect(detail.packages[1].brazilFreightCharge?.paymentStatus).toBe("paid");
     expect(detail.packages[2]).toMatchObject({ id: untouched.id, brazilFreightCharge: { paymentStatus: "pending" }, customsCharge: { paymentStatus: "pending" } });
     expect(detail.packages.slice(0, 2).map(row => row.calculation?.unitCount)).toEqual([1, 1]);
   });
@@ -122,7 +122,7 @@ describe("package product refunds", () => {
     const pkg = detail.packages[0], item = detail.items[0];
     const requested = await service.requestRefund(tracking.id, { expectedRevision: detail.tracking.revision, costItemId: item.id, quantity: 1, requestedProductCents: 10_000, requestedChinaCents: 0, reason: "Cancelou uma unidade", packageRemovals: [{ packageId: pkg.id, quantity: 1 }], unassignedQuantity: 0 });
     await expect(service.saveItemCosts(tracking.id, { expectedRevision: requested.tracking.revision, itemId: item.id, effectivePriceState: "known", effectivePriceUnitCents: 9_000, chinaFreightState: "known", chinaFreightUnitCents: 1_000 })).rejects.toMatchObject({ code: "REFUND_PRODUCTS_LOCKED" });
-    await expect(service.saveAllocations(tracking.id, { expectedRevision: requested.tracking.revision, allocations: [{ packageId: pkg.id, costItemId: item.id, quantity: 2 }] })).rejects.toMatchObject({ code: "REFUND_INELIGIBLE_UNITS" });
+    await expect(service.saveAllocations(tracking.id, { expectedRevision: requested.tracking.revision, packageId: pkg.id, allocations: [{ costItemId: item.id, quantity: 2 }] })).rejects.toMatchObject({ code: "REFUND_INELIGIBLE_UNITS" });
   });
 
   it("locks composition only for items with an active refund while protecting all original bases", async () => {

@@ -39,3 +39,7 @@ The databases `loti-prod` and `loti-dev` are provisioned and migrated. Vercel pr
 ## What is not a blocker
 
 Do not stop for ordinary code errors, migration failures, tests, or naming already resolved by the canonical specification. Fix those and continue.
+
+## HubBuy balance extension
+
+The economic policy choices D1–D3 have been resolved by the user on 17 October 2026 and are recorded in `26_HUBBUY_BALANCE_AND_MIXED_PAYMENTS_PLAN.md`. No real HubBuy balance, refund destination, historical exchange pair, RAM/Elixir allocation or external settlement amount has been supplied for this implementation; use synthetic values only. That is an operational data boundary, not a blocker to local code, fixture, migration and UI work.

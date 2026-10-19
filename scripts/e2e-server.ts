@@ -19,7 +19,8 @@ if (explicitE2eDatabaseUrl) {
 }
 process.env.BETTER_AUTH_URL = "http://localhost:3100";
 process.env.BETTER_AUTH_SECRET = randomBytes(48).toString("base64url");
-process.env.LOTI_NEXT_DIR = ".next-e2e";
+const productionE2e = process.env.LOTI_E2E_PRODUCTION === "1";
+process.env.LOTI_NEXT_DIR = productionE2e ? ".next" : ".next-e2e";
 for (const name of ["R2_ACCOUNT_ID", "R2_BUCKET_NAME", "R2_WRITE_ACCESS_KEY_ID", "R2_WRITE_SECRET_ACCESS_KEY", "R2_READ_ACCESS_KEY_ID", "R2_READ_SECRET_ACCESS_KEY"]) process.env[name] = "";
 await import("./seed");
 // Configure the exact seeded Better Auth ID as the QC manager only in this
@@ -50,7 +51,7 @@ try {
   await invitationFixture.db.insert(workspaceMembers).values([{ workspaceId, userId: qa.id, createdAt }, { workspaceId, userId: reader.id, createdAt }]).run();
 } finally { invitationFixture.client.close(); }
 
-const child = spawn(process.execPath, ["node_modules/next/dist/bin/next", "dev", "--webpack", "-H", "localhost", "-p", "3100"], { stdio: "inherit", env: process.env });
+const child = spawn(process.execPath, ["node_modules/next/dist/bin/next", ...(productionE2e ? ["start"] : ["dev", "--webpack"]), "-H", "localhost", "-p", "3100"], { stdio: "inherit", env: process.env });
 for (const signal of ["SIGINT", "SIGTERM"] as const) process.on(signal, () => child.kill(signal));
 child.on("exit", code => {
   if (explicitE2eDatabasePath) rmSync(explicitE2eDatabasePath, { force: true });

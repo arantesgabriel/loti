@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, CalendarDays, ChevronDown, CircleCheck, CircleDollarSign, Clock3, Hash, LockKeyhole, MoreVertical, Package, Pencil, Plus, RotateCcw, Trash2, UserRound, UsersRound } from "lucide-react";
 import { toast } from "sonner";
-import { Avatar, EmptyState } from "@/components/shared";
+import { Avatar, EmptyState, ProductCategoryMarker } from "@/components/shared";
 import { Button } from "@/components/ui/button";
 import { Confirm, Surface } from "@/components/ui/surface";
 import type { CostTrackingView } from "@/lib/domain/package-cost-reading";
@@ -15,7 +15,8 @@ import { formatMoney } from "@/lib/domain/money";
 import { splitByWeights } from "@/lib/domain/package-cost-calculations";
 import { costRequest, percentFromBasisPoints, percentInputFromBasisPoints, basisPointsFromPercent, parseCostCents } from "./package-cost-client";
 import { RefundsSection } from "./refunds-section";
-import { QcCostCover, QcCostPhotoStrip, QcImportPanel, useQcCostPresentations } from "@/components/qc/qc-components";
+import { AdditionalOrdersPanel } from "./additional-orders-panel";
+import { QcGalleryButton, QcImportPanel } from "@/components/qc/qc-components";
 
 type Detail = CostTrackingView;
 type DetailItem = Detail["items"][number];
@@ -24,6 +25,7 @@ type ChargeType = "products" | "brazil_freight" | "customs";
 type ChargeEditor = { id: string; type: ChargeType; name: string };
 type ItemEditor = { id: string; name: string };
 type PaymentReset = { operation: string; rest: Record<string, unknown> };
+type PackageAllocationLine = { id: string; name: string; variant: string | null; quantity: number; shippingQuantity: number; cancelledQuantity: number; participants: string[] };
 
 const money = (amount: number | null | undefined) => amount === null || amount === undefined ? "Falta informar" : formatMoney(amount);
 const logisticName = (status: string) => status === "received" ? "Recebido" : status === "sent" ? "Enviado" : "Em preparação";
@@ -46,6 +48,20 @@ function productUnitsSummary(item: DetailItem) {
   const cancelled = item.calculation?.cancelledQuantity ?? 0;
   const shipping = item.calculation?.shippingQuantity ?? item.original.quantity;
   return `${item.original.quantity} ${item.original.quantity === 1 ? "unidade comprada" : "unidades compradas"} · ${cancelled} ${cancelled === 1 ? "unidade cancelada" : "unidades canceladas"} · ${shipping} ${shipping === 1 ? "unidade enviável" : "unidades enviáveis"}`;
+}
+function packageAllocationLines(detail: Detail): PackageAllocationLine[] {
+  const original = detail.items.map(item => ({
+    id: item.id, name: item.original.name, variant: item.original.variant, quantity: item.original.quantity,
+    shippingQuantity: item.calculation?.shippingQuantity ?? item.original.quantity,
+    cancelledQuantity: item.calculation?.cancelledQuantity ?? 0,
+    participants: item.participants.map(person => person.name),
+  }));
+  const additional = detail.productOrders.filter(order => order.kind === "additional" && order.state === "recorded").flatMap(order => order.items.map(row => ({
+    id: row.cost.id, name: row.item?.name ?? "Produto", variant: row.item?.variant ?? null, quantity: row.quantity,
+    shippingQuantity: row.calculation?.shippingQuantity ?? row.quantity, cancelledQuantity: row.calculation?.cancelledQuantity ?? 0,
+    participants: row.participants.map(person => person.name),
+  })));
+  return [...original, ...additional];
 }
 export function PackageCostDetailScreen({ trackingId }: { trackingId: string }) {
   const router = useRouter();
@@ -134,15 +150,19 @@ export function PackageCostDetailScreen({ trackingId }: { trackingId: string }) 
 
   async function saveAllocations(packageId: string, draft: Record<string, number>) {
     if (!detail) return;
-    const allocations = detail.packages.flatMap(pkg => detail.items.flatMap(item => {
-      const savedQuantity = pkg.items.find(row => row.costItemId === item.id)?.quantity ?? 0;
-      const quantity = pkg.id === packageId ? draft[item.id] ?? 0 : savedQuantity;
-      return quantity > 0 ? [{ packageId: pkg.id, costItemId: item.id, quantity }] : [];
-    }));
-    const invalid = detail.items.some(item => allocations.filter(row => row.costItemId === item.id).reduce((sum, row) => sum + row.quantity, 0) > (item.calculation?.shippingQuantity ?? item.original.quantity));
+    const lines = packageAllocationLines(detail);
+    const allocations = lines.map(item => ({ costItemId: item.id, quantity: draft[item.id] ?? 0 }));
+    const invalid = lines.some(item => (detail.packages.filter(pkg => pkg.id !== packageId).reduce((sum, pkg) => sum + (pkg.items.find(row => row.costItemId === item.id)?.quantity ?? 0), 0) + (draft[item.id] ?? 0)) > item.shippingQuantity);
     if (invalid) { toast.error("A soma das unidades dos pacotes não pode superar as unidades disponíveis para envio."); return false; }
-    const rest = { input: { expectedRevision: detail.tracking.revision, allocations } };
+    const rest = { input: { expectedRevision: detail.tracking.revision, packageId, allocations } };
     return mutate("package.allocations", rest, true);
+  }
+
+  async function unsealPackage(pkg: DetailPackage, reason: string) {
+    if (!detail) return false;
+    const ok = await mutate("package.content.unseal", { packageId: pkg.id, input: { expectedRevision: detail.tracking.revision, reason } });
+    if (ok) toast.success("Conteúdo reaberto para conferência");
+    return ok;
   }
 
   async function saveProductMethod(method: string) {
@@ -203,11 +223,15 @@ export function PackageCostDetailScreen({ trackingId }: { trackingId: string }) 
         </div>
         <div className="cost-detail-meta">
           {detail.purchase.hubbuyAccount && <p className="cost-account"><span className="cost-account-label">Conta HubBuy:</span>{" "}<strong>{detail.purchase.hubbuyAccount}</strong></p>}
+          <Link className="cost-account-manage-link" href="/packages/accounts">Gerenciar contas HubBuy</Link>
           {detail.purchase.hubbuyAccount && lastEdited && <span className="cost-detail-meta-separator" aria-hidden="true">·</span>}
           <p className="cost-last-edited muted"><UserRound size={13} aria-hidden="true"/><span>Atualizado por <strong>{updatedByName}</strong>{lastEdited && <> · <time dateTime={new Date(detail.tracking.updatedAt).toISOString()}>{lastEdited}</time></>}</span></p>
         </div>
       </div>
-      <div className="cost-heading-actions"><QcImportPanel purchaseId={detail.purchase.id} targets={detail.items.map(item => ({ id: item.original.id, name: item.original.name, variant: item.original.variant, quantity: item.original.quantity }))}/><span className="cost-status">Compra finalizada</span><span className={`cost-status ${locked ? "closed" : "open"}`}>{locked ? <><LockKeyhole size={13}/> Custos encerrados</> : "Custos abertos"}</span>{locked && <Button aria-label="Reabrir acompanhamento" variant="outline" onClick={() => setReopenOpen(true)}><RotateCcw size={16}/><span className="desktop-label">Reabrir</span></Button>}</div>
+      <div className="cost-heading-actions"><QcImportPanel purchaseId={detail.purchase.id} targets={[
+        ...detail.items.map(item => ({ id: `purchase:${item.original.id}`, origin: "purchase" as const, name: item.original.name, variant: item.original.variant, quantity: item.original.quantity })),
+        ...detail.productOrders.filter(order => order.kind === "additional" && order.state === "recorded").flatMap(order => order.items.flatMap(row => row.item ? [{ id: `additional:${row.item.id}`, origin: "additional" as const, name: row.item.name, variant: row.item.variant, quantity: row.item.quantity }] : [])),
+      ]}/><span className="cost-status">Compra finalizada</span><span className={`cost-status ${locked ? "closed" : "open"}`}>{locked ? <><LockKeyhole size={13}/> Custos encerrados</> : "Custos abertos"}</span>{locked && <Button aria-label="Reabrir acompanhamento" variant="outline" onClick={() => setReopenOpen(true)}><RotateCcw size={16}/><span className="desktop-label">Reabrir</span></Button>}</div>
     </div>
 
     <div className="cost-summary-card">
@@ -217,6 +241,7 @@ export function PackageCostDetailScreen({ trackingId }: { trackingId: string }) 
 
     <ProgressiveSection id="products" title="Produtos e pagamento" summary={presentation.productsSummary} open={openSections.products} onToggle={() => setOpenSections(current => ({ ...current, products: !current.products }))}>
     <div className="cost-section-content" aria-labelledby="product-payment-title">
+      <div className="cost-product-payment-panel">
       <div className="cost-product-payment">
         <div className="cost-product-payment-heading"><span className="cost-product-payment-icon" aria-hidden="true"><CircleDollarSign size={24}/></span><div><h2 id="product-payment-title">Pagamento dos produtos</h2><p className="muted">Uma cobrança para o preço efetivo e o frete China de toda a compra.</p></div></div>
         {products.baseCents === null && <p className="cost-payment-requirement">Para configurar e confirmar esta cobrança, informe os campos pendentes: {detail.items.flatMap(item => [item.effectivePriceState === "pending" ? `${item.original.name} · preço efetivo` : null, item.chinaFreightState === "pending" ? `${item.original.name} · frete China` : null].filter((value): value is string => value !== null)).join("; ") || "a composição dos produtos"}.</p>}
@@ -238,18 +263,21 @@ export function PackageCostDetailScreen({ trackingId }: { trackingId: string }) 
         <p className="muted cost-hint">O percentual fica registrado nesta cobrança mesmo se o padrão do grupo mudar.</p>
         {detail.calculation.summary.receivedRefundCents > 0 && <p className="cost-product-payment-credit" role="status"><span>Crédito recebido</span><strong>{formatMoney(detail.calculation.summary.receivedRefundCents)}</strong></p>}
       </div>
+      {shippingUnits === 0 && <RefundsSection key={refundItemId ?? "closed"} detail={detail} locked={!!locked} busy={busy} requestItemId={refundItemId} onRequestClose={() => setRefundItemId(null)} onDetails={setItemDetailId} mutate={mutate}/>}
+      </div>
     </div>
     {shippingUnits > 0 && <div className="cost-section-content" aria-labelledby="items-title">
       <div className="cost-section-heading"><div><h2 id="items-title">Custos por produto</h2><p className="muted">Valores unitários de preço e frete China; os demais encargos são rateados pelas unidades.</p></div><div className="cost-products-total"><span>{detail.calculation.summary.totalCents === null ? "Total parcial" : "Total final"}</span><strong>{detail.calculation.summary.hasKnownAmount ? formatMoney(detail.calculation.summary.totalCents ?? detail.calculation.summary.partialCents) : "Falta informar"}</strong></div></div>
       <ProductCostsList detail={detail} locked={!!locked} onDetails={setItemDetailId} onEdit={item => setItemEditor({ id: item.id, name: item.original.name })} onRefund={setRefundItemId}/>
     </div>}
-    <RefundsSection key={refundItemId ?? "closed"} detail={detail} locked={!!locked} busy={busy} requestItemId={refundItemId} onRequestClose={() => setRefundItemId(null)} onDetails={setItemDetailId} mutate={mutate}/>
+    {shippingUnits > 0 && <RefundsSection key={refundItemId ?? "closed"} detail={detail} locked={!!locked} busy={busy} requestItemId={refundItemId} onRequestClose={() => setRefundItemId(null)} onDetails={setItemDetailId} mutate={mutate}/>}
+    <AdditionalOrdersPanel detail={detail} locked={!!locked} busy={busy} onRefundRequest={setRefundItemId} mutate={mutate}/>
     </ProgressiveSection>
 
     <ProgressiveSection id="packages" title="Pacotes" summary={presentation.packagesSummary} open={openSections.packages} onToggle={() => setOpenSections(current => ({ ...current, packages: !current.packages }))}>
     <div className="cost-section-content" aria-labelledby="cost-section-packages-title">
       <div className="cost-section-heading"><div><p className="muted">Unidades enviáveis atribuídas: {assignedUnits} de {shippingUnits}{remainingUnits ? ` · ${remainingUnits} sem pacote` : " · Tudo atribuído"}</p></div>{!locked && <Button data-cost-target="package-create" variant="outline" onClick={() => void startCreatePackage()} disabled={busy}><Plus size={16}/>Novo pacote</Button>}</div>
-      {!detail.packages.length ? <EmptyState icon={Package} title="Adicione um pacote" description="Separe os produtos como chegam em cada envio."/> : <div className="cost-package-list">{detail.packages.map(pkg => <PackageCard key={pkg.id} pkg={pkg} detail={detail} expanded={!!expandedPackages[pkg.id]} onExpandedChange={open => setExpandedPackages(current => ({ ...current, [pkg.id]: open }))} locked={!!locked} busy={busy} savePackage={savePackage} saveAllocations={draft => saveAllocations(pkg.id, draft)} openCharge={charge => setChargeEditor(charge)} markPaid={markPaid} mutate={mutate}/>)}</div>}
+      {!detail.packages.length ? <EmptyState icon={Package} title="Adicione um pacote" description="Separe os produtos como chegam em cada envio."/> : <div className="cost-package-list">{detail.packages.map(pkg => <PackageCard key={pkg.id} pkg={pkg} detail={detail} expanded={!!expandedPackages[pkg.id]} onExpandedChange={open => setExpandedPackages(current => ({ ...current, [pkg.id]: open }))} locked={!!locked} busy={busy} savePackage={savePackage} saveAllocations={draft => saveAllocations(pkg.id, draft)} unsealPackage={reason => unsealPackage(pkg, reason)} openCharge={charge => setChargeEditor(charge)} markPaid={markPaid} mutate={mutate}/>)}</div>}
     </div>
     </ProgressiveSection>
 
@@ -292,14 +320,13 @@ function pendingDetails(item: DetailItem) {
 }
 
 function ProductCostsList({ detail, locked, onDetails, onEdit, onRefund }: { detail: Detail; locked: boolean; onDetails: (itemId: string) => void; onEdit: (item: DetailItem) => void; onRefund: (itemId: string) => void }) {
-  const qcPresentations = useQcCostPresentations(detail.purchase.id, detail.items.map(item => item.original.id));
   const operationalItems = detail.items.filter(item => (item.calculation?.shippingQuantity ?? item.original.quantity) > 0);
   return <>
     {!!operationalItems.length && <>
     <div className="cost-table-wrap">
       <table className="cost-table"><thead><tr><th>Produto</th><th>Qtd.</th><th>Preço efetivo / un.</th><th>Frete China / un.</th><th>Taxa de pagamento</th><th>Frete Brasil</th><th>Receita</th><th>Total</th><th>Ações</th></tr></thead><tbody>
         {operationalItems.map(item => <tr key={item.id}>
-          <td data-label="Produto"><div className="cost-product-name"><QcCostCover purchaseId={detail.purchase.id} itemName={item.original.name} visualKey={item.original.visualKey} cover={qcPresentations[item.original.id]?.coverPreview ?? undefined}/><span><strong>{item.original.name}</strong><small>{item.original.variant || "Sem variação"}</small>{item.participants.length > 0 && <small className="cost-product-participants"><UsersRound size={12} aria-hidden="true"/><span>{item.participants.map(person => person.name).join(" · ")}</span></small>}<QcCostPhotoStrip purchaseId={detail.purchase.id} itemId={item.original.id} itemName={item.original.name} presentation={qcPresentations[item.original.id]}/><small className="cost-cell-pending">{item.calculation?.cancelledQuantity ? productUnitsSummary(item) : ""}</small></span></div></td>
+          <td data-label="Produto"><div className="cost-product-name"><ProductCategoryMarker visualKey={item.original.visualKey}/><span><strong>{item.original.name}</strong><small>{item.original.variant || "Sem variação"}</small>{item.participants.length > 0 && <small className="cost-product-participants"><UsersRound size={12} aria-hidden="true"/><span>{item.participants.map(person => person.name).join(" · ")}</span></small>}<QcGalleryButton purchaseId={detail.purchase.id} itemId={`purchase:${item.original.id}`} itemName={item.original.name} canManageHere triggerLabel="Ver QC"/><small className="cost-cell-pending">{item.calculation?.cancelledQuantity ? productUnitsSummary(item) : ""}</small></span></div></td>
           <td data-label="Quantidade"><span className="cost-quantity"><Hash size={12} aria-hidden="true"/>{item.original.quantity}</span></td>
           <td className={item.effectivePriceState === "pending" ? "cost-value-pending" : undefined} data-label="Preço efetivo / un.">{displayedValue(item.effectivePriceState, item.effectivePriceUnitCents)}</td>
           <td className={item.chinaFreightState === "pending" ? "cost-value-pending" : undefined} data-label="Frete China / un.">{displayedValue(item.chinaFreightState, item.chinaFreightUnitCents)}</td>
@@ -315,7 +342,7 @@ function ProductCostsList({ detail, locked, onDetails, onEdit, onRefund }: { det
       {operationalItems.map(item => {
         const pending = pendingDetails(item);
         return <article className="cost-product-mobile-card" key={item.id}>
-          <div className="cost-product-mobile-title"><QcCostCover purchaseId={detail.purchase.id} itemName={item.original.name} visualKey={item.original.visualKey} cover={qcPresentations[item.original.id]?.coverPreview ?? undefined}/><span><strong>{item.original.name}</strong><small>{item.original.variant || "Sem variação"}</small>{item.calculation?.cancelledQuantity ? <small>{productUnitsSummary(item)}</small> : null}{item.participants.length > 0 && <small className="cost-product-participants"><UsersRound size={12} aria-hidden="true"/><span>{item.participants.map(person => person.name).join(" · ")}</span></small>}<QcCostPhotoStrip purchaseId={detail.purchase.id} itemId={item.original.id} itemName={item.original.name} presentation={qcPresentations[item.original.id]}/></span></div>
+          <div className="cost-product-mobile-title"><ProductCategoryMarker visualKey={item.original.visualKey}/><span><strong>{item.original.name}</strong><small>{item.original.variant || "Sem variação"}</small>{item.calculation?.cancelledQuantity ? <small>{productUnitsSummary(item)}</small> : null}{item.participants.length > 0 && <small className="cost-product-participants"><UsersRound size={12} aria-hidden="true"/><span>{item.participants.map(person => person.name).join(" · ")}</span></small>}<QcGalleryButton purchaseId={detail.purchase.id} itemId={`purchase:${item.original.id}`} itemName={item.original.name} canManageHere triggerLabel="Ver QC"/></span></div>
           <dl className="cost-product-mobile-values">
             <div><dt>Quantidade</dt><dd>{unitsLabel(item.original.quantity)}</dd></div>
             <div><dt>Preço efetivo / un.</dt><dd>{displayedValue(item.effectivePriceState, item.effectivePriceUnitCents)}</dd></div>
@@ -379,17 +406,20 @@ function ItemBreakdownSurface({ detail, itemId, onClose }: { detail: Detail; ite
   </Surface>;
 }
 
-function PackageCard({ pkg, detail, expanded, onExpandedChange, locked, busy, savePackage, saveAllocations, openCharge, markPaid, mutate }: {
+function PackageCard({ pkg, detail, expanded, onExpandedChange, locked, busy, savePackage, saveAllocations, unsealPackage, openCharge, markPaid, mutate }: {
   pkg: DetailPackage; detail: Detail; expanded: boolean; onExpandedChange: (open: boolean) => void; locked: boolean; busy: boolean;
   savePackage: (pkg: DetailPackage, name: string, logisticsStatus: string) => Promise<boolean>; saveAllocations: (draft: Record<string, number>) => Promise<boolean | undefined>;
+  unsealPackage: (reason: string) => Promise<boolean>;
   openCharge: (charge: ChargeEditor) => void; markPaid: (chargeId: string) => Promise<void>;
   mutate: (operation: string, rest: Record<string, unknown>, mayInvalidatePayment?: boolean) => Promise<boolean>;
 }) {
-  const [packageEditorOpen, setPackageEditorOpen] = useState(false), [allocationEditorOpen, setAllocationEditorOpen] = useState(false), [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
+  const [packageEditorOpen, setPackageEditorOpen] = useState(false), [allocationEditorOpen, setAllocationEditorOpen] = useState(false), [removeConfirmOpen, setRemoveConfirmOpen] = useState(false), [unsealOpen, setUnsealOpen] = useState(false), [unsealReason, setUnsealReason] = useState("");
   const [name, setName] = useState(pkg.name), [logistics, setLogistics] = useState(pkg.logisticsStatus);
   const [allocationDraft, setAllocationDraft] = useState<Record<string, number>>({});
   const freight = pkg.brazilFreightCharge, customs = pkg.customsCharge;
+  const allocationLines = packageAllocationLines(detail);
   const assigned = pkg.calculation?.unitCount ?? 0;
+  const contentSealed = pkg.contentSealSource !== null || pkg.contentSealedAt !== null || pkg.logisticsStatus !== "preparing";
   const pendingText = [
     freight?.valueState === "pending" ? "Frete Brasil: valor pendente" : null,
     freight?.valueState === "known" && freight.paymentStatus === "pending" ? "Frete Brasil: pagamento pendente" : null,
@@ -406,7 +436,7 @@ function PackageCard({ pkg, detail, expanded, onExpandedChange, locked, busy, sa
 
   function editContent() {
     const next: Record<string, number> = {};
-    for (const item of detail.items) next[item.id] = pkg.items.find(row => row.costItemId === item.id)?.quantity ?? 0;
+    for (const item of allocationLines) next[item.id] = pkg.items.find(row => row.costItemId === item.id)?.quantity ?? 0;
     setAllocationDraft(next);
     setAllocationEditorOpen(true);
   }
@@ -423,6 +453,12 @@ function PackageCard({ pkg, detail, expanded, onExpandedChange, locked, busy, sa
     if (ok) setAllocationEditorOpen(false);
   }
 
+  async function submitUnseal(event: React.FormEvent) {
+    event.preventDefault();
+    const ok = await unsealPackage(unsealReason.trim());
+    if (ok) { setUnsealOpen(false); setUnsealReason(""); }
+  }
+
   function updateAllocation(itemId: string, maximum: number, value: string) {
     setAllocationDraft(current => ({ ...current, [itemId]: Math.min(maximum, Math.max(0, Number(value) || 0)) }));
   }
@@ -430,7 +466,7 @@ function PackageCard({ pkg, detail, expanded, onExpandedChange, locked, busy, sa
   const chargeMethod = (charge: NonNullable<typeof freight>) => charge.paymentMethod === "pix" ? "Pix" : charge.paymentMethod === "card" ? "Cartão" : null;
   const packageFreight = pkg.calculation?.freightPaymentTotalCents;
   const packageCustoms = pkg.calculation?.customsPaymentTotalCents;
-  const canDeleteEmptyPackage = !assigned && pkg.logisticsStatus === "preparing" && freight?.valueState === "pending" && customs?.valueState === "pending";
+  const canDeleteEmptyPackage = !assigned && pkg.contentEvents.length === 0 && pkg.logisticsStatus === "preparing" && freight?.valueState === "pending" && customs?.valueState === "pending";
   async function deleteEmptyPackage() {
     const ok = await mutate("package.delete", { packageId: pkg.id, input: { expectedRevision: detail.tracking.revision } });
     if (ok) setRemoveConfirmOpen(false);
@@ -446,16 +482,18 @@ function PackageCard({ pkg, detail, expanded, onExpandedChange, locked, busy, sa
       {expanded && <div className="cost-package-body">
         <div className="cost-package-overview"><div><small>Etapa logística</small><strong>{logisticName(pkg.logisticsStatus)}</strong></div><div><small>Unidades neste pacote</small><strong>{unitsLabel(assigned)}</strong></div></div>
         <div className="cost-package-items"><div className="cost-allocation-head"><strong>Conteúdo</strong><span>{unitsLabel(assigned)}</span></div>{pkg.items.length ? <ul>{pkg.items.map(row => {
-          const item = detail.items.find(value => value.id === row.costItemId);
+          const item = allocationLines.find(value => value.id === row.costItemId);
           if (!item) return null;
-          const people = item.participants.map(person => person.name).join(" · ");
-          return <li key={row.costItemId}><span><strong>{item.original.name}</strong><small>{item.original.variant || "Sem variação"}{people ? ` · ${people}` : ""}</small></span><strong>{unitsLabel(row.quantity)}</strong></li>;
+          const people = item.participants.join(" · ");
+          return <li key={row.costItemId}><span><strong>{item.name}</strong><small>{item.variant || "Sem variação"}{people ? ` · ${people}` : ""}</small></span><strong>{unitsLabel(row.quantity)}</strong></li>;
         })}</ul> : <p className="muted">Nenhuma unidade neste pacote.</p>}</div>
         <div className="cost-package-charges">
           <ChargeSummary label="Frete Brasil" target={`package-freight-${pkg.id}`} paidTarget={`package-freight-paid-${pkg.id}`} charge={freight} base={pkg.calculation?.freight.base} fee={pkg.calculation?.freight.fee} total={packageFreight} feeBps={freight?.feeBps ?? null} method={freight ? chargeMethod(freight) : null} showFee onEdit={() => freight && openCharge({ id: freight.id, type: "brazil_freight", name: `${pkg.name} · Frete Brasil` })} onPaid={() => freight && void markPaid(freight.id)} locked={locked} busy={busy}/>
           <ChargeSummary label="Receita" target={`package-customs-${pkg.id}`} paidTarget={`package-customs-paid-${pkg.id}`} charge={customs} base={pkg.calculation?.customs.base} fee={0} total={packageCustoms} feeBps={null} method={null} onEdit={() => customs && openCharge({ id: customs.id, type: "customs", name: `${pkg.name} · Receita` })} onPaid={() => customs && void markPaid(customs.id)} locked={locked} busy={busy}/>
         </div>
-        {!locked && <div className="cost-package-actions"><DropdownMenu.Root><DropdownMenu.Trigger asChild><Button variant="outline" size="sm" aria-label={`Ações para ${pkg.name}`} disabled={busy}><MoreVertical size={16}/><span>Ações do pacote</span></Button></DropdownMenu.Trigger><DropdownMenu.Portal><DropdownMenu.Content className="dropdown" align="end" sideOffset={6}><DropdownMenu.Item onSelect={editPackage}><Pencil size={15}/>Editar pacote</DropdownMenu.Item><DropdownMenu.Item onSelect={editContent}><Package size={15}/>Editar conteúdo</DropdownMenu.Item>{canDeleteEmptyPackage && <><DropdownMenu.Separator/><DropdownMenu.Item className="danger-text" onSelect={() => setRemoveConfirmOpen(true)}><Trash2 size={15}/>Excluir pacote vazio</DropdownMenu.Item></>}</DropdownMenu.Content></DropdownMenu.Portal></DropdownMenu.Root></div>}
+        {contentSealed && <p className="muted">Conteúdo selado para preservar a conferência do pacote.</p>}
+        {pkg.contentEvents.length > 0 && <div className="cost-package-content-events"><strong>Histórico do conteúdo</strong><ul>{pkg.contentEvents.map(event => <li key={event.id}>{event.eventType === "content_sealed" ? "Conteúdo selado" : event.eventType === "content_unsealed" ? `Conteúdo reaberto · ${event.reason}` : "Conteúdo atualizado"} · {event.actorName} · {new Date(event.createdAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</li>)}</ul></div>}
+        {!locked && <div className="cost-package-actions"><DropdownMenu.Root><DropdownMenu.Trigger asChild><Button variant="outline" size="sm" aria-label={`Ações para ${pkg.name}`} disabled={busy}><MoreVertical size={16}/><span>Ações do pacote</span></Button></DropdownMenu.Trigger><DropdownMenu.Portal><DropdownMenu.Content className="dropdown" align="end" sideOffset={6}><DropdownMenu.Item onSelect={editPackage}><Pencil size={15}/>Editar pacote</DropdownMenu.Item><DropdownMenu.Item disabled={contentSealed} onSelect={editContent}><Package size={15}/>{contentSealed ? "Conteúdo selado" : "Editar conteúdo"}</DropdownMenu.Item>{contentSealed && pkg.logisticsStatus === "preparing" && <DropdownMenu.Item onSelect={() => { setUnsealReason(""); setUnsealOpen(true); }}><RotateCcw size={15}/>Reabrir conteúdo com motivo</DropdownMenu.Item>}{canDeleteEmptyPackage && <><DropdownMenu.Separator/><DropdownMenu.Item className="danger-text" onSelect={() => setRemoveConfirmOpen(true)}><Trash2 size={15}/>Excluir pacote vazio</DropdownMenu.Item></>}</DropdownMenu.Content></DropdownMenu.Portal></DropdownMenu.Root></div>}
       </div>}
     </div>
     <Surface sheet open={packageEditorOpen} title="Editar pacote" subtitle={pkg.name} description="Atualize o nome e a etapa logística. A etapa não altera os valores financeiros." onOpenChange={value => { if (!busy) setPackageEditorOpen(value); }}>
@@ -467,19 +505,25 @@ function PackageCard({ pkg, detail, expanded, onExpandedChange, locked, busy, sa
     </Surface>
     <Surface sheet open={allocationEditorOpen} title="Editar conteúdo" subtitle={pkg.name} description="Distribua as unidades físicas. O restante continua disponível nos outros pacotes." onOpenChange={value => { if (!busy) setAllocationEditorOpen(value); }}>
       <form onSubmit={event => void saveContent(event)}>
-        <div className="cost-allocation-edit-list">{detail.items.map(item => {
+        <div className="cost-allocation-edit-list">{allocationLines.map(item => {
           const inOtherPackages = detail.packages.filter(other => other.id !== pkg.id).reduce((sum, other) => sum + (other.items.find(row => row.costItemId === item.id)?.quantity ?? 0), 0);
-          const shippingQuantity = item.calculation?.shippingQuantity ?? item.original.quantity;
+          const shippingQuantity = item.shippingQuantity;
           const maximum = Math.max(0, shippingQuantity - inOtherPackages);
           const saved = pkg.items.find(row => row.costItemId === item.id)?.quantity ?? 0;
           const quantity = allocationDraft[item.id] ?? saved;
-          return <div className="cost-allocation-edit-row" key={item.id}><span><strong>{item.original.name}</strong><small>{item.original.variant || "Sem variação"} · Unidades compradas: {item.original.quantity} · Unidades canceladas: {item.calculation?.cancelledQuantity ?? 0} · Neste pacote: {saved} · Em outros: {inOtherPackages} · Disponíveis: {maximum - quantity}</small></span><label>Unidades neste pacote<input aria-label={`${item.original.name} neste pacote`} type="number" min="0" max={maximum} step="1" disabled={busy} value={quantity} onChange={event => updateAllocation(item.id, maximum, event.target.value)}/></label></div>;
+          return <div className="cost-allocation-edit-row" key={item.id}><span><strong>{item.name}</strong><small>{item.variant || "Sem variação"} · Unidades compradas: {item.quantity} · Unidades canceladas: {item.cancelledQuantity} · Neste pacote: {saved} · Em outros: {inOtherPackages} · Disponíveis: {maximum - quantity}</small></span><label>Unidades neste pacote<input aria-label={`${item.name} neste pacote`} type="number" min="0" max={maximum} step="1" disabled={busy} value={quantity} onChange={event => updateAllocation(item.id, maximum, event.target.value)}/></label></div>;
         })}</div>
-        <Button className="cost-allocate-remaining" type="button" variant="ghost" size="sm" disabled={busy} onClick={() => setAllocationDraft(Object.fromEntries(detail.items.map(item => {
+        <Button className="cost-allocate-remaining" type="button" variant="ghost" size="sm" disabled={busy} onClick={() => setAllocationDraft(Object.fromEntries(allocationLines.map(item => {
           const used = detail.packages.filter(other => other.id !== pkg.id).reduce((sum, other) => sum + (other.items.find(row => row.costItemId === item.id)?.quantity ?? 0), 0);
-          return [item.id, Math.max(0, (item.calculation?.shippingQuantity ?? item.original.quantity) - used)];
+          return [item.id, Math.max(0, item.shippingQuantity - used)];
         })))}>Incluir unidades disponíveis</Button>
         <div className="form-actions"><Button type="button" variant="outline" disabled={busy} onClick={() => setAllocationEditorOpen(false)}>Cancelar</Button><Button type="submit" disabled={busy}>{busy ? "Salvando…" : "Salvar conteúdo"}</Button></div>
+      </form>
+    </Surface>
+    <Surface sheet open={unsealOpen} title="Reabrir conteúdo" subtitle={pkg.name} description="O motivo ficará no histórico do pacote. Depois da alteração, confira novamente as unidades." onOpenChange={value => { if (!busy) setUnsealOpen(value); }}>
+      <form onSubmit={event => void submitUnseal(event)}>
+        <label>Motivo<textarea required minLength={1} maxLength={1000} value={unsealReason} onChange={event => setUnsealReason(event.target.value)}/></label>
+        <div className="form-actions"><Button type="button" variant="outline" disabled={busy} onClick={() => setUnsealOpen(false)}>Cancelar</Button><Button type="submit" disabled={busy || !unsealReason.trim()}>{busy ? "Salvando…" : "Reabrir conteúdo"}</Button></div>
       </form>
     </Surface>
     <Confirm open={removeConfirmOpen} onOpenChange={value => { if (!busy) setRemoveConfirmOpen(value); }} title="Excluir pacote vazio?" description="Este pacote ainda não contém unidades nem cobranças informadas. A exclusão ficará registrada no acompanhamento." danger label="Excluir pacote" busy={busy} onConfirm={() => void deleteEmptyPackage()} />

@@ -5,6 +5,8 @@ import { hubbuyExternalItems, purchaseItems, purchases, qcEvents, qcImagePreview
 import { openDatabase } from "@/lib/db/connection";
 import { qcServices } from "@/lib/domain/qc-services";
 import { QC_LIMITS } from "@/lib/domain/qc-limits";
+import { hubbuyBalanceServices } from "@/lib/domain/hubbuy-balance-services";
+import { packageCostServices } from "@/lib/domain/package-cost-services";
 import type { QcObject, QcStorage } from "@/lib/qc/storage";
 import { fixture, type Fixture } from "./helpers";
 
@@ -52,6 +54,48 @@ describe("HubBuy QC persistence and permissions", () => {
     await expect(services(f, fake.storage, "foreign", "foreign").getQcSummary("qc-purchase")).rejects.toMatchObject({ status: 403 });
     expect(await bob.getQcSummary("qc-purchase")).toMatchObject({ purchaseId: "qc-purchase", canManage: false, counts: [] });
     await expect(alice.prepare("missing-purchase", external)).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("links, views, and authorizes QC photos for a recorded additional order item", async () => {
+    const balance = hubbuyBalanceServices(f.db, "alice");
+    const account = await balance.createAccount({ workspaceId: "workspace", idempotencyKey: "qc-additional-account", label: "Conta QC adicional", confirmZeroBalance: true });
+    const packages = packageCostServices(f.db, "alice"), tracking = await packages.startTracking("qc-purchase");
+    let detail = await packages.getTracking(tracking.id);
+    const draft = await packages.createAdditionalOrder(tracking.id, {
+      expectedRevision: detail.tracking.revision, idempotencyKey: "qc-additional-draft", accountId: account.accountId,
+      items: [{ name: "Moletom azul", url: "https://weidian.com/item.html?itemID=987", platform: "Weidian", visualKey: "hoodie", quantity: 1, itemOrder: 0,
+        nativeProductState: "known", nativeProductCnyMinor: 1_000, nativeChinaState: "no_charge", nativeChinaCnyMinor: null,
+        variant: "Blue / L", participants: [{ personId: "alice", weightMode: "equal", weight: 1 }] }],
+    });
+    detail = await packages.getTracking(tracking.id);
+    const additional = detail.productOrders.find(order => order.id === draft.orderId)!.items[0]!.item!;
+    await packages.recordAdditionalOrderPayment(tracking.id, draft.orderId, {
+      expectedRevision: detail.tracking.revision, idempotencyKey: "qc-additional-payment", paymentMethod: "pix",
+      principalBrlCents: 1_500, conversionCnyMinor: 1_000, conversionBrlCents: 1_500,
+    });
+
+    const payload = { code: 0, data: { count: 1, list: [{ orderNo: "ADD-ORDER-QC", goodsList: [{ orderGoodsId: "ADD-GOODS-QC", offerUrl: "https://weidian.com/item.html?itemID=987", skuInfo: "Blue / L", goodsName: "Moletom azul", quantity: 1, freePhotos: [sourceUrl] }] }] } };
+    const fake = mockStorage(), previewBytes = Buffer.from("synthetic-additional-preview"), previewHash = createHash("sha256").update(previewBytes).digest("hex");
+    const makeService = (who: string) => qcServices(f.db, who, {
+      managerId: "alice", storage: fake.storage, download: async () => rawPhoto,
+      validate: async bytes => ({ bytes, sha256: createHash("sha256").update(bytes).digest("hex"), mimeType: "image/png", extension: "png", width: 2, height: 2 }),
+      makePreview: async () => ({ bytes: previewBytes, sha256: previewHash, width: 2, height: 2 }),
+    });
+    const alice = makeService("alice"), bob = makeService("bob");
+    const prepared = await alice.prepare("qc-purchase", payload);
+    expect(prepared.rows[0]?.match).toMatchObject({ status: "MATCHED", targetItemId: `additional:${additional.id}` });
+    const confirmed = await alice.confirmImport(prepared.importId, prepared.revision, []);
+    expect(confirmed).toMatchObject({ linked: 1, sources: 1 });
+    expect(await alice.runImportBatch(prepared.importId, confirmed.revision)).toMatchObject({ imported: 1, complete: true });
+
+    const targetKey = `additional:${additional.id}`;
+    const image = (await bob.getGallery("qc-purchase", targetKey)).images[0]!;
+    expect(image).toMatchObject({ previewUrl: expect.stringContaining("/preview") });
+    expect(await bob.getPreview(image.id)).toEqual(previewBytes);
+    expect(await alice.setPresentationCover("qc-purchase", targetKey, image.id, 0)).toMatchObject({ targetKey, primaryImageId: image.id, revision: 1 });
+    expect(await bob.getGallery("qc-purchase", targetKey)).toMatchObject({ primaryImageId: image.id, presentationRevision: 1, images: [{ id: image.id }] });
+    expect(await bob.fallback(image.id)).toMatchObject({ url: expect.stringContaining("private-r2.test"), expiresIn: 120 });
+    expect(await alice.getQcSummary("qc-purchase")).toMatchObject({ counts: [{ itemId: targetKey, count: 1 }] });
   });
 
   it("finishes an empty reconciliation without requiring unconfigured R2", async () => {
@@ -104,7 +148,7 @@ describe("HubBuy QC persistence and permissions", () => {
     const fake = mockStorage(), alice = services(f, fake.storage), bob = services(f, fake.storage, "bob");
     const before = await f.db.select().from(purchaseItems).where(eq(purchaseItems.id, "qc-purchase-item")).get();
     const prepared = await alice.prepare("qc-purchase", external);
-    expect(prepared.rows[0]?.match).toMatchObject({ status: "MATCHED", targetItemId: "qc-purchase-item" });
+    expect(prepared.rows[0]?.match).toMatchObject({ status: "MATCHED", targetItemId: "purchase:qc-purchase-item" });
     const confirmed = await alice.confirmImport(prepared.importId, prepared.revision, []);
     expect(confirmed).toMatchObject({ revision: 1, linked: 1, sources: 1 });
     const batch = await alice.runImportBatch(prepared.importId, 1);
@@ -147,7 +191,7 @@ describe("HubBuy QC persistence and permissions", () => {
     });
     const payload = photoImport(4);
     const preview = await alice.prepare("qc-purchase", payload);
-    expect(preview.rows[0]?.match).toMatchObject({ status: "MATCHED", targetItemId: "qc-purchase-item" });
+    expect(preview.rows[0]?.match).toMatchObject({ status: "MATCHED", targetItemId: "purchase:qc-purchase-item" });
     const confirmed = await alice.confirmImport(preview.importId, preview.revision, []);
     expect(confirmed).toMatchObject({ linked: 1, ignored: 0, sources: 4, eligibleSources: 4 });
 
@@ -402,7 +446,7 @@ describe("HubBuy QC persistence and permissions", () => {
     await f.db.insert(purchaseItems).values({ id: "qc-purchase-second-item", purchaseId: "qc-purchase", sourceFavoriteId: null, personId: "alice", createdBy: "alice", name: "Tênis azul", url: "https://weidian.com/item.html?itemID=123", platform: "weidian", visualKey: "shoe", variant: "Blue / 42", notes: null, quantity: 1, unitPriceCents: 12000, cartStatus: "added", sharingMode: "equal", createdAt: now, updatedAt: now }).run();
     const fake = mockStorage(), alice = distinctPhotoServices(f, fake.storage), payload = photoImport(4, "Navy / L");
     const preview = await alice.prepare("qc-purchase", payload);
-    expect(preview.rows[0]?.match).toMatchObject({ status: "PENDING", targetItemId: null, candidates: [{ itemId: "qc-purchase-item" }, { itemId: "qc-purchase-second-item" }] });
+    expect(preview.rows[0]?.match).toMatchObject({ status: "PENDING", targetItemId: null, candidates: [{ itemId: "purchase:qc-purchase-item" }, { itemId: "purchase:qc-purchase-second-item" }] });
     const confirmed = await alice.confirmImport(preview.importId, preview.revision, []);
     expect(confirmed).toMatchObject({ linked: 0, pendingMatching: 1, ignored: 0, sources: 4, eligibleSources: 0 });
     const pendingProgress = await alice.getImport(preview.importId);
@@ -411,7 +455,7 @@ describe("HubBuy QC persistence and permissions", () => {
     const summary = await alice.getQcSummary("qc-purchase");
     expect(summary.pendingMatching).toBe(1);
     expect(summary.pendingRows).toHaveLength(1);
-    expect(summary.pendingRows?.[0]).toMatchObject({ photoCount: 4, candidates: [{ itemId: "qc-purchase-item" }, { itemId: "qc-purchase-second-item" }] });
+    expect(summary.pendingRows?.[0]).toMatchObject({ photoCount: 4, candidates: [{ itemId: "purchase:qc-purchase-item" }, { itemId: "purchase:qc-purchase-second-item" }] });
     expect(summary.pendingTransfers).toBe(0);
     const occurrence = (await f.db.select().from(hubbuyExternalItems).all())[0]!;
     expect(occurrence.purchaseItemId).toBeNull();

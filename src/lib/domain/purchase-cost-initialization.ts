@@ -1,6 +1,6 @@
 import { eq, inArray, asc } from "drizzle-orm";
 import type { AppDatabase } from "../db/connection";
-import { purchaseCostCharges, purchaseCostTrackings, purchaseItemCosts, purchaseCostParticipants, purchaseItems, purchaseItemParticipants, purchasePackages, purchasePackageItems, type Purchase } from "../db/schema";
+import { purchaseCostCharges, purchaseCostOrders, purchaseCostTrackings, purchaseItemCosts, purchaseCostParticipants, purchaseItems, purchaseItemParticipants, purchasePackages, purchasePackageItems, type Purchase } from "../db/schema";
 
 export type CostTransaction = Parameters<Parameters<AppDatabase["transaction"]>[0]>[0];
 
@@ -8,7 +8,7 @@ export async function initializePurchaseCosts(tx: CostTransaction, purchase: Pur
   const existing = await tx.select().from(purchaseCostTrackings).where(eq(purchaseCostTrackings.purchaseId, purchase.id)).get();
   if (existing) return existing;
 
-  const now = new Date(), trackingId = crypto.randomUUID();
+  const now = new Date(), trackingId = crypto.randomUUID(), orderId = crypto.randomUUID();
   const tracking = await tx.insert(purchaseCostTrackings).values({
     id: trackingId,
     purchaseId: purchase.id,
@@ -23,6 +23,12 @@ export async function initializePurchaseCosts(tx: CostTransaction, purchase: Pur
     closedAt: null,
   }).returning().get();
 
+  await tx.insert(purchaseCostOrders).values({
+    id: orderId, trackingId, kind: "original", accountId: null, externalReference: null, state: "recorded", revision: 0,
+    createdBy: actorId, createdAt: now, updatedBy: actorId, updatedAt: now,
+    occurredAt: null, recordedAt: now, operationId: null,
+  }).run();
+
   const items = await tx.select().from(purchaseItems).where(eq(purchaseItems.purchaseId, purchase.id)).orderBy(asc(purchaseItems.createdAt), asc(purchaseItems.id)).all();
   const itemIds = items.map(item => item.id);
   const participants = itemIds.length
@@ -34,12 +40,19 @@ export async function initializePurchaseCosts(tx: CostTransaction, purchase: Pur
   const costRows = items.map((item, itemOrder) => ({
     id: crypto.randomUUID(),
     trackingId,
+    orderId,
     purchaseItemId: item.id,
+    additionalOrderItemId: null,
     itemOrder,
     effectivePriceState: item.unitPriceCents === null ? "pending" as const : "known" as const,
     effectivePriceUnitCents: item.unitPriceCents,
     chinaFreightState: "pending" as const,
     chinaFreightUnitCents: null,
+    nativeProductState: "unknown" as const,
+    nativeProductCnyMinor: null,
+    nativeChinaState: "unknown" as const,
+    nativeChinaCnyMinor: null,
+    valuationVersion: 1,
   }));
   if (costRows.length) await tx.insert(purchaseItemCosts).values(costRows).run();
   const costIdByPurchaseItem = new Map(costRows.map(row => [row.purchaseItemId, row.id]));
@@ -62,7 +75,7 @@ export async function initializePurchaseCosts(tx: CostTransaction, purchase: Pur
   const packageRows = costRows.map((item, allocationOrder) => ({ packageId, costItemId: item.id, quantity: items[allocationOrder].quantity, allocationOrder: item.itemOrder }));
   if (packageRows.length) await tx.insert(purchasePackageItems).values(packageRows).run();
   await tx.insert(purchaseCostCharges).values([
-    { id: crypto.randomUUID(), trackingId, packageId: null, chargeType: "products", valueState: null, amountCents: null, paymentMethod: null, feeBps: null, paymentStatus: "pending", paidAt: null, paidBy: null, createdAt: now, updatedAt: now },
+    { id: crypto.randomUUID(), trackingId, orderId, packageId: null, chargeType: "products", valueState: null, amountCents: null, paymentMethod: null, feeBps: null, paymentStatus: "pending", paidAt: null, paidBy: null, createdAt: now, updatedAt: now },
     { id: crypto.randomUUID(), trackingId, packageId, chargeType: "brazil_freight", valueState: "pending", amountCents: null, paymentMethod: null, feeBps: null, paymentStatus: "pending", paidAt: null, paidBy: null, createdAt: now, updatedAt: now },
     { id: crypto.randomUUID(), trackingId, packageId, chargeType: "customs", valueState: "pending", amountCents: null, paymentMethod: null, feeBps: null, paymentStatus: "pending", paidAt: null, paidBy: null, createdAt: now, updatedAt: now },
   ]).run();

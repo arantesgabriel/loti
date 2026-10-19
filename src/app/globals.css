@@ -127,7 +127,7 @@ a {
 .qc-viewer-actions .button { color: #e4e4e7; font-size: 12px; }
 .qc-viewer-actions .qc-viewer-delete { color: #fca5a5; }
 .qc-viewer-surface .button:hover:not(:disabled) { background: #ffffff18; color: white; }
-.qc-cost-photo:focus-visible, .qc-viewer-thumb:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+.qc-viewer-thumb:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
 .qc-image-unavailable { display: grid; min-height: 120px; place-content: center; gap: 8px; justify-items: center; color: var(--muted); background: var(--surface-muted); }
 .qc-delete-button { margin: 0 8px 8px; }
 .qc-status-note { padding: 12px; border-radius: 10px; background: var(--surface-muted); }
@@ -321,6 +321,7 @@ a {
     color: var(--primary-ink);
     font-weight: 600;
 }
+.nav-item-accounts { margin-bottom: 4px; }
 
 .sidebar-collections {
     margin-top: 35px;
@@ -557,6 +558,25 @@ textarea {
 input::placeholder,
 textarea::placeholder {
     color: var(--muted);
+}
+
+.cost-account-discard-confirmation {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-height: 44px;
+    margin-top: 12px;
+    cursor: pointer;
+}
+
+.cost-account-discard-confirmation input {
+    flex: 0 0 20px;
+    width: 20px;
+    height: 20px;
+    min-height: 20px;
+    margin: 2px 0 0;
+    padding: 0;
+    accent-color: var(--primary);
 }
 
 textarea {
@@ -4108,90 +4128,6 @@ details .details-fields {
     height: 25px;
 }
 
-.qc-cost-cover {
-    position: relative;
-    display: block;
-    flex: 0 0 40px;
-    width: 40px;
-    height: 40px;
-    overflow: hidden;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--surface-muted);
-}
-
-.qc-cost-cover img {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-}
-
-.qc-cost-cover-badge {
-    position: absolute;
-    right: 2px;
-    bottom: 2px;
-    padding: 1px 3px;
-    border-radius: 4px;
-    color: var(--surface);
-    background: var(--primary-ink);
-    font-size: 9px;
-    font-weight: 700;
-    line-height: 1.2;
-}
-
-.qc-cost-photo-strip {
-    display: flex;
-    align-items: center;
-    flex-wrap: nowrap;
-    gap: 5px;
-    min-height: 30px;
-    margin-top: 2px;
-}
-
-.qc-cost-photo {
-    position: relative;
-    flex: 0 0 30px;
-    width: 30px;
-    height: 30px;
-    overflow: hidden;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--surface-muted);
-    padding: 0;
-    cursor: pointer;
-}
-
-.qc-cost-photo.is-cover {
-    border-color: var(--primary);
-    box-shadow: 0 0 0 1px var(--primary);
-}
-
-.qc-cost-photo img,
-.qc-cost-photo .qc-preview-placeholder {
-    display: block;
-    width: 100%;
-    height: 100%;
-    aspect-ratio: 1;
-    object-fit: contain;
-}
-
-.qc-cost-photo .qc-preview-placeholder {
-    padding: 0;
-    overflow: hidden;
-    font-size: 0;
-}
-
-.qc-cost-photo-strip > .button {
-    flex: 0 0 auto;
-    min-height: 28px;
-    padding-inline: 2px;
-    color: var(--muted);
-    font-size: 11px;
-    font-weight: 500;
-    white-space: nowrap;
-}
-
 .cost-product-name>span:last-child {
     display: grid;
     gap: 3px;
@@ -4542,6 +4478,27 @@ details .details-fields {
 .cost-package-items li>strong {
     flex: 0 0 auto;
     text-align: right;
+}
+
+.cost-package-content-events {
+    margin-top: 14px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface-muted);
+}
+
+.cost-package-content-events>strong {
+    font-size: 12px;
+}
+
+.cost-package-content-events ul {
+    display: grid;
+    gap: 6px;
+    margin: 8px 0 0;
+    padding-left: 18px;
+    color: var(--muted);
+    font-size: 11px;
 }
 
 .cost-package-fields {
@@ -4973,50 +4930,57 @@ details .details-fields {
     .cost-product-mobile-list {
         display: grid;
     }
+}
 
-    .cost-product-payment-settings {
-        grid-template-columns: 1fr;
+@media (min-width:768px) {
+    .cost-product-payment-panel {
+        padding: 16px;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: var(--surface);
+    }
+
+    .cost-product-payment-panel>.cost-section-content {
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid var(--border);
+    }
+
+    .cost-product-payment-panel>.cost-section-content .refunds-section {
+        padding: 0;
+        border: 0;
+        background: transparent;
     }
 
     .cost-product-payment-summary {
-        grid-template-columns: minmax(0, 1fr);
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
     }
 
-    .cost-product-payment-controls {
-        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-        grid-template-areas:
-            "method method"
-            "edit confirm";
-        align-items: center;
+    .cost-product-payment-metric {
+        display: grid;
+        align-content: center;
+        gap: 8px;
+        padding: 12px;
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        background: var(--surface);
     }
 
-    .cost-product-payment-controls>label {
-        grid-area: method;
+    .cost-product-payment-metric strong {
+        font-size: 16px;
     }
 
-    .cost-product-payment-controls.locked {
-        grid-template-columns: minmax(0, 1fr);
-        grid-template-areas: "method";
-    }
-
-    .cost-product-payment-controls .cost-payment-edit {
-        grid-area: edit;
-        width: 100%;
-    }
-
-    .cost-product-payment-controls .cost-payment-confirm {
-        grid-area: confirm;
-        width: 100%;
-        white-space: normal;
-        text-align: center;
+    .cost-product-payment-metric.total strong {
+        font-size: 20px;
     }
 
     .cost-product-payment-controls .cost-payment-readonly {
         grid-area: auto;
-        grid-column: 1 / -1;
-        justify-self: start;
-        min-height: 32px;
-        white-space: normal;
+        grid-column: auto;
+        justify-self: center;
+        min-height: 44px;
+        white-space: nowrap;
     }
 }
 
@@ -5196,6 +5160,57 @@ details .details-fields {
     .cost-product-payment-summary {
         grid-template-columns: minmax(0, 1fr);
         gap: 0;
+    }
+
+    .cost-product-payment-panel {
+        display: contents;
+    }
+
+    .cost-product-payment-panel>.cost-section-content {
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid var(--border);
+    }
+
+    .cost-product-payment-settings {
+        grid-template-columns: 1fr;
+    }
+
+    .cost-product-payment-controls {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        grid-template-areas:
+            "method method"
+            "edit confirm";
+        align-items: center;
+    }
+
+    .cost-product-payment-controls>label {
+        grid-area: method;
+    }
+
+    .cost-product-payment-controls.locked {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas: "method";
+    }
+
+    .cost-product-payment-controls .cost-payment-edit {
+        grid-area: edit;
+        width: 100%;
+    }
+
+    .cost-product-payment-controls .cost-payment-confirm {
+        grid-area: confirm;
+        width: 100%;
+        white-space: normal;
+        text-align: center;
+    }
+
+    .cost-product-payment-controls .cost-payment-readonly {
+        grid-area: auto;
+        grid-column: 1 / -1;
+        justify-self: start;
+        min-height: 32px;
+        white-space: normal;
     }
 
     .cost-table-wrap {
@@ -6670,12 +6685,13 @@ details .details-fields {
 .refunds-total { display: grid; gap: 4px; }
 .refunds-total span, .refunds-total small { font-size: 12px; color: var(--muted); }
 .refunds-total strong { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.refunds-desktop-summary, .refunds-financial-note { display: none; }
 .refunds-list { display: grid; gap: 8px; }
 .refund-row { min-width: 0; border: 1px solid var(--border); border-radius: 12px; }
 .refund-row-summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 12px; }
 .refund-product { grid-column: 1 / -1; display: flex; align-items: center; gap: 12px; min-width: 0; }
 .refund-product > div:last-child { min-width: 0; }
-.refund-product > .category-marker, .refund-product > .qc-cost-cover { flex-shrink: 0; }
+.refund-product > .category-marker { flex-shrink: 0; }
 .refund-product h3 { margin: 0; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
 .refund-product p, .refund-context p { margin: 4px 0 0; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 .refund-context { grid-column: 1 / -1; min-width: 0; }
@@ -6718,6 +6734,35 @@ details .details-fields {
 @media (min-width: 1200px) {
   .refund-row-summary { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.15fr) minmax(130px, .8fr) auto; }
   .refund-product, .refund-context { grid-column: auto; }
+}
+@media (min-width: 768px) {
+  .refunds-section { padding: 16px; }
+  .refunds-heading { margin-bottom: 12px; }
+  .refunds-heading h2 { font-size: 14px; }
+  .refunds-heading p, .refunds-total { display: none; }
+  .refunds-desktop-summary {
+    display: flex;
+        width: min(100%, 460px);
+    min-height: 44px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: var(--surface);
+    color: var(--foreground);
+    text-align: left;
+    cursor: pointer;
+  }
+  .refunds-desktop-summary-values { display: grid; flex: 1; gap: 8px; min-width: 0; }
+  .refunds-desktop-summary-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; min-width: 0; font-size: 13px; }
+  .refunds-desktop-summary-row > span { color: var(--muted); }
+  .refunds-desktop-summary-row > strong { color: var(--foreground); font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .refunds-desktop-summary > svg { flex: none; color: var(--muted); transition: transform 180ms ease; }
+  .refunds-desktop-summary[aria-expanded="true"] > svg { transform: rotate(180deg); }
+  .refunds-list[data-expanded="false"] { display: none; }
+  .refunds-financial-note { display: block; margin: 8px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
 }
 .refund-events { margin-top: 10px; border-top: 1px solid var(--border, #e9e3df); }
 .refund-events p { margin: 6px 0; color: var(--text-secondary, #625b57); font-size: 13px; }
@@ -6921,4 +6966,74 @@ details .details-fields {
 }
 @media (prefers-reduced-motion: reduce) {
   .refunds-section *, .refunds-section *::before, .refunds-section *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
+}
+.cost-additional-orders { display: grid; min-width: 0; gap: 14px; margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border, #e9e3df); }
+.cost-additional-orders h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 18px; }
+.cost-hubbuy-accounts, .cost-additional-order-list { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 10px; }
+.cost-hubbuy-account, .cost-additional-order-card { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; min-width: 0; padding: 16px; border: 1px solid var(--border, #e9e3df); border-radius: 14px; background: var(--surface, #fff); }
+.cost-hubbuy-account-head, .cost-additional-order-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.cost-hubbuy-account-head > div, .cost-additional-order-heading > div { display: grid; gap: 4px; min-width: 0; }
+.cost-hubbuy-account-head small, .cost-additional-order-heading small, .cost-additional-order-card li small, .cost-additional-order-payment small { display: block; color: var(--text-secondary, #625b57); font-size: 12px; line-height: 1.45; }
+.cost-hubbuy-account-head > span { flex: 0 0 auto; font-weight: 700; }
+.cost-account-active { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary, #625b57); }
+.cost-account-create { display: flex; align-items: end; gap: 10px; max-width: 640px; }
+.cost-account-create label, .cost-account-reconcile label, .cost-additional-order-create label, .cost-additional-order-payment > label, .cost-order-advance label { display: grid; gap: 5px; min-width: 0; color: var(--text-secondary, #625b57); font-size: 13px; }
+.cost-account-create label { flex: 1; }
+.cost-account-create input, .cost-account-reconcile input, .cost-account-reconcile textarea, .cost-additional-order-create input, .cost-additional-order-create select, .cost-additional-order-payment input, .cost-additional-order-payment select { width: 100%; min-width: 0; }
+.cost-account-reconcile { display: grid; gap: 12px; padding: 14px; border-radius: 12px; background: var(--background, #faf8f6); }
+.cost-account-reconcile > p { margin: 0; font-size: 13px; }
+.cost-account-reconcile-guide, .cost-account-reconcile-check, .cost-account-statement { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--border, #e9e3df); border-radius: 10px; background: var(--surface, #fff); }
+.cost-account-reconcile-guide p, .cost-account-reconcile-check p { margin: 0; font-size: 13px; }
+.cost-account-event, .cost-account-reconcile-finalize { display: grid; gap: 10px; }
+.cost-account-event-values { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.cost-account-event input, .cost-account-event select, .cost-account-reconcile select, .cost-account-reconcile-finalize input, .cost-account-reconcile-finalize textarea { width: 100%; min-width: 0; }
+.cost-account-reconcile-check ol, .cost-account-statement ol { display: grid; gap: 8px; margin: 0; padding-left: 20px; }
+.cost-account-statement li { display: grid; gap: 4px; padding: 8px 0; border-bottom: 1px solid var(--border, #e9e3df); }
+.cost-account-statement li small { color: var(--text-secondary, #625b57); font-size: 12px; line-height: 1.45; }
+.cost-account-rights { margin: 0; color: var(--text-secondary, #625b57); font-size: 13px; line-height: 1.5; }
+.cost-account-share { display: grid; grid-template-columns: minmax(100px, 1fr) repeat(2, minmax(100px, .8fr)); align-items: end; gap: 10px; }
+.cost-additional-order-create { display: grid; gap: 14px; padding: 16px; border: 1px solid var(--border, #e9e3df); border-radius: 14px; background: var(--surface, #fff); }
+.cost-additional-order-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.cost-order-free { display: flex !important; align-items: center; gap: 8px !important; min-height: 40px; }
+.cost-order-free input { width: 16px !important; flex: 0 0 auto; }
+.cost-order-participants { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0; padding: 12px; border: 1px solid var(--border, #e9e3df); border-radius: 10px; }
+.cost-order-participants legend { padding: 0 5px; color: var(--text-secondary, #625b57); font-size: 13px; }
+.cost-order-participants label { display: inline-flex; align-items: center; gap: 7px; }
+.cost-order-participants input { width: 16px; }
+.cost-additional-order-heading > span { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; font-size: 13px; font-weight: 650; }
+.cost-additional-order-heading > span.paid { color: var(--success, #317451); }
+.cost-additional-order-heading > span.pending { color: var(--text-secondary, #625b57); }
+.cost-additional-order-card ul { display: grid; min-width: 0; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.cost-additional-order-card li { display: flex; align-items: center; justify-content: space-between; min-width: 0; gap: 12px; padding: 10px 0; border-top: 1px solid var(--border, #e9e3df); }
+.cost-additional-order-card li > span:first-child { min-width: 0; }
+.cost-additional-order-item-actions { display: flex; flex: 0 0 auto; flex-direction: column; align-items: flex-end; gap: 7px; }
+.cost-additional-order-card li small { margin-top: 3px; }
+.cost-order-payment-note { margin: 0; color: var(--text-secondary, #625b57); font-size: 13px; }
+.cost-order-financing-position { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--border, #e9e3df); border-radius: 10px; background: var(--background, #faf8f6); }
+.cost-order-financing-position > span { display: grid; gap: 3px; }
+.cost-order-financing-position small { color: var(--text-secondary, #625b57); font-size: 12px; }
+.cost-order-settlement-amount { display: grid; grid-template-columns: minmax(100px, .55fr) minmax(0, 1fr); gap: 10px; }
+.cost-order-settlement-amount label { display: grid; gap: 5px; min-width: 0; color: var(--text-secondary, #625b57); font-size: 13px; }
+.cost-order-settlement-amount input, .cost-order-settlement-amount select { width: 100%; min-width: 0; }
+.cost-additional-order-payment { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; gap: 12px; padding-top: 12px; border-top: 1px solid var(--border, #e9e3df); }
+.cost-additional-order-payment > div:first-child { display: grid; gap: 4px; }
+.cost-additional-order-payment > .cost-order-free, .cost-additional-order-payment > button, .cost-additional-order-payment > .error { grid-column: 1 / -1; }
+.cost-order-advance { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-column: 1 / -1; gap: 10px; }
+.cost-order-advance-list { display: grid; grid-column: 1 / -1; gap: 10px; }
+.cost-order-advance > button { grid-column: 1 / -1; justify-self: start; }
+.cost-account-manage-link:focus-visible, .nav-item:focus-visible { outline: 2px solid var(--accent, #9f6e54); outline-offset: 2px; }
+.cost-account-manage-link { color: var(--accent, #9f6e54); font-size: 12px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.cost-hubbuy-account-head { flex-wrap: wrap; }
+.cost-hubbuy-account-head > div { flex: 1 1 180px; overflow-wrap: anywhere; }
+.cost-account-create small { color: var(--text-secondary, #625b57); font-size: 12px; line-height: 1.45; }
+@media (max-width: 680px) {
+  .cost-account-create { align-items: stretch; flex-direction: column; }
+  .cost-account-event-values { grid-template-columns: 1fr; }
+  .cost-account-share { grid-template-columns: minmax(0, 1fr) repeat(2, minmax(88px, .75fr)); gap: 7px; }
+  .cost-additional-order-fields, .cost-additional-order-payment { grid-template-columns: 1fr; }
+  .cost-order-advance { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cost-order-settlement-amount { grid-template-columns: 1fr; }
+  .cost-order-financing-position { align-items: flex-start; flex-direction: column; }
+  .cost-additional-order-item-actions { align-items: flex-end; }
+  .cost-additional-order-payment > .cost-order-free, .cost-additional-order-payment > button, .cost-additional-order-payment > .error { grid-column: auto; }
 }

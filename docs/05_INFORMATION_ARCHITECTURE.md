@@ -21,6 +21,7 @@ Profile/logout is accessed from the user avatar. Collections live inside Favorit
 /history
 /history/[purchaseId]
 /packages
+/packages/accounts
 /packages/[trackingId]
 /profile
 ```
@@ -35,6 +36,7 @@ Creation/editing should generally stay in context via Sheet/Drawer/Dialog instea
 - Favorites context includes collections in the sidebar/secondary area;
 - profile identity at bottom;
 - main content to the right.
+- show **Contas HubBuy** as its own sidebar item immediately below **Pacotes e custos**, with a wallet icon; it is a separate destination, not an indented child or a page-level Acompanhamentos/Contas tab pair.
 
 ## Mobile shell
 
@@ -56,6 +58,7 @@ Creation/editing should generally stay in context via Sheet/Drawer/Dialog instea
 - History
 - Historical Purchase Detail
 - Packages and costs list
+- HubBuy accounts management
 - Purchase cost follow-up detail
 - Profile
 

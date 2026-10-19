@@ -146,3 +146,7 @@ The approved extension in [the refund plan](23_PRODUCT_REFUNDS_PLAN.md) adds onl
 - Keep matching, upload, retry, deletion, quotas and audit independent from packages, costs, refunds and purchase snapshots.
 
 This is the only photo exception: no listing thumbnails or product images in operational cards/lists. Do not add a bookmarklet, browser extension, automatic collection, scraping, AI, workers or queues. External Cloudflare configuration, secrets, bucket creation, production migration and publication require specific authorization.
+
+### Approved post-MVP financial extension — 17 October 2026
+
+The user authorized local implementation of [the HubBuy balance and mixed-payment plan](26_HUBBUY_BALANCE_AND_MIXED_PAYMENTS_PLAN.md). It is a narrow post-MVP extension: one HubBuy CNY account may hold individual proportional credit rights; another member's share may fund a purchase through an explicit CNY advance; additional orders and package admission are limited to the same open tracking and verified account. This supersedes the earlier no-exchange/no-reusable-balance/multiple-order exclusions only for this handoff. It does not process bank payments, infer real balances, mutate finalized purchases, or authorize production migration/publication.
