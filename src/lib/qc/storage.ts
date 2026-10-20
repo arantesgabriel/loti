@@ -22,7 +22,9 @@ function storageClients(): StorageClients {
   const writeId = process.env.R2_WRITE_ACCESS_KEY_ID, writeSecret = process.env.R2_WRITE_SECRET_ACCESS_KEY;
   const readId = process.env.R2_READ_ACCESS_KEY_ID, readSecret = process.env.R2_READ_SECRET_ACCESS_KEY;
   if (![accountId, bucket, writeId, writeSecret, readId, readSecret].every(Boolean) || !/^[a-f0-9]{32}$/.test(accountId!)) throw new DomainError("Backup QC indisponível: configure as credenciais R2 do ambiente.", 503, "QC_STORAGE_UNAVAILABLE");
-  const endpoint = `https://${accountId}.r2.cloudflarestorage.com`;
+  const testEndpoint = process.env.LOTI_QC_TEST_S3_ENDPOINT || undefined;
+  if (testEndpoint && (process.env.VERCEL || process.env.LOTI_E2E_QC_VIEWER !== "1" || !/^file:\.\/data\/e2e-refunds-[a-zA-Z0-9_-]+\.sqlite$/.test(process.env.TURSO_DATABASE_URL ?? "") || process.env.BETTER_AUTH_URL !== "http://localhost:3100" || testEndpoint !== "http://localhost:3102" || bucket !== "qc-fixture")) throw new Error("QC storage test endpoint requires an isolated local E2E process");
+  const endpoint = testEndpoint ?? `https://${accountId}.r2.cloudflarestorage.com`;
   clients = {
     bucket: bucket!,
     write: new S3Client({ region: "auto", endpoint, forcePathStyle: true, maxAttempts: 1, credentials: { accessKeyId: writeId!, secretAccessKey: writeSecret! } }),
