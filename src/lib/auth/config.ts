@@ -15,7 +15,6 @@ export function createAuth(db: AppDatabase | Parameters<Parameters<AppDatabase["
     emailAndPassword: { enabled: true, disableSignUp: !operator, autoSignIn: !operator, minPasswordLength: 12, maxPasswordLength: 128 },
     session: { expiresIn: 60 * 60 * 24 * 14, updateAge: 60 * 60 * 24 },
     rateLimit: { enabled: true, storage: "memory" },
-    advanced: { useSecureCookies: process.env.NODE_ENV === "production" },
     hooks: {
       before: createAuthMiddleware(async ctx => {
         if (ctx.path !== "/update-user" && ctx.path !== "/change-password") return;

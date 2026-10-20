@@ -87,7 +87,7 @@ O E2E usa uma base local isolada em `data/e2e.sqlite`. Testes de legado usam o w
 
 ## Publicar no Vercel
 
-Produção atual: [loti-omega.vercel.app](https://loti-omega.vercel.app). Projeto `loti`, produção na branch `feat/mvp`; bancos `loti-prod` e `loti-dev` na região AWS São Paulo. As migrations estão aplicadas e as variáveis server-side estão configuradas. Usuários reais precisam ser provisionados pelo operador.
+Produção oficial: [useloti.com](https://useloti.com). Projeto `loti`, produção na branch `feat/mvp`; bancos `loti-prod` e `loti-dev` na região AWS São Paulo. `BETTER_AUTH_URL=https://useloti.com` já foi configurada pelo operador. Os aliases `www.useloti.com`, `meuloti.com` e `www.meuloti.com` redirecionam ao domínio oficial; não são origens adicionais de autenticação. Contas existentes mantêm seus IDs e dados, mas precisam de novo login no domínio oficial. A auditoria de autenticação não aplica migrations nem publica alterações de produção.
 
 Importe o repositório GitHub como projeto Next.js no Vercel. Crie `loti-prod` e `loti-dev` no Turso, aplique migrações a cada banco e configure variáveis server-side. A URL final do projeto será a origem de `BETTER_AUTH_URL`; após ajustá-la, faça novo deploy. Verifique `/login`, `/api/health`, sessão e uma leitura/escrita contra `loti-prod`. O guia completo está em [docs/13_DEPLOYMENT.md](docs/13_DEPLOYMENT.md).
 

@@ -42,7 +42,7 @@ Vercel uses the following server-side variables:
 | `TURSO_DATABASE_URL` | `loti-prod` URL | `loti-dev` URL (or local file for local development) |
 | `TURSO_AUTH_TOKEN` | `loti-prod` database token | `loti-dev` database token |
 | `BETTER_AUTH_SECRET` | strong random secret, at least 32 characters | separate local/preview secret |
-| `BETTER_AUTH_URL` | exact production HTTPS origin | optional for Preview: derives from Vercel branch URL; local uses localhost |
+| `BETTER_AUTH_URL` | `https://useloti.com` | optional for Preview: derives from Vercel branch URL; local uses localhost |
 
 Do not create `NEXT_PUBLIC_` variants of database credentials or the Better Auth secret. Changes to Vercel environment variables take effect only in a new deployment.
 
@@ -50,7 +50,11 @@ For Preview, leave `BETTER_AUTH_URL` unset: authentication and mutation origin c
 
 ## Better Auth and URL
 
-After the first deployment, set `BETTER_AUTH_URL` to the real `https://<project>.vercel.app` origin, plus any explicitly configured trusted-origin value if the application adds one. Redeploy after changing it. Keep public signup disabled.
+Production uses `BETTER_AUTH_URL=https://useloti.com` (already configured by the operator). Do not overwrite it or rotate `BETTER_AUTH_SECRET` for the domain change. With `VERCEL_ENV=production`, missing configuration or a non-HTTPS URL fails closed instead of falling back to a branch/deployment alias. Environment changes require a new deployment; this authentication audit does not authorize a production deployment.
+
+Better Auth 1.7.7 automatically trusts the configured base URL. No additional `trustedOrigins`, secondary domain, old Vercel origin, request-derived hosts, or wildcard is required. Do not configure `BETTER_AUTH_TRUSTED_ORIGINS` with additional origins for this single-origin application. Preview uses only its exact configured branch origin and an isolated database/secret; open it through that branch alias. Local development defaults to `http://localhost:3000`; the isolated browser tests explicitly select `http://localhost:3100`.
+
+The browser auth client uses the current origin; login, logout and invitation return paths stay relative. Better Auth chooses secure cookies from the base URL protocol: HTTPS uses `__Secure-better-auth.session_token`, `Secure`, `HttpOnly`, `SameSite=Lax`, `Path=/`, no `Domain`. HTTP localhost retains compatible cookies. Sessions remain database-backed for 14 days with a one-day update age. No cross-subdomain sharing or cookie cache is enabled. Users must sign in again on the official domain; their existing Better Auth IDs and workspace data remain unchanged. Recovery is operator-assisted; no OAuth or automatic recovery/verification email provider is configured.
 
 ## Migrations
 

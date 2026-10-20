@@ -27,7 +27,7 @@ Real production addresses and passwords are not part of this specification. Do n
 
 The canonical target is Vercel + Turso/libSQL. Production does not use Railway or a persistent application volume. If the authenticated accounts cannot create the required resources, record the exact external permission blocker and finish all repository-side work.
 
-The databases `loti-prod` and `loti-dev` are provisioned and migrated. Vercel project `loti` is connected to `arantesgabriel/loti`, with `feat/mvp` as its production branch and server-side credentials scoped by database. Production origin: `https://loti-omega.vercel.app`.
+The databases `loti-prod` and `loti-dev` are provisioned and migrated. Vercel project `loti` is connected to `arantesgabriel/loti`, with `feat/mvp` as its production branch and server-side credentials scoped by database. Official production origin: `https://useloti.com`; the operator has set Production `BETTER_AUTH_URL` accordingly. The old Vercel alias remains available but is not an additional trusted authentication origin. Domain migration does not require database changes or secret rotation.
 
 ## HubBuy QC operational inputs
 
