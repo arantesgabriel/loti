@@ -39,6 +39,7 @@ import { ProductCostsList } from "./product-costs-list";
 import { AdditionalProductEditor } from "./additional-product-editor";
 import "./purchase-cost-header.css";
 import "./package-cost-layout.css";
+import "./package-cost-v4.css";
 import { RefundsSection } from "./refunds-section";
 import {
   AdditionalOrdersPanel,
@@ -319,13 +320,6 @@ export function PackageCostDetailScreen({
     setFocusRequestId(current => current + 1);
   }
 
-  function openPackageCharge(packageId: string, charge: "freight" | "customs") {
-    setOpenSections(current => ({ ...current, packages: true }));
-    setExpandedPackages(current => ({ ...current, [packageId]: true }));
-    focusTarget.current = `package-${charge === "freight" ? "freight" : "customs"}-${packageId}`;
-    setFocusRequestId(current => current + 1);
-  }
-
   async function saveAllocations(
     packageId: string,
     draft: Record<string, number>,
@@ -485,6 +479,7 @@ export function PackageCostDetailScreen({
 
   return (
     <>
+      <div className="cost-v4">
       <Link className="cost-back" href="/packages">
         <ArrowLeft size={16} />
         Pacotes e custos
@@ -614,10 +609,10 @@ export function PackageCostDetailScreen({
         </div>
       </header>
 
-      <div className="cost-summary-card">
+      <div className={`cost-summary-card ${detail.financialDisplay.refundGroups.length ? "has-refunds" : ""}`}>
         <div className="cost-summary-total">
           <div>
-            <span>{presentation.isPartial ? "Custo da compra até agora" : "Custo final da compra"}</span>
+            <span>Custo líquido atual</span>
             <span className="cost-summary-status" role="status">
               {presentation.isPartial ? "Parcial" : "Final"}
             </span>
@@ -629,8 +624,8 @@ export function PackageCostDetailScreen({
           </strong>
         </div>
         {detail.financialDisplay.refundGroups.length > 0 && <div className="cost-summary-breakdown">
-          <div><span>Produtos que continuam no pedido</span><strong>{detail.financialDisplay.summary.remaining.finalCents !== null ? formatMoney(detail.financialDisplay.summary.remaining.finalCents) : detail.financialDisplay.summary.remaining.hasKnownAmount ? `Parcial · ${formatMoney(detail.financialDisplay.summary.remaining.knownCents)}` : "Falta informar"}</strong></div>
-          <div><span>{detail.financialDisplay.summary.cancelledAwaitingReceipt ? "Custos mantidos até agora" : "Custos mantidos dos itens cancelados"}</span><strong>{formatMoney(detail.financialDisplay.summary.cancelledRetainedCents)}</strong></div>
+          <div><span>Produtos ainda no pedido</span><strong>{detail.financialDisplay.summary.remaining.finalCents !== null ? formatMoney(detail.financialDisplay.summary.remaining.finalCents) : detail.financialDisplay.summary.remaining.hasKnownAmount ? `Parcial · ${formatMoney(detail.financialDisplay.summary.remaining.knownCents)}` : "Falta informar"}</strong></div>
+          <div><span>{detail.financialDisplay.summary.cancelledAwaitingReceipt ? "Custos mantidos até agora" : "Custos mantidos no reembolso"}</span><strong>{formatMoney(detail.financialDisplay.summary.cancelledRetainedCents)}</strong></div>
           {detail.financialDisplay.summary.requestedRefundCents > 0 && <p>A receber {formatMoney(detail.financialDisplay.summary.requestedRefundCents)} · o valor solicitado não reduz o custo atual.</p>}
         </div>}
         {nextAction && (
@@ -702,7 +697,7 @@ export function PackageCostDetailScreen({
       <ProgressiveSection
         id="payments"
         title="Pagamentos e reembolsos"
-        summary="Histórico de pagamentos e reembolsos"
+        summary="Pagamentos, saldo HubBuy e devoluções"
         open={openSections.payments}
         onToggle={() =>
           setOpenSections((current) => ({
@@ -712,10 +707,16 @@ export function PackageCostDetailScreen({
         }
       >
         <div className="cost-section-content">
-          <Button className="cost-payment-history-trigger" variant="outline" aria-expanded={paymentsExpanded} aria-controls="cost-payment-history" onClick={() => setPaymentsExpanded(value => !value)}>
-            {paymentsExpanded ? "Ocultar pagamentos" : "Ver pagamentos"}
-            <ChevronDown className={paymentsExpanded ? "expanded" : ""} size={16} aria-hidden="true"/>
-          </Button>
+          <div className="cost-payments-heading"><h3>Pagamentos da compra</h3><span>{1 + detail.productOrders.filter(order => order.kind === "additional" && order.state === "recorded").length} registros</span></div>
+          <div className="cost-payment-register">
+            <button type="button" className="cost-payment-register-row" aria-label={paymentsExpanded ? "Ocultar pagamentos" : "Ver pagamentos"} aria-expanded={paymentsExpanded} aria-controls="cost-payment-history" onClick={() => setPaymentsExpanded(value => !value)}>
+              <span className="cost-payment-number">01</span>
+              <span className="cost-payment-register-name"><strong>Pedido original</strong><small>{finalizedDate} · {productsPaid ? "Pagamento confirmado" : "Pagamento pendente"}</small></span>
+              <span className="cost-payment-register-source"><span>{productsCharge?.paymentMethod === "pix" ? "Pix" : productsCharge?.paymentMethod === "card" ? "Cartão" : "Método não definido"} · Base {money(products.baseCents)}</span><small>Taxa: {money(productsRate)}</small></span>
+              <span className={`cost-payment-register-status ${productsPaid ? "paid" : ""}`}>{productsPaid ? "Pago" : "Pendente"}</span>
+              <strong className="cost-payment-register-total">{money(products.totalCents)}</strong><span className="cost-payment-register-details">Detalhes {paymentsExpanded ? "⌃" : "›"}</span>
+            </button>
+          </div>
           <div id="cost-payment-history" hidden={!paymentsExpanded}>
           {paymentsExpanded && <div className="cost-payment-history">
           <div aria-labelledby="product-payment-title">
@@ -845,9 +846,13 @@ export function PackageCostDetailScreen({
             </div>
           </div>
           </div>
-          <AdditionalPaymentHistory detail={detail} onPackageCharge={openPackageCharge}/>
           </div>}
           </div>
+          <AdditionalPaymentHistory onPackages={() => {
+            setOpenSections(current => ({ ...current, packages: true }));
+            focusTarget.current = "packages-section";
+            setFocusRequestId(current => current + 1);
+          }} detail={detail}/>
         </div>
         <RefundsSection
           detail={detail}
@@ -952,13 +957,6 @@ export function PackageCostDetailScreen({
           className="cost-section-content"
           aria-labelledby="cost-section-people-title"
         >
-          <div className="cost-section-heading">
-            <div>
-              <p className="muted">
-                Parcelas dos produtos compartilhados e seus encargos.
-              </p>
-            </div>
-          </div>
           {detail.calculation.summary.undistributedCents > 0 && (
             <p className="cost-undistributed" role="status">
               Há {formatMoney(detail.calculation.summary.undistributedCents)} em
@@ -975,8 +973,8 @@ export function PackageCostDetailScreen({
                   <small>
                     {person.personalUnits}{" "}
                     {person.personalUnits === 1
-                      ? "unidade enviável pessoal"
-                      : "unidades enviáveis pessoais"}
+                      ? "unidade"
+                      : "unidades"}
                     {person.sharedItems
                       ? ` · ${person.sharedItems} ${person.sharedItems === 1 ? "item compartilhado" : "itens compartilhados"}`
                       : ""}
@@ -1133,6 +1131,7 @@ export function PackageCostDetailScreen({
           }}
         />
       )}
+      </div>
     </>
   );
 }
@@ -1168,6 +1167,7 @@ function ProgressiveSection({
           type="button"
           aria-expanded={open}
           aria-controls={panelId}
+          data-cost-target={id === "packages" ? "packages-section" : undefined}
           onClick={onToggle}
         >
           <span>
@@ -1194,14 +1194,16 @@ function ProgressiveSection({
   );
 }
 
-function AdditionalPaymentHistory({ detail, onPackageCharge }: { detail: Detail; onPackageCharge: (packageId: string, charge: "freight" | "customs") => void }) {
+function AdditionalPaymentHistory({ detail, onPackages }: { detail: Detail; onPackages: () => void }) {
   const orders = detail.productOrders.filter(order => order.kind === "additional" && order.state === "recorded");
   const corrections = detail.orderCorrections;
   const paymentLabel = (source: string) => source === "balance" ? "Saldo HubBuy" : source === "pix" ? "Pix" : "Cartão";
   return <div className="cost-payment-history-extra">
     <section className="cost-history-orders" aria-labelledby="additional-payments-title">
       <h3 id="additional-payments-title">Pedidos adicionais vigentes</h3>
-      {orders.length === 0 ? <p className="muted">Nenhum pedido adicional registrado.</p> : orders.map(order => <article className="cost-history-order" key={order.id}>
+      {orders.map((order, index) => <details className="cost-history-order" key={order.id}>
+        <summary className="cost-payment-register-row"><span className="cost-payment-number">{String(index + 2).padStart(2, "0")}</span><span className="cost-payment-register-name"><strong>Pedido adicional{order.externalReference ? ` · ${order.externalReference}` : ""}</strong><small>{order.recordedAt ? new Date(order.recordedAt).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "Data não registrada"} · Produtos para a mesma compra</small></span><span className="cost-payment-register-source"><span>{order.paymentComponents.map(component => component.sourceType === "balance" ? `Saldo HubBuy · ${formatCnyMinor(component.cnyMinor)} (histórico)` : paymentLabel(component.sourceType)).join(" + ")}</span><small>{order.paymentComponents.some(component => component.feeBrlCents > 0) ? `Taxa: ${formatMoney(order.paymentComponents.reduce((sum, component) => sum + component.feeBrlCents, 0))}` : "Sem taxa de processamento"}</small></span><span className="cost-payment-register-status">Registrado</span><strong className="cost-payment-register-total">{formatMoney(order.totalCostBrlCents)}</strong><span className="cost-payment-register-details">Detalhes ›</span></summary>
+        <div className="cost-additional-payment-details">
         <header><div><strong>{order.externalReference ? `Pedido adicional · ${order.externalReference}` : "Pedido adicional"}</strong><small>{order.recordedAt ? new Date(order.recordedAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" }) : "Data não registrada"}{order.account ? ` · ${order.account.label}` : ""}</small></div><span>Registrado</span></header>
         <dl><div><dt>Custo histórico</dt><dd>{formatMoney(order.totalCostBrlCents)}</dd></div><div><dt>Dinheiro novo</dt><dd>{formatMoney(order.newMoneyBrlCents)}</dd></div>{order.historicalBrlCents > 0 && <div><dt>Base histórica do saldo</dt><dd>{formatMoney(order.historicalBrlCents)}</dd></div>}</dl>
         <ul aria-label="Fontes de pagamento do pedido adicional">
@@ -1210,14 +1212,10 @@ function AdditionalPaymentHistory({ detail, onPackageCharge }: { detail: Detail;
             <span>{component.sourceType === "balance" ? `${formatMoney(component.principalBrlCents)} de base histórica · ${formatCnyMinor(component.cnyMinor)}` : `${formatMoney(component.principalBrlCents + component.feeBrlCents)} de dinheiro novo · ${formatMoney(component.principalBrlCents)} de base${component.feeBrlCents ? ` · ${formatMoney(component.feeBrlCents)} de taxa` : ""}`}</span>
           </li>)}
         </ul>
-      </article>)}
+      </div></details>)}
     </section>
     {corrections.length > 0 && <details className="cost-payment-corrections"><summary>Pedidos substituídos · {corrections.length}</summary>{corrections.map(correction => <p key={correction.id}><strong>Pedido anterior · {formatMoney(correction.previousTotalBrlCents)}</strong><span>Substituído por um pedido adicional vigente · {correction.actorName} · {new Date(correction.recordedAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}{correction.reason ? ` · ${correction.reason}` : ""}</span></p>)}</details>}
-    {detail.packages.length > 0 && <section className="cost-history-packages" aria-labelledby="package-payment-links-title">
-      <h3 id="package-payment-links-title">Frete Brasil e Receita</h3>
-      {detail.packages.map(pkg => <div key={pkg.id}><strong>{pkg.name}</strong><Button variant="ghost" size="sm" onClick={() => onPackageCharge(pkg.id, "freight")}>Ver frete Brasil · {displayedValue(pkg.brazilFreightCharge?.valueState ?? "pending", pkg.brazilFreightCharge?.amountCents)}</Button><Button variant="ghost" size="sm" onClick={() => onPackageCharge(pkg.id, "customs")}>Ver Receita · {displayedValue(pkg.customsCharge?.valueState ?? "pending", pkg.customsCharge?.amountCents)}</Button></div>)}
-      <p className="muted">As cobranças continuam na composição dos produtos e não são somadas novamente aqui.</p>
-    </section>}
+    {detail.packages.length > 0 && <p className="cost-package-charge-link"><button type="button" onClick={onPackages}>Frete Brasil e Receita</button> são informados por pacote, na seção abaixo.</p>}
   </div>;
 }
 

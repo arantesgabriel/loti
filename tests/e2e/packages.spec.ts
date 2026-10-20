@@ -98,10 +98,10 @@ test("finalized purchase gets a separate cost tracking with payment, package, an
   await page.locator(".cost-product-payment select").selectOption("pix");
   await page.getByRole("button", { name: "Marcar como pago", exact: true }).click();
   const payment = page.locator(".cost-product-payment");
-  await expect(payment.locator(".cost-product-payment-summary > div")).toHaveCount(4);
-  await expect(payment.getByText("Pago", { exact: true })).toBeVisible();
+  await expect(payment.locator(".cost-product-payment-summary > div")).toHaveCount(3);
+  await expect(page.locator(".cost-payment-register-status").getByText("Pago", { exact: true })).toBeVisible();
   await expect(page.locator(".cost-summary-status")).toHaveText("Parcial");
-  await expect(payment.getByRole("status", { name: "Pagamento pago" })).toBeVisible();
+  await expect(payment.getByRole("status")).toHaveText("Pagamento confirmado");
   await expect(payment.getByRole("button", { name: "Pagamento confirmado", exact: true })).toHaveCount(0);
   await expect(payment.getByText("Reembolso recebido", { exact: true })).toHaveCount(0);
   await expect(payment.getByText("A receber", { exact: true })).toHaveCount(0);

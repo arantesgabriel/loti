@@ -73,6 +73,10 @@ The approved mockups were generated before the final product name was chosen and
 
 ## Execution style
 
+### Commit messages
+
+Use Conventional Commit prefixes without parenthesized scopes: `feat: ...`, `fix: ...`, `refactor: ...`, `docs: ...`, etc. Write the description in English, following the project's existing style. Do not use `feat(scope): ...` or other scoped prefixes.
+
 Implement phase-by-phase, but continue autonomously between phases. Run lint, typecheck, tests, migrations and build continuously. Fix failures before proceeding. Stop only for a genuine human-only blocker such as missing credentials or an unavailable external account.
 
 - Product refunds follow `docs/23_PRODUCT_REFUNDS_PLAN.md`: cancellation removes explicitly selected pre-shipment units, while only a confirmed receipt creates credit. Preserve original product/China bases, payment confirmation, captured fee and finalized snapshots.

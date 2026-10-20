@@ -145,21 +145,11 @@ test("requests, receives, corrects and voids product refunds without changing th
   await expect(page.locator(".refunds-total")).toContainText("A receber: R$ 75,00");
   await expect(page.locator(".refund-row:visible .refund-status").first()).toHaveText("Aguardando reembolso");
   await expect(page.locator("#cost-section-products-title")).toBeVisible();
-  const toggle = page.locator(".refund-row:visible").first().locator(".refund-record-toggle");
-  await expect(toggle).toHaveAttribute("aria-expanded", "false");
-  await expect(page.locator(".refund-row:visible").first().getByRole("button", { name: "Registrar recebimento", exact: true })).toHaveCount(0);
+  await expect(page.locator(".refund-record-toggle:visible")).toHaveCount(0);
+  await expect(page.locator(".refund-row:visible").first().getByRole("button", { name: "Registrar recebimento", exact: true })).toBeVisible();
   await page.setViewportSize({ width: 320, height: 640 });
-  await captureMobileUx("refund-summary-single-request-320-after", false);
-  await toggle.focus();
-  await page.keyboard.press("Enter");
-  await expect(toggle).toHaveAttribute("aria-expanded", "true");
-  await captureMobileUx("refund-summary-single-request-320-details-open-after", false);
-  await page.keyboard.press("Enter");
-  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await captureMobileUx("refund-summary-single-request-320-flat-after", false);
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await toggle.focus();
-  await page.keyboard.press("Enter");
-  await expect(toggle).toHaveAttribute("aria-expanded", "true");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Ver pagamentos", exact: true })).toBeVisible();
   await expect(page.locator(".cost-product-payment")).toHaveCount(0);
@@ -192,7 +182,7 @@ test("requests, receives, corrects and voids product refunds without changing th
   await surface.getByLabel("Novo valor recebido do frete China (R$)").fill("10,00");
   await surface.getByLabel("Motivo da correção").fill("Conferência do valor do produto");
   await surface.getByRole("button", { name: "Corrigir recebimento", exact: true }).click();
-  await expect(page.locator(".refund-row:visible").first()).toContainText("R$ 89,00");
+  await expect(page.locator(".refunds-total")).toContainText("R$ 89,00");
   await capture("refund-received-desktop");
   await page.getByRole("button", { name: "Corrigir valores recebidos", exact: true }).click();
   surface = page.getByRole("dialog");
@@ -203,7 +193,7 @@ test("requests, receives, corrects and voids product refunds without changing th
   await expect(zeroCorrection).toBeDisabled();
   await surface.getByLabel("Confirmo zerar o crédito recebido: ele será removido e o custo voltará a ficar integral.").check();
   await zeroCorrection.click();
-  await expect(page.locator(".refund-row:visible .refund-amount").first()).toContainText("R$ 0,00");
+  await expect(page.locator(".refunds-total")).toContainText("R$ 0,00");
   await expect(payment.locator(".refund-financial-summary")).toHaveCount(0);
   await expect(payment.locator(".cost-payment-order-heading")).toContainText("R$ 222,20");
   await openRefundRequest();
@@ -212,7 +202,7 @@ test("requests, receives, corrects and voids product refunds without changing th
   await surface.getByLabel("Motivo").fill("Segunda unidade cancelada");
   await surface.getByRole("button", { name: "Registrar solicitação", exact: true }).click();
   await expandRefundGroups();
-  await page.locator(".refund-row.status-requested:visible").getByRole("button", { name: /Ver detalhes/ }).click();
+  await expect(page.locator(".refund-record-toggle:visible")).toHaveCount(0);
   await page.locator(".refund-row.status-requested:visible").getByRole("button", { name: "Anular registro", exact: true }).click();
   surface = page.getByRole("dialog");
   await surface.getByLabel("Motivo da anulação").fill("Solicitação aberta por engano");
@@ -237,7 +227,7 @@ test("requests, receives, corrects and voids product refunds without changing th
   await expect(page.locator(".cost-products-empty")).toContainText("Nenhum produto permanece no pedido");
   await expect(page.locator(".cost-product-mobile-card")).toHaveCount(0);
   await expect(page.locator(".refunds-total")).toContainText("A receber: R$ 110,00");
-  await page.locator(".refund-row.status-requested:visible").getByRole("button", { name: /Ver detalhes/ }).click();
+  await expect(page.locator(".refund-record-toggle:visible")).toHaveCount(0);
   await expect(page.locator(".refund-row.status-requested:visible")).toContainText("1 unidade cancelada");
   await expect(page.locator(".refund-row.status-requested:visible .refund-details")).toContainText("Produto solicitado");
   await capture("refund-all-cancelled-desktop");
@@ -257,22 +247,6 @@ test("requests, receives, corrects and voids product refunds without changing th
       }).filter(element => element.right > window.innerWidth + 1 || element.left < -1).slice(0, 12),
     }));
     expect(dimensions.content, `Horizontal overflow at ${dimensions.viewport}px: ${dimensions.content}px; ${JSON.stringify(dimensions.offenders)}`).toBeLessThanOrEqual(dimensions.viewport);
-    if (width === 320) {
-      const row = page.locator(".refund-row.status-requested:visible").first();
-      await row.scrollIntoViewIfNeeded();
-      const amount = row.locator(".refund-amount strong");
-      await expect(amount).toHaveCSS("white-space", "nowrap");
-      const collapsedLayout = await row.evaluate(element => {
-        const amount = element.querySelector(".refund-amount strong")!.getBoundingClientRect();
-      const button = element.querySelector(".refund-record-toggle")!.getBoundingClientRect();
-        return { amountHeight: amount.height, amountRight: amount.right, buttonTop: button.top, amountBottom: amount.bottom, width: window.innerWidth, scrollWidth: document.documentElement.scrollWidth };
-      });
-      expect(collapsedLayout.amountHeight).toBeLessThanOrEqual(24);
-      expect(collapsedLayout.amountRight).toBeLessThanOrEqual(collapsedLayout.width);
-      expect(collapsedLayout.buttonTop).toBeGreaterThanOrEqual(collapsedLayout.amountBottom - 1);
-      expect(collapsedLayout.scrollWidth).toBeLessThanOrEqual(collapsedLayout.width);
-      await captureMobileUx("refund-summary-320-after", false);
-    }
   }
 });
 
@@ -346,15 +320,14 @@ test("summarizes multiple refunds while retaining cancelled product residuals", 
   await expect(page.locator(".cost-products-empty")).toContainText("Nenhum produto permanece no pedido");
   for (const width of [320, 390, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
-    const section = page.getByRole("region", { name: "Reembolsos", exact: true });
+    const section = page.getByRole("region", { name: "Produtos reembolsados", exact: true });
     const groupToggle = section.locator(".refund-group-toggle:visible").first();
     if (await groupToggle.getAttribute("aria-expanded") === "true") await groupToggle.click();
     await groupToggle.focus();
     await page.keyboard.press("Space");
     await expect(groupToggle).toHaveAttribute("aria-expanded", "true");
     await expect(page.getByRole("dialog")).toHaveCount(0);
-    const recordToggle = section.locator(".refund-record-toggle:visible").first();
-    await recordToggle.click();
+    await expect(section.locator(".refund-record-toggle:visible")).toHaveCount(0);
     await expect(section).toContainText("Pagamento original · Pix");
     const dimensions = await page.evaluate(() => ({ viewport: innerWidth, content: document.documentElement.scrollWidth }));
     expect(dimensions.content).toBeLessThanOrEqual(dimensions.viewport);
@@ -362,15 +335,13 @@ test("summarizes multiple refunds while retaining cancelled product residuals", 
       mkdirSync(resolve("artifacts/qa/package-refunds"), { recursive: true });
       await section.screenshot({ path: resolve(`artifacts/qa/package-refunds/refunds-summary-${width}.png`) });
     }
-    await recordToggle.click();
     await groupToggle.click();
     await expect(groupToggle).toHaveAttribute("aria-expanded", "false");
   }
   await page.emulateMedia({ reducedMotion: "reduce" });
   const toggle = page.locator(".refund-group-toggle:visible").first();
   await toggle.click();
-  const transitionDuration = await page.locator(".refund-details-panel").first().evaluate(element => getComputedStyle(element).transitionDuration);
-  expect(parseFloat(transitionDuration)).toBeLessThan(0.01);
+  await expect(page.locator(".refund-record-flat:visible").first()).toBeVisible();
   // Refund withdrawals retain content history; keep the empty package and resolve its obligations.
   await cost("charge.save", { chargeType: "brazil_freight", valueState: "no_charge", amountCents: null, paymentMethod: null, feeBps: null }, { chargeId: detail.packages[0].brazilFreightCharge.id });
   await cost("charge.save", { chargeType: "customs", valueState: "no_charge", amountCents: null }, { chargeId: detail.packages[0].customsCharge.id });
@@ -378,7 +349,7 @@ test("summarizes multiple refunds while retaining cancelled product residuals", 
   await page.reload();
   await expect(page.getByRole("button", { name: /Produtos e custos/ })).toHaveAttribute("aria-expanded", "true");
   await expandRefundGroups();
-  await page.locator(".refund-record-toggle:visible").first().click();
+  await expect(page.locator(".refund-record-toggle:visible")).toHaveCount(0);
   await expect(page.locator(".refunds-section").getByRole("button", { name: "Corrigir valores recebidos", exact: true })).toHaveCount(0);
   await expect(page.locator(".refunds-section").getByRole("button", { name: "Fechar composição", exact: true })).toHaveCount(2);
 });

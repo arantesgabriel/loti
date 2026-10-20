@@ -37,7 +37,7 @@ test("hybrid costs preserve real residuals and actions across desktop and mobile
   const refunded = detail.items.find(item => item.original.name === "Memória RAM")!;
   await cost("refund.request", { costItemId: refunded.id, quantity: 1, requestedProductCents: 15_000, requestedChinaCents: 0, packageRemovals: [{ packageId: firstPackage.id, quantity: 1 }], unassignedQuantity: 0, reason: "Fixture de cancelamento" });
   const refund = detail.refunds[0];
-  await cost("refund.receive", { receivedProductCents: 12_000, receivedChinaCents: 0, confirmed: true }, { refundId: refund.id });
+  await cost("refund.receive", { receivedProductCents: 12_000, receivedChinaCents: 0, confirmed: true, destination: "hubbuy", newAccountLabel: "Conta V4 QA", confirmZeroBalance: true, receivedProductCnyMinor: 12_000, receivedChinaCnyMinor: 0, nativeEvidence: "Crédito sintético para conferir a referência V4" }, { refundId: refund.id });
   // Put two products in a second, incomplete package to render complete and partial lines together.
   await cost("package.allocations", { packageId: firstPackage.id, allocations: detail.items.slice(0, 2).map(item => ({ costItemId: item.id, quantity: 1 })) });
   await cost("package.create", { name: "Pacote complementar" });
@@ -60,10 +60,19 @@ test("hybrid costs preserve real residuals and actions across desktop and mobile
   await expect(page.locator(".cost-compact-row")).toHaveCount(4);
   await expect(page.getByRole("button", { name: /^Produtos e custos/ })).toHaveAttribute("aria-expanded", "true");
   await expect(page.getByRole("button", { name: /^Pagamentos e reembolsos/ })).toHaveAttribute("aria-expanded", "true");
+  const packagesToggle = page.getByRole("button", { name: /^Pacotes / });
+  await packagesToggle.click();
+  await expect(packagesToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator("details.cost-history-packages")).toHaveCount(0);
+  await page.getByRole("button", { name: "Frete Brasil e Receita", exact: true }).click();
+  await expect(packagesToggle).toHaveAttribute("aria-expanded", "true");
+  await expect(packagesToggle).toBeFocused();
   const ram = page.locator(".cost-compact-row").filter({ hasText: "Memória RAM" });
   await expect(ram).toHaveCount(0);
   await expect(page.locator(".refunds-table-wrap")).toContainText("Memória RAM");
   await expect(page.locator(".refunds-table-wrap")).toContainText("R$ 31,50"); // Principal not refunded plus captured fee.
+  await expect(page.getByRole("complementary", { name: "Crédito recebido na HubBuy" })).toContainText("R$ 120,00");
+  await expect(page.getByRole("complementary", { name: "Crédito recebido na HubBuy" })).toContainText("não é abatido automaticamente");
   await expect(page.locator(".cost-compact-row").filter({ hasText: "Camiseta de algodão" })).toContainText("R$ 0,00");
   await expect(page.locator(".cost-row-status.complete").first()).toBeVisible();
   await expect(page.locator(".cost-row-status.partial").first()).toBeVisible();
@@ -110,6 +119,7 @@ test("hybrid costs preserve real residuals and actions across desktop and mobile
     await expect(page.locator(".cost-inline-composition").filter({ visible: true })).toHaveCount(1);
     // A compact sibling should stay compact while one product is expanded.
     expect((await visibleRows.nth(1).boundingBox())!.height).toBeLessThan(160);
+    await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({ path: resolve(screenshots, `hybrid-${width}.png`), fullPage: true });
   }
   await page.locator(".cost-package-toggle").first().click();
@@ -117,12 +127,19 @@ test("hybrid costs preserve real residuals and actions across desktop and mobile
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({ path: resolve(screenshots, `package-expanded-${width}.png`), fullPage: true });
   }
   for (const label of [/^Produtos e custos/, /^Pagamentos e reembolsos/, /^Pacotes /, /^Divisão por pessoa/]) {
     const toggle = page.getByRole("button", { name: label });
     await toggle.click();
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  }
+  for (const width of [1440, 1280, 768, 390, 360]) {
+    await page.setViewportSize({ width, height: 1000 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: resolve(screenshots, `v4-collapsed-${width}.png`), fullPage: true });
   }
   await page.setViewportSize({ width: 320, height: 844 });
   await page.screenshot({ path: resolve(screenshots, "collapsed-320.png"), fullPage: true });
@@ -134,6 +151,15 @@ test("hybrid costs preserve real residuals and actions across desktop and mobile
   await page.locator(".refund-group-toggle:visible").first().click();
   await expect(page.locator(".refund-group-composition:visible")).toContainText("Taxa do pagamento dessas unidades");
   await expect(page.locator(".refund-group-composition:visible")).toContainText("Custo não devolvido");
+  await expect(page.locator(".refund-record-flat:visible .refund-product")).toHaveCount(0);
+  await expect(page.locator(".refund-record-toggle:visible")).toHaveCount(0);
+  await expect(page.locator(".refund-record-flat:visible").getByRole("button", { name: "Corrigir valores recebidos" })).toBeVisible();
+  for (const width of [1440, 1280, 768, 390, 360]) {
+    await page.setViewportSize({ width, height: 1000 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({ path: resolve(screenshots, `v4-refund-expanded-${width}.png`), fullPage: true });
+  }
   const after: CostTrackingView = (await (await page.request.get(url)).json()).data;
   expect(after.calculation.summary.partialCents).toBe(expectedNet);
   expect(after.productsCharge).toEqual(paidSnapshot);
