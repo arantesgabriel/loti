@@ -41,6 +41,14 @@ describe("additional product orders", () => {
     expect(detail.items[0].calculation?.components.find(component => component.name === "Taxa dos produtos")).toMatchObject({ amountCents: 39 });
     expect(detail.productOrders.find(order => order.id === draft.orderId)).toMatchObject({ feeBrlCents: 0, historicalBrlCents: 1_927, newMoneyBrlCents: 0 });
     expect(detail.calculation.summary.partialCents).toBe(5_824);
+    expect(detail.financialDisplay.items.map(row => [row.origin,
+      row.remaining.product.knownCents + row.remaining.china.knownCents + row.remaining.productFee.knownCents + row.remaining.packageCosts.knownCents,
+    ]).sort(([a], [b]) => String(a).localeCompare(String(b)))).toEqual([
+      ["additional", 1_927],
+      ["purchase", 3_897],
+    ]);
+    expect(detail.financialDisplay.summary).toMatchObject({ remaining: { knownCents: 5_824 }, current: { knownCents: 5_824 } });
+    expect(detail.memberTotals).toMatchObject([{ personId: "alice", totalCents: 5_824, grossCents: 5_824, receivedRefundCents: 0, requestedRefundCents: 0 }]);
     expect(await f.db.select().from(purchaseCostCharges).where(eq(purchaseCostCharges.id, originalCharge!.id)).get()).toEqual(originalCharge);
   });
 

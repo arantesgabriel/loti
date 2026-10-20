@@ -13,6 +13,7 @@ import { purchaseCostOrderServices } from "./purchase-cost-order-services";
 import { allocateExactMinor } from "./hubbuy-balance-calculations";
 import { activateEmptyHubbuyAccountAtZeroInTransaction, calculateHubBuyBalanceState, createHubbuyZeroBalanceAccountInTransaction } from "./hubbuy-balance-services";
 import { allocateRefundCredit } from "./package-refund-calculations";
+import { refundUnitRangeCapacityCents } from "./refund-unit-capacity";
 import { purchaseOrderCorrectionServices } from "./purchase-order-corrections";
 
 const maxCost = 1_000_000_000_000;
@@ -113,13 +114,11 @@ function assertRefundValues(quantity: number, productCents: number, chinaCents: 
 }
 
 function refundQuantityCapacity(totalCents: number, totalQuantity: number, startQuantity: number, quantity: number) {
-  if (![totalCents, totalQuantity, startQuantity, quantity].every(Number.isSafeInteger) || totalCents < 0 || totalQuantity < 1 || startQuantity < 0 || quantity < 0 || startQuantity + quantity > totalQuantity) {
+  try {
+    return refundUnitRangeCapacityCents(totalCents, totalQuantity, startQuantity, quantity);
+  } catch {
     throw new DomainError("A faixa de unidades do reembolso é inválida.", 409, "REFUND_INELIGIBLE_UNITS");
   }
-  const total = BigInt(totalCents), count = BigInt(totalQuantity), start = BigInt(startQuantity), end = start + BigInt(quantity);
-  const base = total / count, remainder = total % count;
-  const extra = (end < remainder ? end : remainder) - (start < remainder ? start : remainder);
-  return Number(base * BigInt(quantity) + (extra > 0n ? extra : 0n));
 }
 
 function assertRefundRangeAmounts(productCents: number, chinaCents: number, productCapacity: number, chinaCapacity: number, requested = false) {

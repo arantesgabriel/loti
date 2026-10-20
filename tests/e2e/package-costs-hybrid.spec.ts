@@ -57,12 +57,13 @@ test("hybrid costs preserve real residuals and actions across desktop and mobile
   await expect(header.getByRole("button", { name: "Importar QC", exact: true })).toBeVisible();
   await expect(header.locator(".qc-import-primary img")).toHaveAttribute("src", "/icons/qc-import.svg");
   await expect(header.getByRole("link", { name: "Gerenciar contas HubBuy" })).toHaveAttribute("href", "/packages/accounts");
-  await expect(page.locator(".cost-compact-row")).toHaveCount(5);
+  await expect(page.locator(".cost-compact-row")).toHaveCount(4);
   await expect(page.getByRole("button", { name: /^Produtos e custos/ })).toHaveAttribute("aria-expanded", "true");
   await expect(page.getByRole("button", { name: /^Pagamentos e reembolsos/ })).toHaveAttribute("aria-expanded", "true");
   const ram = page.locator(".cost-compact-row").filter({ hasText: "Memória RAM" });
-  await expect(ram).toContainText("Reembolso recebido");
-  await expect(ram).toContainText("R$ 31,50"); // Principal not refunded plus captured fee.
+  await expect(ram).toHaveCount(0);
+  await expect(page.locator(".refunds-table-wrap")).toContainText("Memória RAM");
+  await expect(page.locator(".refunds-table-wrap")).toContainText("R$ 31,50"); // Principal not refunded plus captured fee.
   await expect(page.locator(".cost-compact-row").filter({ hasText: "Camiseta de algodão" })).toContainText("R$ 0,00");
   await expect(page.locator(".cost-row-status.complete").first()).toBeVisible();
   await expect(page.locator(".cost-row-status.partial").first()).toBeVisible();
@@ -79,7 +80,7 @@ test("hybrid costs preserve real residuals and actions across desktop and mobile
   for (const width of [1440, 1280, 768, 390, 360, 320]) {
     await page.setViewportSize({ width, height: width < 768 ? 844 : 1000 });
     const visibleRows = width >= 1100 ? page.locator(".cost-compact-row") : page.locator(".cost-product-mobile-card");
-    await expect(visibleRows).toHaveCount(5);
+    await expect(visibleRows).toHaveCount(4);
     await expect(visibleRows.first()).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     const markerAlignment = await visibleRows.first().locator(".category-marker").evaluate(marker => {
@@ -126,11 +127,13 @@ test("hybrid costs preserve real residuals and actions across desktop and mobile
   await page.setViewportSize({ width: 320, height: 844 });
   await page.screenshot({ path: resolve(screenshots, "collapsed-320.png"), fullPage: true });
   await page.getByRole("button", { name: /^Produtos e custos/ }).click();
+  await page.getByRole("button", { name: /^Pagamentos e reembolsos/ }).click();
   await page.getByRole("button", { name: "Fechar composição de Tênis para caminhada", exact: true }).click();
   await expect(page.locator(".cost-inline-composition").filter({ visible: true })).toHaveCount(0);
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.getByRole("button", { name: "Ver composição de Memória RAM", exact: true }).click();
-  await expect(page.locator(".cost-inline-refund").filter({ visible: true })).toContainText("Custo líquido residual");
+  await page.locator(".refund-group-toggle:visible").first().click();
+  await expect(page.locator(".refund-group-composition:visible")).toContainText("Taxa do pagamento dessas unidades");
+  await expect(page.locator(".refund-group-composition:visible")).toContainText("Custo não devolvido");
   const after: CostTrackingView = (await (await page.request.get(url)).json()).data;
   expect(after.calculation.summary.partialCents).toBe(expectedNet);
   expect(after.productsCharge).toEqual(paidSnapshot);

@@ -141,6 +141,7 @@ export function PackageCostDetailScreen({
   const [openSections, setOpenSections] = useState<
     Record<CostSectionKey, boolean>
   >({ products: true, payments: true, packages: true, people: true });
+  const [paymentsExpanded, setPaymentsExpanded] = useState(false);
   const [expandedProducts, setExpandedProducts] = useState<
     Record<string, boolean>
   >({});
@@ -222,6 +223,14 @@ export function PackageCostDetailScreen({
           setFocusRequestId(current => current + 1);
         }
       }
+      if (operation === "refund.request") {
+        const costItemId = (rest.input as { costItemId?: string } | undefined)?.costItemId;
+        if (costItemId) {
+          setOpenSections(current => ({ ...current, payments: true }));
+          focusTarget.current = `refund-group-${costItemId}`;
+          setFocusRequestId(current => current + 1);
+        }
+      }
       setCurrentDetail(result.data);
       setError("");
       return true;
@@ -284,6 +293,7 @@ export function PackageCostDetailScreen({
       return;
     }
     setOpenSections((current) => ({ ...current, [nextAction.section]: true }));
+    if (nextAction.section === "payments" && !nextAction.target.startsWith("refund-group-")) setPaymentsExpanded(true);
     if (nextAction.target.startsWith("item-cost-"))
       setExpandedProducts((current) => ({
         ...current,
@@ -301,6 +311,19 @@ export function PackageCostDetailScreen({
   function openRefundRequest(id: string) {
     setOpenSections((current) => ({ ...current, payments: true }));
     setRefundItemId(id);
+  }
+
+  function openRefundDetails(id: string) {
+    setOpenSections(current => ({ ...current, payments: true }));
+    focusTarget.current = `refund-group-${id}`;
+    setFocusRequestId(current => current + 1);
+  }
+
+  function openPackageCharge(packageId: string, charge: "freight" | "customs") {
+    setOpenSections(current => ({ ...current, packages: true }));
+    setExpandedPackages(current => ({ ...current, [packageId]: true }));
+    focusTarget.current = `package-${charge === "freight" ? "freight" : "customs"}-${packageId}`;
+    setFocusRequestId(current => current + 1);
   }
 
   async function saveAllocations(
@@ -594,7 +617,7 @@ export function PackageCostDetailScreen({
       <div className="cost-summary-card">
         <div className="cost-summary-total">
           <div>
-            <span>Custo líquido atual</span>
+            <span>{presentation.isPartial ? "Custo da compra até agora" : "Custo final da compra"}</span>
             <span className="cost-summary-status" role="status">
               {presentation.isPartial ? "Parcial" : "Final"}
             </span>
@@ -605,6 +628,11 @@ export function PackageCostDetailScreen({
               : "Falta informar"}
           </strong>
         </div>
+        {detail.financialDisplay.refundGroups.length > 0 && <div className="cost-summary-breakdown">
+          <div><span>Produtos que continuam no pedido</span><strong>{detail.financialDisplay.summary.remaining.finalCents !== null ? formatMoney(detail.financialDisplay.summary.remaining.finalCents) : detail.financialDisplay.summary.remaining.hasKnownAmount ? `Parcial · ${formatMoney(detail.financialDisplay.summary.remaining.knownCents)}` : "Falta informar"}</strong></div>
+          <div><span>{detail.financialDisplay.summary.cancelledAwaitingReceipt ? "Custos mantidos até agora" : "Custos mantidos dos itens cancelados"}</span><strong>{formatMoney(detail.financialDisplay.summary.cancelledRetainedCents)}</strong></div>
+          {detail.financialDisplay.summary.requestedRefundCents > 0 && <p>A receber {formatMoney(detail.financialDisplay.summary.requestedRefundCents)} · o valor solicitado não reduz o custo atual.</p>}
+        </div>}
         {nextAction && (
           <div className="cost-next-action">
             <span>Próxima tarefa</span>
@@ -657,6 +685,7 @@ export function PackageCostDetailScreen({
               setItemEditor({ id: item.id, name: item.original.name })
             }
             onRefund={openRefundRequest}
+            onRefundDetails={openRefundDetails}
             expanded={expandedProducts}
             onToggle={(id) =>
               setExpandedProducts((current) => ({
@@ -673,7 +702,7 @@ export function PackageCostDetailScreen({
       <ProgressiveSection
         id="payments"
         title="Pagamentos e reembolsos"
-        summary="Pagamento original, taxas e créditos recebidos"
+        summary="Histórico de pagamentos e reembolsos"
         open={openSections.payments}
         onToggle={() =>
           setOpenSections((current) => ({
@@ -682,10 +711,14 @@ export function PackageCostDetailScreen({
           }))
         }
       >
-        <div
-          className="cost-section-content"
-          aria-labelledby="product-payment-title"
-        >
+        <div className="cost-section-content">
+          <Button className="cost-payment-history-trigger" variant="outline" aria-expanded={paymentsExpanded} aria-controls="cost-payment-history" onClick={() => setPaymentsExpanded(value => !value)}>
+            {paymentsExpanded ? "Ocultar pagamentos" : "Ver pagamentos"}
+            <ChevronDown className={paymentsExpanded ? "expanded" : ""} size={16} aria-hidden="true"/>
+          </Button>
+          <div id="cost-payment-history" hidden={!paymentsExpanded}>
+          {paymentsExpanded && <div className="cost-payment-history">
+          <div aria-labelledby="product-payment-title">
           <div className="cost-product-payment-panel">
             <div className="cost-product-payment">
               <p
@@ -695,6 +728,11 @@ export function PackageCostDetailScreen({
                 Pagamento dos produtos e frete China da compra original. Pedidos
                 adicionais têm pagamento próprio.
               </p>
+              <div className="cost-payment-order-heading">
+                <strong>Pedido original</strong>
+                <span>{money(products.totalCents)} · {productsPaid ? "Pago" : "Pagamento pendente"} · {productsCharge?.paymentMethod === "pix" ? "Pix" : productsCharge?.paymentMethod === "card" ? "Cartão" : "Método não definido"}</span>
+                {productsCharge?.paidAt && <small>{new Date(productsCharge.paidAt).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}{productsCharge.paidBy ? ` · ${detail.members.find(person => person.id === productsCharge.paidBy)?.name ?? "Membro"}` : ""}</small>}
+              </div>
               {products.baseCents === null && (
                 <p className="cost-payment-requirement">
                   Para configurar e confirmar esta cobrança, informe os campos
@@ -714,15 +752,9 @@ export function PackageCostDetailScreen({
                   .
                 </p>
               )}
-              <div
-                className="cost-product-payment-summary"
-                role="group"
-                aria-label="Resumo da cobrança dos produtos"
-              >
+              <div className="cost-product-payment-summary" role="group" aria-label="Composição da cobrança do pedido original">
                 <div className="cost-product-payment-metric">
-                  <span className="cost-detail-label">
-                    Pagamento original · base
-                  </span>
+                  <span className="cost-detail-label">Base original</span>
                   <strong>{money(products.baseCents)}</strong>
                 </div>
                 <div className="cost-product-payment-metric">
@@ -736,40 +768,11 @@ export function PackageCostDetailScreen({
                   <strong>{money(productsRate)}</strong>
                 </div>
                 <div className="cost-product-payment-metric">
-                  <span className="cost-detail-label">
-                    Custo bruto conhecido
-                  </span>
-                  <strong>
-                    {formatMoney(detail.calculation.summary.grossPartialCents)}
-                  </strong>
-                </div>
-                <div className="cost-product-payment-metric">
-                  <span className="cost-detail-label">Crédito recebido</span>
-                  <strong>
-                    {formatMoney(
-                      detail.calculation.summary.receivedRefundCents,
-                    )}
-                  </strong>
+                  <span className="cost-detail-label">Total da cobrança original</span>
+                  <strong>{money(products.totalCents)}</strong>
                 </div>
               </div>
               <div className="cost-product-payment-settings">
-                <div className="cost-payment-original-total">
-                  <span>
-                    {productsPaid
-                      ? "Total pago original"
-                      : "Total a pagar original"}
-                  </span>
-                  <strong>{money(products.totalCents)}</strong>
-                  <span
-                    className={`cost-products-payment-status ${productsPaid ? "paid" : "pending"}`}
-                    role="status"
-                    aria-label={
-                      productsPaid ? "Pagamento pago" : "Pagamento a pagar"
-                    }
-                  >
-                    {productsPaid ? "Pago" : "A pagar"}
-                  </span>
-                </div>
                 <div
                   className={`cost-product-payment-controls ${locked ? "locked" : ""}`}
                   role="group"
@@ -840,6 +843,10 @@ export function PackageCostDetailScreen({
                 grupo mudar.
               </p>
             </div>
+          </div>
+          </div>
+          <AdditionalPaymentHistory detail={detail} onPackageCharge={openPackageCharge}/>
+          </div>}
           </div>
         </div>
         <RefundsSection
@@ -1185,6 +1192,33 @@ function ProgressiveSection({
       </div>
     </section>
   );
+}
+
+function AdditionalPaymentHistory({ detail, onPackageCharge }: { detail: Detail; onPackageCharge: (packageId: string, charge: "freight" | "customs") => void }) {
+  const orders = detail.productOrders.filter(order => order.kind === "additional" && order.state === "recorded");
+  const corrections = detail.orderCorrections;
+  const paymentLabel = (source: string) => source === "balance" ? "Saldo HubBuy" : source === "pix" ? "Pix" : "Cartão";
+  return <div className="cost-payment-history-extra">
+    <section className="cost-history-orders" aria-labelledby="additional-payments-title">
+      <h3 id="additional-payments-title">Pedidos adicionais vigentes</h3>
+      {orders.length === 0 ? <p className="muted">Nenhum pedido adicional registrado.</p> : orders.map(order => <article className="cost-history-order" key={order.id}>
+        <header><div><strong>{order.externalReference ? `Pedido adicional · ${order.externalReference}` : "Pedido adicional"}</strong><small>{order.recordedAt ? new Date(order.recordedAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" }) : "Data não registrada"}{order.account ? ` · ${order.account.label}` : ""}</small></div><span>Registrado</span></header>
+        <dl><div><dt>Custo histórico</dt><dd>{formatMoney(order.totalCostBrlCents)}</dd></div><div><dt>Dinheiro novo</dt><dd>{formatMoney(order.newMoneyBrlCents)}</dd></div>{order.historicalBrlCents > 0 && <div><dt>Base histórica do saldo</dt><dd>{formatMoney(order.historicalBrlCents)}</dd></div>}</dl>
+        <ul aria-label="Fontes de pagamento do pedido adicional">
+          {order.paymentComponents.map(component => <li key={component.id}>
+            <strong>{paymentLabel(component.sourceType)}</strong>
+            <span>{component.sourceType === "balance" ? `${formatMoney(component.principalBrlCents)} de base histórica · ${formatCnyMinor(component.cnyMinor)}` : `${formatMoney(component.principalBrlCents + component.feeBrlCents)} de dinheiro novo · ${formatMoney(component.principalBrlCents)} de base${component.feeBrlCents ? ` · ${formatMoney(component.feeBrlCents)} de taxa` : ""}`}</span>
+          </li>)}
+        </ul>
+      </article>)}
+    </section>
+    {corrections.length > 0 && <details className="cost-payment-corrections"><summary>Pedidos substituídos · {corrections.length}</summary>{corrections.map(correction => <p key={correction.id}><strong>Pedido anterior · {formatMoney(correction.previousTotalBrlCents)}</strong><span>Substituído por um pedido adicional vigente · {correction.actorName} · {new Date(correction.recordedAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}{correction.reason ? ` · ${correction.reason}` : ""}</span></p>)}</details>}
+    {detail.packages.length > 0 && <section className="cost-history-packages" aria-labelledby="package-payment-links-title">
+      <h3 id="package-payment-links-title">Frete Brasil e Receita</h3>
+      {detail.packages.map(pkg => <div key={pkg.id}><strong>{pkg.name}</strong><Button variant="ghost" size="sm" onClick={() => onPackageCharge(pkg.id, "freight")}>Ver frete Brasil · {displayedValue(pkg.brazilFreightCharge?.valueState ?? "pending", pkg.brazilFreightCharge?.amountCents)}</Button><Button variant="ghost" size="sm" onClick={() => onPackageCharge(pkg.id, "customs")}>Ver Receita · {displayedValue(pkg.customsCharge?.valueState ?? "pending", pkg.customsCharge?.amountCents)}</Button></div>)}
+      <p className="muted">As cobranças continuam na composição dos produtos e não são somadas novamente aqui.</p>
+    </section>}
+  </div>;
 }
 
 function displayedValue(state: string, cents: number | null | undefined) {

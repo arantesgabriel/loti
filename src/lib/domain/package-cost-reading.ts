@@ -4,6 +4,7 @@ import { financialOperations, hubbuyAccounts, hubbuyBalanceConsumptions, hubbuyB
 import { authorization } from "./authorization";
 import { DomainError } from "./errors";
 import { calculateCostTracking } from "./package-cost-calculations";
+import { projectCostFinancialDisplay } from "./package-cost-display";
 import { CostTransaction } from "./purchase-cost-initialization";
 
 type CostReadDatabase = Pick<AppDatabase, "select">;
@@ -182,6 +183,69 @@ export async function readCostTracking(db: CostDatabase, userId: string, trackin
   catch (error) { throw new DomainError(error instanceof Error ? error.message : "Não foi possível calcular este acompanhamento.", 409); }
   const calculatedItems = new Map(calculation.items.map(item => [item.id, item]));
   const calculatedPackages = new Map(calculation.packages.map(pkg => [pkg.id, pkg]));
+  const additionalItemById = new Map(additionalItemRows.map(item => [item.id, item]));
+  const financialDisplay = (() => {
+    try {
+      return projectCostFinancialDisplay(calculatedCostItems.map(cost => {
+        const original = cost.purchaseItemId ? purchaseItemsById.get(cost.purchaseItemId) : null;
+        const additional = cost.additionalOrderItemId ? additionalItemById.get(cost.additionalOrderItemId) : null;
+        const item = calculatedItems.get(cost.id);
+        if (!item || (!original && !additional)) throw new Error("Um item da projeção não existe no acompanhamento.");
+        const amount = (name: string) => item.components.find(component => component.name === name)?.amountCents ?? null;
+        const displayComponent = (name: string, state: string) => {
+          const cents = amount(name);
+          return cents === null
+            ? { name, state: "pending" as const, amountCents: null }
+            : state === "no_charge"
+              ? { name, state: "no_charge" as const, amountCents: null }
+              : { name, state: "known" as const, amountCents: cents };
+        };
+        const packageComponents = item.components
+          .filter(component => component.name.startsWith("Frete Brasil · ") || component.name.startsWith("Taxa do frete · ") || component.name.startsWith("Receita · "))
+          .map(component => ({ name: component.name, state: component.amountCents === null ? "pending" as const : "known" as const, amountCents: component.amountCents }));
+        const refundRows = refundsByCostItem.get(cost.id) ?? [];
+        const refundsInput = refundRows.map(refund => {
+          const snapshot = refundParticipantsById.get(refund.id) ?? [];
+          return {
+            id: refund.id,
+            status: refund.status,
+            quantity: refund.quantity,
+            unitStart: refund.unitStart,
+            originalItemQuantity: refund.originalItemQuantity,
+            requestedProductCents: refund.requestedProductCents,
+            requestedChinaCents: refund.requestedChinaCents,
+            receivedProductCents: refund.receivedProductCents,
+            receivedChinaCents: refund.receivedChinaCents,
+            originalItemFeeCents: refund.originalItemFeeCents,
+            originalProductShareCents: snapshot.length ? snapshot.reduce((sum, person) => sum + person.originalProductShareCents, 0) : null,
+            originalChinaShareCents: snapshot.length ? snapshot.reduce((sum, person) => sum + person.originalChinaShareCents, 0) : null,
+          };
+        });
+        const pendingReasons = item.pendingComponents.filter(reason => reason !== "reembolso solicitado" && reason !== "divisão por pessoa pendente");
+        return {
+          costItemId: cost.id,
+          orderId: cost.orderId,
+          itemOrder: cost.itemOrder,
+          origin: original ? "purchase" as const : "additional" as const,
+          purchasedQuantity: original?.quantity ?? additional!.quantity,
+          product: displayComponent("Preço efetivo", cost.effectivePriceState),
+          china: displayComponent("Frete China", cost.chinaFreightState),
+          productFee: displayComponent("Taxa dos produtos", "known"),
+          packageCosts: packageComponents,
+          pendingReasons,
+          refunds: refundsInput,
+        };
+      }), {
+        partialCents: calculation.summary.partialCents,
+        totalCents: calculation.summary.totalCents,
+        hasKnownAmount: calculation.summary.hasKnownAmount,
+        requestedRefundCents: calculation.summary.requestedRefundCents,
+        receivedRefundCents: calculation.summary.receivedRefundCents,
+      });
+    } catch (error) {
+      throw new DomainError(error instanceof Error ? error.message : "Não foi possível projetar a leitura financeira.", 409);
+    }
+  })();
   const items = legacyCostItems.map(cost => {
     const original = purchaseItemsById.get(cost.purchaseItemId!)!;
     const participants = participantsByCostItem.get(cost.id) ?? [];
@@ -212,7 +276,6 @@ export async function readCostTracking(db: CostDatabase, userId: string, trackin
     customsCharge: chargeByScope.get(`${pkg.id}:customs`) ?? null,
     calculation: calculatedPackages.get(pkg.id),
   }));
-  const additionalItemById = new Map(additionalItemRows.map(item => [item.id, item]));
   const accountsById = new Map(accountRows.map(account => [account.id, account]));
   const allocationsByComponent = new Map<string, typeof allocationRows>();
   for (const row of allocationRows) allocationsByComponent.set(row.purchase_payment_allocations.componentId, [...(allocationsByComponent.get(row.purchase_payment_allocations.componentId) ?? []), row]);
@@ -252,17 +315,20 @@ export async function readCostTracking(db: CostDatabase, userId: string, trackin
     };
   });
   const memberTotals = new Map<string, { personId: string; name: string; totalCents: number; grossCents: number; receivedRefundCents: number; requestedRefundCents: number; hasKnownAmount: boolean; pending: boolean; personalUnits: number; sharedItems: number }>();
-  for (const item of items) {
-    for (const participant of item.participants) {
-      const current = memberTotals.get(participant.personId) ?? { personId: participant.personId, name: participant.name, totalCents: 0, grossCents: 0, receivedRefundCents: 0, requestedRefundCents: 0, hasKnownAmount: false, pending: false, personalUnits: 0, sharedItems: 0 };
-      if (participant.partialShareCents === null) current.pending = true;
-      else { current.totalCents += participant.partialShareCents; current.hasKnownAmount = true; }
-      current.receivedRefundCents += participant.receivedRefundCents;
-      current.requestedRefundCents += participant.requestedRefundCents;
-      current.grossCents += participant.grossPartialCents ?? 0;
-      if (participant.shareCents === null) current.pending = true;
-      if (item.participants.length > 1) current.sharedItems += 1;
-      else current.personalUnits += item.calculation?.shippingQuantity ?? item.original.quantity;
+  for (const cost of calculatedCostItems) {
+    const calculationItem = calculatedItems.get(cost.id);
+    const participants = participantsByCostItem.get(cost.id) ?? [];
+    for (const participant of participants) {
+      const share = calculationItem?.shares.find(value => value.personId === participant.personId);
+      const current = memberTotals.get(participant.personId) ?? { personId: participant.personId, name: peopleById.get(participant.personId)?.name ?? "Membro", totalCents: 0, grossCents: 0, receivedRefundCents: 0, requestedRefundCents: 0, hasKnownAmount: false, pending: false, personalUnits: 0, sharedItems: 0 };
+      if (share?.partialAmountCents == null) current.pending = true;
+      else { current.totalCents += share.partialAmountCents; current.hasKnownAmount = true; }
+      current.receivedRefundCents += share?.receivedRefundCents ?? 0;
+      current.requestedRefundCents += share?.requestedRefundCents ?? 0;
+      current.grossCents += share?.grossPartialAmountCents ?? 0;
+      if (share?.amountCents === null || share === undefined) current.pending = true;
+      if (participants.length > 1) current.sharedItems += 1;
+      else current.personalUnits += calculationItem?.shippingQuantity ?? 0;
       memberTotals.set(participant.personId, current);
     }
   }
@@ -300,6 +366,7 @@ export async function readCostTracking(db: CostDatabase, userId: string, trackin
     reopenings: reopenings.map(event => ({ ...event, name: peopleById.get(event.reopenedBy)?.name ?? "Membro" })),
     settings: { pixBps: settings?.pixBps ?? 100, cardBps: settings?.cardBps ?? 500 },
     calculation,
+    financialDisplay,
   };
 }
 

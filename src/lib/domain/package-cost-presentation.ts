@@ -18,7 +18,8 @@ function missingValueLabel(count: number, singular: string, plural: string) {
 function nextAction(detail: CostTrackingView): CostNextAction | null {
   if (detail.tracking.status === "closed") return null;
 
-  for (const item of detail.items) {
+  const operationalIds = new Set(detail.financialDisplay.items.filter(item => item.remainingQuantity > 0).map(item => item.costItemId));
+  for (const item of detail.items.filter(item => operationalIds.has(item.id))) {
     if (item.effectivePriceState === "pending") return { label: `Informar preço efetivo de ${item.original.name}`, section: "products", target: `item-cost-${item.id}` };
     if (item.chinaFreightState === "pending") return { label: `Informar frete China de ${item.original.name}`, section: "products", target: `item-cost-${item.id}` };
     if (item.calculation?.pendingComponents.includes("divisão por pessoa pendente")) return { label: `Ajustar divisão de ${item.original.name}`, section: "products", target: `item-cost-${item.id}` };
@@ -58,17 +59,26 @@ function nextAction(detail: CostTrackingView): CostNextAction | null {
   }
 
   const requested = detail.refunds.find(refund => refund.status === "requested");
-  if (requested) return { label: `Conferir reembolso de ${detail.items.find(item => item.id === requested.costItemId)?.original.name ?? "produto"}`, section: "payments", target: "refunds-section" };
+  if (requested) {
+    const originalName = detail.items.find(item => item.id === requested.costItemId)?.original.name;
+    const additionalName = detail.productOrders.flatMap(order => order.items).find(item => item.cost.id === requested.costItemId)?.item?.name;
+    return { label: `Conferir reembolso de ${originalName ?? additionalName ?? "produto"}`, section: "payments", target: `refund-group-${requested.costItemId}` };
+  }
 
   return { label: "Encerrar custos", section: "products", target: "close-costs" };
 }
 
 export function packageCostPresentation(detail: CostTrackingView) {
-  const pricePending = detail.items.filter(item => item.effectivePriceState === "pending").length;
-  const chinaPending = detail.items.filter(item => item.chinaFreightState === "pending").length;
+  const operationalItems = detail.financialDisplay.items.filter(item => item.remainingQuantity > 0);
+  const pricePending = operationalItems.filter(item => item.remaining.product.finalCents === null).length;
+  const chinaPending = operationalItems.filter(item => item.remaining.china.finalCents === null).length;
   const additionalItems = (detail.productOrders ?? []).filter(order => order.kind === "additional" && order.state === "recorded").flatMap(order => order.items);
-  const productCount = detail.items.length + additionalItems.length;
-  const distinctParticipants = new Set([...detail.items, ...additionalItems].flatMap(item => item.participants.map(person => person.personId)));
+  const activeOperationalIds = new Set(operationalItems.map(item => item.costItemId));
+  const productCount = operationalItems.length;
+  const distinctParticipants = new Set([
+    ...detail.items.filter(item => activeOperationalIds.has(item.id)).flatMap(item => item.participants.map(person => person.personId)),
+    ...additionalItems.filter(item => activeOperationalIds.has(item.cost.id)).flatMap(item => item.participants.map(person => person.personId)),
+  ]);
   const packageCharges = detail.packages.flatMap(pkg => [pkg.brazilFreightCharge, pkg.customsCharge]).filter(Boolean);
   const pendingPackagePayments = packageCharges.filter(charge => charge?.valueState === "known" && charge.paymentStatus === "pending").length;
   const pendingPackageValues = packageCharges.filter(charge => !charge || charge.valueState === "pending").length;
@@ -77,7 +87,7 @@ export function packageCostPresentation(detail: CostTrackingView) {
   const isPartial = detail.calculation.summary.totalCents === null;
   const packageCount = detail.packages.length;
   const assignedUnits = detail.calculation.summary.assignedUnits;
-  const unitCount = detail.calculation.summary.unitCount;
+  const unitCount = operationalItems.reduce((sum, item) => sum + item.remainingQuantity, 0);
   const shippingUnits = detail.calculation.summary.shippingUnits;
 
   return {
@@ -87,8 +97,8 @@ export function packageCostPresentation(detail: CostTrackingView) {
     isPartial,
     productsSummary: [
       `${productCount} ${productCount === 1 ? "produto" : "produtos"}`,
-      countedUnits(unitCount, "unidade comprada", "unidades compradas"),
-      ...(detail.calculation.summary.cancelledUnits ? [countedUnits(detail.calculation.summary.cancelledUnits, "unidade cancelada", "unidades canceladas")] : []),
+      countedUnits(unitCount, "unidade no pedido", "unidades no pedido"),
+      ...(detail.financialDisplay.refundGroups.length ? ["Unidades canceladas em Reembolsos"] : []),
       ...(detail.refundsSummary.requestedCount ? [`${detail.refundsSummary.requestedCount} ${detail.refundsSummary.requestedCount === 1 ? "reembolso solicitado" : "reembolsos solicitados"}`] : []),
       ...(pricePending ? [missingValueLabel(pricePending, "preço efetivo", "preços efetivos")] : []),
       ...(chinaPending ? [missingValueLabel(chinaPending, "frete China", "fretes China")] : []),

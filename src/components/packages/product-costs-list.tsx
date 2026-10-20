@@ -13,32 +13,7 @@ import "./product-costs.css";
 
 type Detail = CostTrackingView;
 type DetailItem = Detail["items"][number];
-const money = (value: number | null | undefined) =>
-  value == null ? "Pendente" : formatMoney(value);
-function sumComponents(
-  calculation: CostCalculation | undefined,
-  startsWith: string,
-) {
-  if (!calculation) return null;
-  const values =
-    calculation.components.filter((component) =>
-      component.name.startsWith(startsWith),
-    ) ?? [];
-  if (!values.length) {
-    const unassignedUnits = calculation?.pendingComponents.some((component) =>
-      component.endsWith("unidades sem pacote"),
-    );
-    if (
-      unassignedUnits &&
-      (startsWith === "Frete Brasil" || startsWith === "Receita")
-    )
-      return null;
-    return 0;
-  }
-  return values.some((component) => component.amountCents === null)
-    ? null
-    : values.reduce((sum, component) => sum + (component.amountCents ?? 0), 0);
-}
+type DisplayItem = Detail["financialDisplay"]["items"][number];
 type CostCalculation = NonNullable<DetailItem["calculation"]>;
 type ProductOrder = Detail["productOrders"][number];
 type AdditionalOrderItem = ProductOrder["items"][number];
@@ -59,9 +34,11 @@ type CostProductRow = {
   original?: DetailItem;
   additional?: AdditionalOrderItem;
   order?: ProductOrder;
+  display: DisplayItem;
 };
 
 function productCostRows(detail: Detail): CostProductRow[] {
+  const displayById = new Map(detail.financialDisplay.items.map(item => [item.costItemId, item]));
   const originalRows: CostProductRow[] = detail.items.map((item) => ({
     id: item.id,
     itemOrder: item.itemOrder,
@@ -81,6 +58,7 @@ function productCostRows(detail: Detail): CostProductRow[] {
     chinaFreightState: item.chinaFreightState,
     chinaFreightUnitCents: item.chinaFreightUnitCents,
     original: item,
+    display: displayById.get(item.id)!,
   }));
   const additionalRows: CostProductRow[] = detail.productOrders
     .filter(
@@ -110,29 +88,41 @@ function productCostRows(detail: Detail): CostProductRow[] {
             chinaFreightUnitCents: row.cost.chinaFreightUnitCents,
             additional: row,
             order,
+            display: displayById.get(row.cost.id)!,
           },
         ];
       }),
     );
-  return [...originalRows, ...additionalRows].sort(
+  return [...originalRows, ...additionalRows].filter(row => row.display && row.display.remainingQuantity > 0).sort(
     (a, b) => a.itemOrder - b.itemOrder || a.id.localeCompare(b.id),
   );
 }
 
 function productUnitsSummary(
-  quantity: number,
-  calculation: CostCalculation | undefined,
+  item: CostProductRow,
 ) {
-  const cancelled = calculation?.cancelledQuantity ?? 0;
-  const shipping = calculation?.shippingQuantity ?? quantity;
-  return `${quantity} ${quantity === 1 ? "unidade comprada" : "unidades compradas"} · ${cancelled} ${cancelled === 1 ? "unidade cancelada" : "unidades canceladas"} · ${shipping} ${shipping === 1 ? "unidade enviável" : "unidades enviáveis"}`;
+  const remaining = item.display.remainingQuantity;
+  const cancelled = item.display.cancelledQuantity;
+  return `${remaining} ${remaining === 1 ? "unidade no pedido" : "unidades no pedido"}${cancelled ? ` · ${cancelled} ${cancelled === 1 ? "unidade cancelada" : "unidades canceladas"}` : ""}`;
 }
 
-function capturedComponent(item: CostProductRow, name: string) {
-  return (
-    item.calculation?.components.find((component) => component.name === name)
-      ?.amountCents ?? null
-  );
+function displayAmount(value: DisplayItem["remaining"]["product"]) {
+  if (value.state === "no_charge") return "Sem cobrança";
+  if (value.finalCents !== null) return formatMoney(value.finalCents);
+  return value.hasKnownAmount ? `Parcial · ${formatMoney(value.knownCents)}` : "Pendente";
+}
+
+function combineDisplayMoney(values: DisplayItem["remaining"]["product"][]) {
+  const pendingReasons = [...new Set(values.flatMap(value => value.pendingReasons))];
+  const knownCents = values.reduce((sum, value) => sum + value.knownCents, 0);
+  const hasKnownAmount = values.some(value => value.hasKnownAmount);
+  return {
+    knownCents,
+    hasKnownAmount,
+    finalCents: pendingReasons.length ? null : knownCents,
+    pendingReasons,
+    state: pendingReasons.length ? hasKnownAmount ? "partial" as const : "pending" as const : "known" as const,
+  };
 }
 
 function nativeAmountLabel(
@@ -156,52 +146,18 @@ type Props = {
   onEdit: (item: DetailItem) => void;
   onEditAdditional: (id: string) => void;
   onRefund: (id: string) => void;
+  onRefundDetails: (id: string) => void;
   onResumeOrder: (id: string) => void;
   onAssociate: (id: string) => void;
 };
 
 function productStatus(item: CostProductRow) {
-  const refunds = item.original?.refunds ?? item.additional?.refunds ?? [];
-  if (refunds.some((refund) => refund.status === "requested"))
-    return { label: "Reembolso solicitado", kind: "partial" };
-  if ((item.calculation?.cancelledQuantity ?? 0) > 0)
-    return {
-      label: refunds.some((refund) => refund.status === "received")
-        ? "Reembolso recebido"
-        : "Unidades canceladas",
-      kind: "refunded",
-    };
-  return item.calculation?.totalCents != null
+  return item.display.remaining.total.finalCents != null
     ? { label: "Completo", kind: "complete" }
     : { label: "Parcial", kind: "partial" };
 }
 function rowTotal(item: CostProductRow) {
-  const calculation = item.calculation;
-  return calculation?.totalCents != null
-    ? formatMoney(calculation.totalCents)
-    : calculation?.hasKnownAmount
-      ? formatMoney(calculation.partialCents)
-      : "Pendente";
-}
-function packageComponentLabel(
-  detail: Detail,
-  item: CostProductRow,
-  component: "Frete Brasil" | "Receita",
-) {
-  const amount = sumComponents(item.calculation, component);
-  if (amount === null) return "Pendente";
-  const packages = detail.packages.filter((pkg) =>
-    pkg.items.some((row) => row.costItemId === item.id),
-  );
-  if (!packages.length && item.calculation?.shippingQuantity === 0)
-    return "Não aplicável";
-  const charges = packages.map((pkg) =>
-    component === "Frete Brasil" ? pkg.brazilFreightCharge : pkg.customsCharge,
-  );
-  return charges.length &&
-    charges.every((charge) => charge?.valueState === "no_charge")
-    ? "Sem cobrança"
-    : money(amount);
+  return displayAmount(item.display.remaining.total);
 }
 function Identity({
   item,
@@ -218,7 +174,7 @@ function Identity({
         <small>
           {item.participants.map((person) => person.name).join(" · ") ||
             "Divisão pendente"}
-          {mobile ? ` · ${item.quantity} un.` : ""}
+          {mobile ? ` · ${item.display.remainingQuantity} un.` : ""}
         </small>
         {item.origin === "additional" && (
           <span className="cost-additional-origin-flag">Pedido adicional</span>
@@ -264,6 +220,7 @@ function RowComposition({
   onEdit,
   onEditAdditional,
   onRefund,
+  onRefundDetails,
   onResumeOrder,
   onAssociate,
 }: Omit<Props, "expanded" | "onToggle"> & { item: CostProductRow }) {
@@ -273,32 +230,20 @@ function RowComposition({
   );
   const unassigned = Math.max(
     0,
-    (calculation?.shippingQuantity ?? item.quantity) -
+    (calculation?.shippingQuantity ?? item.display.remainingQuantity) -
       (calculation?.allocatedQuantity ?? 0),
   );
   const qcId =
     item.origin === "purchase"
       ? `purchase:${item.original!.original.id}`
       : `additional:${item.additional!.item!.id}`;
-  // Components are already allocated in cents by the domain, including captured additional-order bases.
   const values = [
-    [
-      "Preço do produto",
-      item.effectivePriceState === "no_charge"
-        ? "Sem cobrança"
-        : money(capturedComponent(item, "Preço efetivo")),
-    ],
-    [
-      "Frete China",
-      item.chinaFreightState === "no_charge"
-        ? "Sem cobrança"
-        : money(capturedComponent(item, "Frete China")),
-    ],
-    ["Taxa de pagamento", money(sumComponents(calculation, "Taxa"))],
-    ["Frete Brasil", packageComponentLabel(detail, item, "Frete Brasil")],
-    ["Receita", packageComponentLabel(detail, item, "Receita")],
+    ["Preço das unidades restantes", displayAmount(item.display.remaining.product)],
+    ["Frete China das unidades restantes", displayAmount(item.display.remaining.china)],
+    ["Taxa dos produtos restante", displayAmount(item.display.remaining.productFee)],
+    ["Custos de pacote das unidades restantes", displayAmount(item.display.remaining.packageCosts)],
+    ["Custo atual das unidades restantes", displayAmount(item.display.remaining.total)],
   ];
-  const refunds = item.original?.refunds ?? item.additional?.refunds ?? [];
   return (
     <div className="cost-inline-composition">
       <div className="cost-inline-composition-heading">
@@ -319,7 +264,7 @@ function RowComposition({
         <p className="cost-inline-note">Variação: {item.variant}</p>
       )}
       <p className="cost-inline-note">
-        {productUnitsSummary(item.quantity, calculation)}
+        {productUnitsSummary(item)}
         {associations.length
           ? ` · ${associations.map((pkg) => pkg.name).join(", ")}`
           : " · Sem pacote"}
@@ -338,25 +283,15 @@ function RowComposition({
           )}
         </p>
       )}
-      {refunds.some((refund) => refund.status !== "voided") && (
-        <dl className="cost-inline-refund">
-          <div>
-            <dt>Crédito recebido</dt>
-            <dd>{money(calculation?.receivedRefundCents)}</dd>
-          </div>
-          <div>
-            <dt>A receber</dt>
-            <dd>{money(calculation?.requestedRefundCents)}</dd>
-          </div>
-          <div>
-            <dt>Custo líquido residual</dt>
-            <dd>{rowTotal(item)}</dd>
-          </div>
-        </dl>
-      )}
-      {!!calculation?.pendingComponents.length && (
+      {item.display.cancelled && (
         <p className="cost-inline-note">
-          Falta informar: {calculation.pendingComponents.join(", ")}
+          O custo das {item.display.cancelledQuantity === 1 ? "unidade cancelada" : "unidades canceladas"} está conciliado em Reembolsos.
+          <Button variant="ghost" size="sm" onClick={() => onRefundDetails(item.id)}>Ver reembolso e custos mantidos</Button>
+        </p>
+      )}
+      {!!item.display.remaining.total.pendingReasons.length && (
+        <p className="cost-inline-note">
+          Falta informar: {item.display.remaining.total.pendingReasons.join(", ")}
         </p>
       )}
       <div className="cost-inline-actions">
@@ -414,20 +349,27 @@ function RowComposition({
 export function ProductCostsList(props: Props) {
   const { detail, expanded, onToggle } = props;
   const rows = productCostRows(detail);
+  const remainingUnits = rows.reduce((sum, item) => sum + item.display.remainingQuantity, 0);
+  const operationalSubtotal = combineDisplayMoney(rows.map(item => item.display.remaining.total));
   if (!rows.length)
     return (
       <>
         <div className="cost-products-toolbar">{props.toolbar}</div>
-        <p className="muted cost-empty-note">
-          Nenhum produto neste acompanhamento.
-        </p>
+        <div className="cost-products-empty">
+          <p className="muted cost-empty-note">
+            {detail.financialDisplay.refundGroups.length
+              ? "Nenhum produto permanece no pedido. Consulte os reembolsos e os custos mantidos abaixo."
+              : "Nenhum produto neste acompanhamento."}
+          </p>
+          {detail.financialDisplay.refundGroups[0] && <Button variant="outline" onClick={() => props.onRefundDetails(detail.financialDisplay.refundGroups[0].costItemId)}>Ver reembolsos</Button>}
+        </div>
       </>
     );
   return (
     <div className="cost-hybrid-products">
       <div className="cost-products-toolbar">
         <p className="cost-products-count">
-          {rows.length} {rows.length === 1 ? "produto" : "produtos"}
+          {rows.length} {rows.length === 1 ? "produto" : "produtos"} · {remainingUnits} {remainingUnits === 1 ? "unidade" : "unidades"} no pedido
           <span>Abra a composição para consultar custos e ações.</span>
         </p>
         <div>{props.toolbar}</div>
@@ -438,10 +380,10 @@ export function ProductCostsList(props: Props) {
           <thead>
             <tr>
               <th>Produto</th>
-              <th>Qtd.</th>
-              <th>Preço do produto</th>
+              <th>Qtd. no pedido</th>
+              <th>Preço dos produtos</th>
               <th>Encargos</th>
-              <th>Total líquido</th>
+              <th>Custo atual</th>
               <th>Situação e detalhes</th>
             </tr>
           </thead>
@@ -449,19 +391,12 @@ export function ProductCostsList(props: Props) {
             {rows.map((item) => {
               const open = !!expanded[item.id],
                 status = productStatus(item);
-              const product = capturedComponent(item, "Preço efetivo");
-              const knownCharges =
-                item.calculation?.components.filter(
-                  (component) =>
-                    component.name !== "Preço efetivo" &&
-                    component.amountCents !== null,
-                ) ?? [];
-              const charges = knownCharges.length
-                ? knownCharges.reduce(
-                    (sum, component) => sum + (component.amountCents ?? 0),
-                    0,
-                  )
-                : null;
+              const product = item.display.remaining.product;
+              const charges = combineDisplayMoney([
+                item.display.remaining.china,
+                item.display.remaining.productFee,
+                item.display.remaining.packageCosts,
+              ]);
               return (
                 <Fragment key={item.id}>
                   <tr
@@ -470,34 +405,31 @@ export function ProductCostsList(props: Props) {
                     <td>
                       <Identity item={item} purchaseId={detail.purchase.id} />
                     </td>
-                    <td>{item.quantity}</td>
+                    <td>{item.display.remainingQuantity}</td>
                     <td>
-                      <strong>{money(product)}</strong>
+                      <strong>{displayAmount(product)}</strong>
                       <small className="cost-unit-note">
-                        {item.quantity > 1
-                          ? `${item.quantity} unidades`
-                          : "Produto"}
+                        {item.display.remainingQuantity > 1
+                          ? `${item.display.remainingQuantity} unidades restantes`
+                          : "Unidade restante"}
                       </small>
                     </td>
                     <td>
-                      <strong>{money(charges)}</strong>
+                      <strong>{displayAmount(charges)}</strong>
                       <small className="cost-unit-note">
-                        {item.calculation?.totalCents == null
-                          ? "Parciais"
-                          : "Fretes e taxas"}
+                        {charges.finalCents === null ? "Parciais" : "China, taxas e pacotes"}
                       </small>
                     </td>
                     <td>
                       <strong>{rowTotal(item)}</strong>
-                      {(item.calculation?.receivedRefundCents ?? 0) > 0 && (
-                        <small className="cost-unit-note">Após crédito</small>
-                      )}
+                      {item.display.remaining.total.finalCents === null && <small className="cost-unit-note">Parcial</small>}
                     </td>
                     <td>
                       <div className="cost-compact-status">
                         <span className={`cost-row-status ${status.kind}`}>
                           {status.label}
                         </span>
+                        {item.display.cancelledQuantity > 0 && <Button className="cost-cancelled-link" variant="ghost" size="sm" onClick={() => props.onRefundDetails(item.id)}>{item.display.cancelledQuantity} {item.display.cancelledQuantity === 1 ? "cancelada" : "canceladas"} · Ver reembolsos</Button>}
                         <CompositionToggle
                           item={item}
                           open={open}
@@ -540,6 +472,7 @@ export function ProductCostsList(props: Props) {
                 mobile
                 onToggle={() => onToggle(item.id)}
               />
+              {item.display.cancelledQuantity > 0 && <Button className="cost-cancelled-link cost-cancelled-link-mobile" variant="ghost" size="sm" onClick={() => props.onRefundDetails(item.id)}>{item.display.cancelledQuantity} {item.display.cancelledQuantity === 1 ? "unidade cancelada" : "unidades canceladas"} · Ver reembolsos</Button>}
               {open && (
                 <div id={`cost-composition-mobile-${item.id}`}>
                   <RowComposition {...props} item={item} />
@@ -551,25 +484,12 @@ export function ProductCostsList(props: Props) {
       </div>
       <div className="cost-products-footer">
         <small>
-          {detail.calculation.summary.shippingUnits}{" "}
-          {detail.calculation.summary.shippingUnits === 1
-            ? "unidade enviável"
-            : "unidades enviáveis"}
-          {detail.calculation.summary.cancelledUnits
-            ? ` · ${detail.calculation.summary.cancelledUnits} ${detail.calculation.summary.cancelledUnits === 1 ? "cancelada" : "canceladas"}`
-            : ""}
+          {remainingUnits} {remainingUnits === 1 ? "unidade no pedido" : "unidades no pedido"}
         </small>
         <span>
-          {detail.calculation.summary.totalCents === null
-            ? "Total parcial"
-            : "Total final"}
+          {operationalSubtotal.finalCents === null ? "Subtotal parcial dos produtos no pedido" : "Subtotal dos produtos no pedido"}
           <strong>
-            {detail.calculation.summary.hasKnownAmount
-              ? formatMoney(
-                  detail.calculation.summary.totalCents ??
-                    detail.calculation.summary.partialCents,
-                )
-              : "Pendente"}
+            {displayAmount(operationalSubtotal)}
           </strong>
         </span>
       </div>

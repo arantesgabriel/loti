@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { packageCostServices } from "@/lib/domain/package-cost-services";
-import { purchaseCostCharges, purchaseCostRefundEvents, purchaseCostRefundParticipants, purchaseCostRefunds, purchaseItems } from "@/lib/db/schema";
+import { financialOperations, hubbuyBalanceEntries, memberBalanceFinancingEntries, purchaseCostCharges, purchaseCostParticipants, purchaseCostRefundEvents, purchaseCostRefundParticipants, purchaseCostRefunds, purchaseItems, purchasePackageItems, purchasePackages, purchasePaymentAllocations, purchasePaymentComponents } from "@/lib/db/schema";
 import { fixture, type Fixture } from "./helpers";
 
 let f: Fixture;
@@ -23,6 +23,43 @@ async function paidTracking(quantity = 1) {
 }
 
 describe("package product refunds", () => {
+  it("projects persisted refund ranges on read without writing financial or purchase state", async () => {
+    const { item, service, tracking, detail: before } = await paidTracking(2);
+    const itemCost = before.items[0], pkg = before.packages[0];
+    const afterRequest = await service.requestRefund(tracking.id, {
+      expectedRevision: before.tracking.revision, costItemId: itemCost.id, quantity: 1,
+      requestedProductCents: 10_000, requestedChinaCents: 0, reason: "Fornecedor cancelou uma unidade",
+      packageRemovals: [{ packageId: pkg.id, quantity: 1 }], unassignedQuantity: 0,
+    });
+    const snapshot = async () => ({
+      purchaseItems: await f.db.select().from(purchaseItems).all(),
+      participants: await f.db.select().from(purchaseCostParticipants).all(),
+      charges: await f.db.select().from(purchaseCostCharges).all(),
+      paymentComponents: await f.db.select().from(purchasePaymentComponents).all(),
+      allocations: await f.db.select().from(purchasePaymentAllocations).all(),
+      refundRows: await f.db.select().from(purchaseCostRefunds).all(),
+      refundParticipants: await f.db.select().from(purchaseCostRefundParticipants).all(),
+      refundEvents: await f.db.select().from(purchaseCostRefundEvents).all(),
+      packageRows: await f.db.select().from(purchasePackages).all(),
+      packageItems: await f.db.select().from(purchasePackageItems).all(),
+      operations: await f.db.select().from(financialOperations).all(),
+      balanceEntries: await f.db.select().from(hubbuyBalanceEntries).all(),
+      financing: await f.db.select().from(memberBalanceFinancingEntries).all(),
+    });
+    const beforeRead = await snapshot();
+    const read = await service.getTracking(tracking.id);
+    const expected = read.financialDisplay.items.find(row => row.costItemId === itemCost.id)!;
+    expect(expected).toMatchObject({
+      purchasedQuantity: 2, remainingQuantity: 1, cancelledQuantity: 1,
+      remaining: { product: { finalCents: 10_000 }, china: { finalCents: 1_000 }, productFee: { finalCents: 110 } },
+      cancelled: { productCents: 10_000, chinaCents: 1_000, productFeeCents: 110, requestedCents: 10_000, receivedCents: 0, retainedCents: 11_110, awaitingReceipt: true },
+    });
+    expect(read.financialDisplay.summary.current.knownCents).toBe(read.calculation.summary.partialCents);
+    expect(await snapshot()).toEqual(beforeRead);
+    expect((await f.db.select().from(purchaseItems).where(eq(purchaseItems.id, item!.id)).get())?.quantity).toBe(2);
+    expect(read.productsCharge).toEqual(afterRequest.productsCharge);
+  });
+
   it("cancels selected units, preserves the original paid product charge and applies only received credit", async () => {
     const { item, service, tracking, detail: before } = await paidTracking();
     const itemCost = before.items[0], pkg = before.packages[0], chargeBefore = before.productsCharge!;

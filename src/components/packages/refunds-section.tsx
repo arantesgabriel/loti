@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { Fragment, useId, useState } from "react";
 import { Box, ChevronDown, CircleCheck, CircleX, Clock3, Info, Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Surface } from "@/components/ui/surface";
@@ -9,20 +9,29 @@ import { QcGalleryButton } from "@/components/qc/qc-components";
 import type { CostTrackingView } from "@/lib/domain/package-cost-reading";
 import { formatMoney } from "@/lib/domain/money";
 import { formatCnyMinor } from "@/lib/domain/financial-money";
+import { refundUnitRangeCapacityCents } from "@/lib/domain/refund-unit-capacity";
 import { parseCostCents } from "./package-cost-client";
 
 type Detail = CostTrackingView;
 type Refund = Detail["refunds"][number];
 type Item = Detail["items"][number];
+type DisplayItem = Detail["financialDisplay"]["items"][number];
+type RefundCapacity = Detail["financialDisplay"]["refundsById"][string];
 type RefundItem = {
   id: string;
   origin: "purchase" | "additional";
   original: { id: string; name: string; variant: string | null; visualKey: string; quantity: number };
   calculation: Item["calculation"];
   refunds: Refund[];
-  productTotalCents: number;
-  chinaTotalCents: number;
+  display: DisplayItem;
+  productTotalCents: number | null;
+  chinaTotalCents: number | null;
   legacyItem: Item | null;
+};
+type RefundGroup = Detail["financialDisplay"]["refundGroups"][number] & {
+  item: RefundItem | undefined;
+  refunds: Refund[];
+  display: DisplayItem;
 };
 type Mutate = (operation: string, rest: Record<string, unknown>) => Promise<boolean>;
 const formatInput = (cents: number) => (cents / 100).toFixed(2).replace(".", ",");
@@ -33,14 +42,6 @@ function itemUnitsSummary(item: RefundItem) {
   const cancelled = item.calculation?.cancelledQuantity ?? 0;
   const shipping = item.calculation?.shippingQuantity ?? purchased;
   return `${purchased} ${purchased === 1 ? "unidade comprada" : "unidades compradas"} · ${cancelled} ${cancelled === 1 ? "unidade cancelada" : "unidades canceladas"} · ${shipping} ${shipping === 1 ? "unidade enviável" : "unidades enviáveis"}`;
-}
-
-function capacity(totalCents: number, totalQuantity: number, start: number, quantity: number) {
-  if (totalQuantity < 1 || start < 0 || quantity < 0 || start + quantity > totalQuantity) return 0;
-  const total = BigInt(totalCents), count = BigInt(totalQuantity), from = BigInt(start), to = from + BigInt(quantity);
-  const base = total / count, remainder = total % count;
-  const extras = (to < remainder ? to : remainder) - (from < remainder ? from : remainder);
-  return Number(base * BigInt(quantity) + (extras > 0n ? extras : 0n));
 }
 
 function firstAvailableUnit(item: RefundItem, quantity: number) {
@@ -55,8 +56,9 @@ function firstAvailableUnit(item: RefundItem, quantity: number) {
 function fullAmounts(item: RefundItem, quantity: number) {
   const start = firstAvailableUnit(item, quantity);
   return {
-    product: capacity(item.productTotalCents, item.original.quantity, start, quantity),
-    china: capacity(item.chinaTotalCents, item.original.quantity, start, quantity),
+    product: item.productTotalCents === null ? 0 : refundUnitRangeCapacityCents(item.productTotalCents, item.original.quantity, start, quantity),
+    china: item.chinaTotalCents === null ? 0 : refundUnitRangeCapacityCents(item.chinaTotalCents, item.original.quantity, start, quantity),
+    fee: item.display.remaining.productFee.finalCents === null ? null : refundUnitRangeCapacityCents(item.display.remaining.productFee.finalCents + (item.display.cancelled?.productFeeCents ?? 0), item.original.quantity, start, quantity),
   };
 }
 
@@ -65,15 +67,21 @@ export function RefundsSection({ detail, locked, busy, requestItemId, onRequestC
 }) {
   const [activeRefundId, setActiveRefundId] = useState<string | null>(null);
   const [mode, setMode] = useState<"receive" | "correct" | "void" | "edit">("receive");
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const displayById = new Map(detail.financialDisplay.items.map(item => [item.costItemId, item]));
+  const totalBase = (display: DisplayItem, key: "product" | "china") => {
+    const remaining = display.remaining[key].finalCents;
+    return remaining === null ? null : remaining + (display.cancelled?.[key === "product" ? "productCents" : "chinaCents"] ?? 0);
+  };
   const refundItems: RefundItem[] = [
-    ...detail.items.map(item => ({ id: item.id, origin: "purchase" as const, original: item.original, calculation: item.calculation, refunds: item.refunds,
-      productTotalCents: item.effectivePriceState === "no_charge" ? 0 : (item.effectivePriceUnitCents ?? 0) * item.original.quantity,
-      chinaTotalCents: item.chinaFreightState === "no_charge" ? 0 : (item.chinaFreightUnitCents ?? 0) * item.original.quantity, legacyItem: item })),
+    ...detail.items.map(item => { const display = displayById.get(item.id)!; return { id: item.id, origin: "purchase" as const, original: item.original, calculation: item.calculation, refunds: item.refunds,
+      display, productTotalCents: totalBase(display, "product"), chinaTotalCents: totalBase(display, "china"), legacyItem: item }; }),
     ...detail.productOrders.filter(order => order.kind === "additional" && order.state === "recorded").flatMap(order => order.items.flatMap(row => row.item ? [{
       id: row.cost.id, origin: "additional" as const, original: { id: row.item.id, name: row.item.name, variant: row.item.variant, visualKey: row.item.visualKey, quantity: row.item.quantity },
       calculation: row.calculation, refunds: row.refunds,
-      productTotalCents: row.calculation?.components.find(component => component.name === "Preço efetivo")?.amountCents ?? 0,
-      chinaTotalCents: row.calculation?.components.find(component => component.name === "Frete China")?.amountCents ?? 0,
+      display: displayById.get(row.cost.id)!,
+      productTotalCents: totalBase(displayById.get(row.cost.id)!, "product"),
+      chinaTotalCents: totalBase(displayById.get(row.cost.id)!, "china"),
       legacyItem: null,
     }] : [])),
   ];
@@ -81,9 +89,15 @@ export function RefundsSection({ detail, locked, busy, requestItemId, onRequestC
   const activeRefund = detail.refunds.find(refund => refund.id === activeRefundId) ?? null;
   const requestItem = requestItemId ? itemByCostId.get(requestItemId) ?? null : null;
   const requested = detail.refunds.filter(refund => refund.status === "requested");
-  const received = detail.refunds.filter(refund => refund.status === "received");
   const voided = detail.refunds.filter(refund => refund.status === "voided");
-  const receivedItems = new Set(received.map(refund => refund.costItemId)).size;
+  const groups: RefundGroup[] = detail.financialDisplay.refundGroups.map(group => ({
+    ...group,
+    item: itemByCostId.get(group.costItemId),
+    refunds: group.activeRefundIds.map(id => detail.refunds.find(refund => refund.id === id)).filter((refund): refund is Refund => !!refund),
+    display: displayById.get(group.costItemId)!,
+  }));
+  const cancelledUnits = groups.reduce((sum, group) => sum + group.cancelledQuantity, 0);
+  const retainedTotal = groups.reduce((sum, group) => sum + group.retainedCents, 0);
 
   function openRefund(refund: Refund, nextMode: typeof mode) { setActiveRefundId(refund.id); setMode(nextMode); }
   async function submit(operation: string, refundId: string | undefined, input: unknown) {
@@ -93,28 +107,66 @@ export function RefundsSection({ detail, locked, busy, requestItemId, onRequestC
 
   return <>
     {detail.refunds.length > 0 && <div className="cost-section-content"><section className="refunds-section" aria-labelledby="refunds-title" data-cost-target="refunds-section" tabIndex={-1}>
-      <header className="refunds-heading">
-        <div><h2 id="refunds-title">Reembolsos</h2><p>{receivedItems > 0 ? `${receivedItems} ${receivedItems === 1 ? "item reembolsado" : "itens reembolsados"} nesta compra.` : requested.length > 0 ? "Aguardando recebimento do reembolso." : "Histórico de registros anulados."}{requested.length > 0 && receivedItems > 0 ? ` ${requested.length} ${requested.length === 1 ? "solicitação a receber" : "solicitações a receber"}.` : ""}</p></div>
-        <div className="refunds-total"><span>Total reembolsado</span><strong>{formatMoney(detail.refundsSummary.receivedCents)}</strong>{requested.length > 0 && <small>A receber: {formatMoney(detail.refundsSummary.requestedCents)}</small>}</div>
+      <header className="refunds-heading"><div><h2 id="refunds-title">Reembolsos</h2><p>{groups.length > 0 ? `${groups.length} ${groups.length === 1 ? "produto" : "produtos"} · ${cancelledUnits} ${cancelledUnits === 1 ? "unidade cancelada" : "unidades canceladas"}` : "Nenhum reembolso ativo."}</p></div>
+        <div className="refunds-total"><span>Total recebido</span><strong>{formatMoney(detail.refundsSummary.receivedCents)}</strong>{requested.length > 0 && <small>A receber: {formatMoney(detail.refundsSummary.requestedCents)}</small>}{groups.length > 0 && <small>{groups.some(group => group.awaitingReceipt) ? "Custos mantidos até agora" : "Custos mantidos"}: {formatMoney(retainedTotal)}</small>}</div>
       </header>
-      <div className="refunds-list" id="refunds-detail-list" data-expanded="true">
-        {[...requested, ...received].map(refund => <RefundRow key={refund.id} refund={refund} detail={detail} item={itemByCostId.get(refund.costItemId)} locked={locked} busy={busy} onDetails={onDetails} onAction={openRefund} />)}
-        {voided.length > 0 && <details className="refunds-voided"><summary>Histórico anulado · {voided.length}</summary>{voided.map(refund => <RefundRow key={refund.id} refund={refund} detail={detail} item={itemByCostId.get(refund.costItemId)} locked={locked} busy={busy} onDetails={onDetails} onAction={openRefund} />)}</details>}
-      </div>
-      <p className="refunds-financial-note">O pagamento original dos produtos permanece registrado como pago. Valores solicitados não reduzem o custo; apenas recebimentos confirmados geram crédito.</p>
+      {groups.length > 0 && <>
+        <div className="refunds-table-wrap"><table className="refunds-table"><caption className="sr-only">Reembolsos agrupados por produto</caption><thead><tr><th>Produto</th><th>Qtd. cancelada</th><th>Reembolso</th><th>Custo mantido</th><th>Situação e detalhes</th></tr></thead><tbody>
+          {groups.map(group => { const open = !!expandedGroups[group.costItemId], status = refundGroupStatus(group.refunds); return <Fragment key={group.costItemId}>
+            <tr><td><div className="refund-group-product">{group.item && <ProductCategoryMarker visualKey={group.item.original.visualKey}/>}<div><strong>{group.item ? itemLabel(group.item) : "Produto"}</strong><small>{group.refunds.flatMap(refund => refund.participants.map(person => person.name)).filter((name, index, all) => all.indexOf(name) === index).join(" · ")}</small>{group.item && <QcGalleryButton purchaseId={detail.purchase.id} itemId={`${group.item.origin}:${group.item.original.id}`} itemName={itemLabel(group.item)} canManageHere triggerLabel="Ver QC"/>}</div></div></td>
+              <td>{group.cancelledQuantity}</td>
+              <td><div className="refund-group-amounts">{group.refunds.some(refund => refund.status === "received") && <span>Recebido <strong>{formatMoney(group.receivedCents)}</strong></span>}{group.requestedCents > 0 && <span>A receber <strong>{formatMoney(group.requestedCents)}</strong></span>}</div></td>
+              <td><strong>{formatMoney(group.retainedCents)}</strong><small>{group.awaitingReceipt ? "Mantido até agora" : "Não devolvido"}</small></td>
+              <td><span className={`refund-group-status ${status.kind}`}>{status.label}</span><Button className="refund-details-toggle refund-group-toggle" size="sm" variant="outline" data-cost-target={`refund-group-${group.costItemId}`} aria-expanded={open} aria-controls={`refund-group-panel-desktop-${group.costItemId}`} onClick={() => setExpandedGroups(current => ({ ...current, [group.costItemId]: !current[group.costItemId] }))}>{open ? "Fechar composição" : "Ver composição"}<ChevronDown size={16} aria-hidden="true"/></Button></td>
+            </tr>
+            {open && <tr className="refund-group-details-row"><td colSpan={5}><RefundGroupDetails id={`refund-group-panel-desktop-${group.costItemId}`} group={group} detail={detail} item={group.item} locked={locked} busy={busy} onDetails={onDetails} onAction={openRefund}/></td></tr>}
+          </Fragment>; })}
+        </tbody></table></div>
+        <div className="refunds-groups-mobile">{groups.map(group => { const open = !!expandedGroups[group.costItemId], status = refundGroupStatus(group.refunds); return <article className="refund-group-mobile" key={group.costItemId}>
+          <div className="refund-group-mobile-heading">{group.item && <ProductCategoryMarker visualKey={group.item.original.visualKey}/>}<div className="refund-group-mobile-name"><strong>{group.item ? itemLabel(group.item) : "Produto"}</strong><small>{group.cancelledQuantity} {group.cancelledQuantity === 1 ? "unidade cancelada" : "unidades canceladas"} · {status.label}</small></div><strong>{formatMoney(group.retainedCents)}</strong></div>
+          <div className="refund-group-mobile-amounts">{group.refunds.some(refund => refund.status === "received") && <span>Recebido {formatMoney(group.receivedCents)}</span>}{group.requestedCents > 0 && <span>A receber {formatMoney(group.requestedCents)}</span>}</div>
+          {group.item && <QcGalleryButton purchaseId={detail.purchase.id} itemId={`${group.item.origin}:${group.item.original.id}`} itemName={itemLabel(group.item)} canManageHere triggerLabel="Ver QC"/>}
+          <Button className="refund-details-toggle refund-group-toggle" size="sm" variant="outline" data-cost-target={`refund-group-${group.costItemId}`} aria-expanded={open} aria-controls={`refund-group-panel-mobile-${group.costItemId}`} onClick={() => setExpandedGroups(current => ({ ...current, [group.costItemId]: !current[group.costItemId] }))}>{open ? "Fechar composição" : "Ver composição"}<ChevronDown size={16} aria-hidden="true"/></Button>
+          {open && <RefundGroupDetails id={`refund-group-panel-mobile-${group.costItemId}`} group={group} detail={detail} item={group.item} locked={locked} busy={busy} onDetails={onDetails} onAction={openRefund}/>}</article>; })}</div>
+      </>}
+      {voided.length > 0 && <details className="refunds-voided"><summary>Histórico anulado · {voided.length}</summary>{voided.map(refund => <RefundRow key={refund.id} refund={refund} detail={detail} item={itemByCostId.get(refund.costItemId)} capacity={detail.financialDisplay.refundsById[refund.id]} locked={locked} busy={busy} onDetails={onDetails} onAction={openRefund} />)}</details>}
+      <p className="refunds-financial-note">Só recebimentos confirmados reduzem o custo. Taxas e valores não devolvidos continuam contabilizados.</p>
     </section></div>}
     {requestItem && <RefundRequestSurface item={requestItem} detail={detail} busy={busy} onClose={onRequestClose} onSubmit={input => submit("refund.request", undefined, input)} />}
     {activeRefund && itemByCostId.get(activeRefund.costItemId) && <RefundActionSurface refund={activeRefund} item={itemByCostId.get(activeRefund.costItemId)!} mode={mode} detail={detail} locked={locked} busy={busy} onClose={() => setActiveRefundId(null)} onSubmit={(operation, input) => submit(operation, activeRefund.id, input)} />}
   </>;
 }
 
+function refundGroupStatus(refunds: Refund[]) {
+  const received = refunds.some(refund => refund.status === "received");
+  const requested = refunds.some(refund => refund.status === "requested");
+  if (received && requested) return { label: "Parte recebida · parte a receber", kind: "partial" };
+  if (requested) return { label: "Aguardando reembolso", kind: "pending" };
+  return { label: refunds.filter(refund => refund.status === "received").length > 1 ? "Recebimentos registrados" : "Recebimento registrado", kind: "received" };
+}
+
+function RefundGroupDetails({ id, group, detail, item, locked, busy, onDetails, onAction }: {
+  id: string; group: RefundGroup; detail: Detail; item?: RefundItem; locked: boolean; busy: boolean;
+  onDetails: (itemId: string) => void;
+  onAction: RefundRowProps["onAction"];
+}) {
+  const costs = group.display.cancelled;
+  if (!costs) return <div className="refund-group-composition" id={id}><p className="muted">A composição histórica deste item não está disponível.</p></div>;
+  return <div className="refund-group-composition" id={id}>
+    <div className="refund-group-composition-heading"><strong>{item ? itemLabel(item) : "Produto"}</strong><span>{group.cancelledQuantity} {group.cancelledQuantity === 1 ? "unidade cancelada" : "unidades canceladas"}</span></div>
+    <dl><div><dt>Produto das unidades canceladas</dt><dd>{formatMoney(costs.productCents)}</dd></div><div><dt>Frete China dessas unidades</dt><dd>{formatMoney(costs.chinaCents)}</dd></div><div><dt>Taxa do pagamento dessas unidades</dt><dd>{formatMoney(costs.productFeeCents)}</dd></div><div><dt>Recebido de volta</dt><dd>−{formatMoney(costs.receivedCents)}</dd></div>{costs.requestedCents > 0 && <div><dt>A receber, em separado</dt><dd>{formatMoney(costs.requestedCents)}</dd></div>}<div className="refund-group-retained"><dt>{costs.awaitingReceipt ? "Custo mantido até agora" : "Custo não devolvido"}</dt><dd>{formatMoney(costs.retainedCents)}</dd></div></dl>
+    <p className="muted">Os encargos de pacote continuam nas unidades restantes. A composição acima mostra somente produto, frete China e taxa das unidades canceladas.</p>
+    <div className="refund-group-records"><h4>Registros deste produto</h4><div className="refunds-list">{group.refunds.map(refund => <RefundRow key={refund.id} refund={refund} detail={detail} item={item} capacity={detail.financialDisplay.refundsById[refund.id]} locked={locked} busy={busy} onDetails={onDetails} onAction={onAction}/>)}</div></div>
+  </div>;
+}
+
 type RefundRowProps = {
-  refund: Refund; detail: Detail; item?: RefundItem; locked: boolean; busy: boolean;
+  refund: Refund; detail: Detail; item?: RefundItem; capacity?: RefundCapacity; locked: boolean; busy: boolean;
   onDetails: (itemId: string) => void;
   onAction: (refund: Refund, mode: "receive" | "correct" | "void" | "edit") => void;
 };
 
-function RefundRow({ refund, detail, item, locked, busy, onDetails, onAction }: RefundRowProps) {
+function RefundRow({ refund, detail, item, capacity, locked, busy, onDetails, onAction }: RefundRowProps) {
   const [expanded, setExpanded] = useState(false);
   const panelId = useId();
   const name = item ? itemLabel(item) : "Produto";
@@ -129,12 +181,12 @@ function RefundRow({ refund, detail, item, locked, busy, onDetails, onAction }: 
         {item && <ProductCategoryMarker visualKey={item.original.visualKey}/>}
         <div><h3>{name}</h3><p>{refund.participants.length === 1 ? "Usuário" : "Participantes"}: {refund.participants.map(person => person.name).join(" · ")}</p>{item && <QcGalleryButton purchaseId={detail.purchase.id} itemId={`${item.origin}:${item.original.id}`} itemName={name} canManageHere triggerLabel="Ver QC"/>}</div>
       </div>
-      <div className="refund-context"><span className="refund-status"><StatusIcon size={14} aria-hidden="true"/>{received ? "Reembolsado" : refund.status === "requested" ? "A receber" : "Anulado"}</span><p><time dateTime={date.toISOString()}>{date.toLocaleDateString("pt-BR", { day: "numeric", month: "short", year: "numeric", timeZone: "America/Sao_Paulo" }).replaceAll(" de ", " ")}</time><span aria-hidden="true"> · </span>{refund.status === "voided" ? refund.voidReason : refund.reason}</p></div>
+      <div className="refund-context"><span className="refund-status"><StatusIcon size={14} aria-hidden="true"/>{received ? amount === 0 ? "Recebimento encerrado sem devolução" : "Recebimento registrado" : refund.status === "requested" ? "Aguardando reembolso" : "Anulado"}</span><p><time dateTime={date.toISOString()}>{date.toLocaleDateString("pt-BR", { day: "numeric", month: "short", year: "numeric", timeZone: "America/Sao_Paulo" }).replaceAll(" de ", " ")}</time><span aria-hidden="true"> · </span>{refund.status === "voided" ? refund.voidReason : refund.reason}</p></div>
       <div className="refund-amount"><strong>{refund.status === "voided" ? "Sem crédito ativo" : formatMoney(amount)}</strong><small>{refund.status === "requested" ? "Valor solicitado" : paymentMethod ? `Pagamento original · ${paymentMethod}` : ""}</small></div>
-      <Button className="refund-details-toggle" size="sm" variant="outline" aria-expanded={expanded} aria-controls={panelId} aria-label={`${expanded ? "Recolher detalhes" : "Ver detalhes"} de ${name}`} onClick={() => setExpanded(value => !value)}>{expanded ? "Recolher detalhes" : "Ver detalhes"}<ChevronDown size={16} aria-hidden="true"/></Button>
+      <Button className="refund-details-toggle refund-record-toggle" size="sm" variant="outline" aria-expanded={expanded} aria-controls={panelId} aria-label={`${expanded ? "Recolher detalhes" : "Ver detalhes"} de ${name}`} onClick={() => setExpanded(value => !value)}>{expanded ? "Recolher detalhes" : "Ver detalhes"}<ChevronDown size={16} aria-hidden="true"/></Button>
     </div>
     <div className="refund-details-panel" id={panelId} inert={!expanded} aria-hidden={!expanded} data-expanded={expanded}><div>
-      <RefundDetails refund={refund} item={item} detail={detail}/>
+      <RefundDetails refund={refund} capacity={capacity} detail={detail}/>
       <div className="refund-row-actions">
         {item?.legacyItem && <Button size="sm" variant="ghost" onClick={() => onDetails(item.legacyItem!.id)}>Ver composição</Button>}
         {!locked && <>
@@ -147,21 +199,22 @@ function RefundRow({ refund, detail, item, locked, busy, onDetails, onAction }: 
   </article>;
 }
 
-function RefundDetails({ refund, item, detail }: { refund: Refund; item?: RefundItem; detail: Detail }) {
+function RefundDetails({ refund, capacity, detail }: { refund: Refund; capacity?: RefundCapacity; detail: Detail }) {
   const received = refund.status === "received";
   const accountLabel = detail.hubbuyAccounts.find(account => account.id === refund.hubbuyAccountId)?.label ?? "Conta removida";
   return <div className="refund-details">
     <dl>
       <div><dt>Unidades</dt><dd>{refund.quantity} {refund.quantity === 1 ? "unidade cancelada" : "unidades canceladas"}{refund.status === "voided" ? " · cancelamento anulado" : ""}</dd></div>
-      <div><dt>Base original das unidades</dt><dd>{formatMoney(refund.quantity * (refund.originalProductUnitCents + refund.originalChinaUnitCents))}</dd></div>
+      <div><dt>Base original da faixa · produto</dt><dd>{capacity?.productCapacityCents == null ? "Não disponível no registro histórico" : formatMoney(capacity.productCapacityCents)}</dd></div>
+      <div><dt>Base original da faixa · frete China</dt><dd>{capacity?.chinaCapacityCents == null ? "Não disponível no registro histórico" : formatMoney(capacity.chinaCapacityCents)}</dd></div>
+      <div><dt>Taxa histórica das unidades</dt><dd>{capacity?.productFeeCapacityCents == null ? "Não disponível no registro histórico" : `${formatMoney(capacity.productFeeCapacityCents)} · preservada`}</dd></div>
       {received && <div><dt>Valor solicitado</dt><dd>{formatMoney(refund.requestedProductCents + refund.requestedChinaCents)}</dd></div>}
       <div><dt>{received ? "Produto recebido" : "Produto solicitado"}</dt><dd>{formatMoney(received ? refund.receivedProductCents ?? 0 : refund.requestedProductCents)}</dd></div>
       <div><dt>{received ? "Frete China recebido" : "Frete China solicitado"}</dt><dd>{formatMoney(received ? refund.receivedChinaCents ?? 0 : refund.requestedChinaCents)}</dd></div>
       {received && <div><dt>Destino</dt><dd>{refund.refundDestination === "hubbuy" ? `Conta HubBuy · ${accountLabel}` : "Fora da HubBuy"}</dd></div>}
       {received && refund.refundDestination === "hubbuy" && <div><dt>Crédito CNY confirmado</dt><dd>{formatCnyMinor((refund.receivedProductCnyMinor ?? 0) + (refund.receivedChinaCnyMinor ?? 0))}</dd></div>}
-      {item && <div><dt>Custo líquido da linha{item.calculation?.totalCents === null ? " (parcial)" : ""}</dt><dd>{formatMoney(item.calculation?.totalCents ?? item.calculation?.partialCents ?? 0)}</dd></div>}
     </dl>
-    <p className="muted">A taxa do pagamento original permanece no custo. O custo líquido considera todos os reembolsos recebidos desta linha.</p>
+    <p className="muted">O custo mantido e a taxa aparecem uma vez na composição agrupada deste produto.</p>
     <details className="refund-events"><summary>Histórico deste reembolso · {eventCountLabel(refund.events.length)}</summary>{refund.events.map(event => <p key={event.id}><strong>{{ requested: "Solicitação", request_updated: "Solicitação editada", received: "Recebimento", receipt_corrected: "Recebimento corrigido", voided: "Anulação" }[event.eventType]}</strong> · {event.actorName} · {new Date(event.createdAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}{event.reason ? ` · ${event.reason}` : ""}</p>)}</details>
   </div>;
 }
@@ -175,6 +228,7 @@ function RefundRequestSurface({ item, detail, busy, onClose, onSubmit }: { item:
   const [unassignedQuantity, setUnassignedQuantity] = useState(eligiblePackages.length === 0 ? unassignedAvailable : 0);
   const selectedQuantity = Object.values(packageQuantities).reduce((sum, quantity) => sum + quantity, 0) + unassignedQuantity;
   const initialAmounts = fullAmounts(item, selectedQuantity);
+  const selectedAmounts = fullAmounts(item, selectedQuantity);
   const [requestedProduct, setRequestedProduct] = useState(formatInput(initialAmounts.product));
   const [requestedChina, setRequestedChina] = useState(formatInput(initialAmounts.china));
   const [manualProduct, setManualProduct] = useState(false), [manualChina, setManualChina] = useState(false);
@@ -226,7 +280,7 @@ function RefundRequestSurface({ item, detail, busy, onClose, onSubmit }: { item:
       </section>
       <section className="refund-request-summary" aria-label="Resumo financeiro">
         <div className="refund-request-receivable"><div><h3>A receber</h3><p>Valor que será reembolsado ao comprador.</p></div><strong aria-live="polite">{productCents === null || chinaCents === null ? "Confira os valores" : formatMoney(productCents + chinaCents)}</strong></div>
-        <div className="refund-request-fee"><span>Taxa dos produtos</span><span>{formatMoney(item.calculation?.components.find(component => component.name === "Taxa dos produtos")?.amountCents ?? 0)} preservada</span></div>
+        <div className="refund-request-fee"><span>Taxa histórica destas unidades</span><span>{selectedAmounts.fee === null ? "Não disponível" : `${formatMoney(selectedAmounts.fee)} preservada`}</span></div>
       </section>
       {paidAffected.length > 0 && <p className="muted">Os encargos de pacote já pagos continuam pagos. O rateio será recalculado com as unidades remanescentes.</p>}
       {emptiedPaidPackage && <p className="error" role="alert">Um pacote ficaria vazio com frete ou Receita positiva. Resolva esse encargo antes de cancelar as unidades.</p>}

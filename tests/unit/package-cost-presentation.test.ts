@@ -6,6 +6,7 @@ function view(overrides: Record<string, unknown> = {}) {
   const base = {
     tracking: { status: "open" },
     items: [],
+    financialDisplay: { items: [], refundGroups: [] },
     packages: [],
     charges: [],
     productsCharge: { paymentStatus: "pending" },
@@ -23,6 +24,7 @@ describe("package cost progressive presentation", () => {
   it("prioritizes the first missing product value and shows a partial known total", () => {
     const detail = view({
       items: [{ id: "shoe", effectivePriceState: "known", chinaFreightState: "pending", original: { name: "Tênis" }, participants: [] }],
+      financialDisplay: { items: [{ costItemId: "shoe", remainingQuantity: 1, remaining: { product: { finalCents: 12_000 }, china: { finalCents: null } } }], refundGroups: [] },
       calculation: { summary: { partialCents: 12_000, totalCents: null, hasKnownAmount: true, undistributedCents: 0, unitCount: 1, assignedUnits: 1 } },
     });
 
