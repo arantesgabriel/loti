@@ -33,6 +33,7 @@ This folder is the canonical product and engineering handoff for the Loti MVP.
 | `26_HUBBUY_BALANCE_AND_MIXED_PAYMENTS_PLAN.md` | Approved phased implementation for CNY HubBuy balance, individual rights, explicit advances, mixed payments, refunds and same-tracking additional orders |
 | `27_HUBBUY_ACCOUNT_CREATION_UX_PLAN.md` | Implemented local account creation in known zero and atomic account creation during a confirmed refund receipt |
 | `28_HUBBUY_ACCOUNT_DELETION_PLAN.md` | Logical deletion of unused HubBuy accounts, retained audit, concurrency guards and local validation |
+| `30_REFUNDS_FINANCIAL_READABILITY_PLAN.md` | Approved handoff for remaining-product costs, grouped refund tables, retained cancellation costs and progressive payment history |
 | `audits/2026-10-17_HUBBUY_BALANCE_AND_MIXED_PAYMENTS.md` | Technical and functional investigation supporting the HubBuy balance and mixed-payment proposal |
 | `design/REFERENCES.md` | Figma and palette inspiration URLs |
 | `design/PACKAGES_AND_COSTS_REFERENCES.md` | Approved A/B/C/D visual references, images and acceptance for Pacotes e custos |
