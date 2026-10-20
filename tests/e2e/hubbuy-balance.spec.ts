@@ -65,8 +65,7 @@ test("creates zero-balance HubBuy accounts and credits the first confirmed refun
   });
 
   await page.goto(`/packages/${trackingId}`);
-  await page.getByRole("button", { name: /Produtos e pagamento/ }).click();
-  await page.locator(".refunds-desktop-summary").click();
+  await expect(page.getByRole("button", { name: /Produtos e custos/ })).toHaveAttribute("aria-expanded", "true");
   await page.getByRole("button", { name: /Ver detalhes de Item base QA/ }).click();
   await page.getByRole("button", { name: "Registrar recebimento" }).click();
   const refundDialog = page.getByRole("dialog").filter({ hasText: "Registrar recebimento" });
@@ -105,8 +104,9 @@ test("creates zero-balance HubBuy accounts and credits the first confirmed refun
   await expect(creditedAccount).toContainText("Esta conta tem saldo");
 
   await page.goto(`/packages/${trackingId}`);
-  await page.getByRole("button", { name: /Produtos e pagamento/ }).click();
-  const additional = page.locator('section[aria-labelledby="additional-orders-title"]');
+  await expect(page.getByRole("button", { name: /Produtos e custos/ })).toHaveAttribute("aria-expanded", "true");
+  await page.getByRole("button", { name: /Adicionar produto/ }).click();
+  const additional = page.locator(".cost-additional-order-surface");
   const accountSelector = additional.getByLabel("Conta HubBuy");
   const refundOption = accountSelector.locator("option").filter({ hasText: refundAccountName });
   await accountSelector.selectOption(await refundOption.getAttribute("value")!);
@@ -120,22 +120,19 @@ test("creates zero-balance HubBuy accounts and credits the first confirmed refun
     if ((await participant.innerText()).includes(memberName)) await checkbox.check();
     else await checkbox.uncheck();
   }
-  await additional.getByRole("button", { name: "Criar rascunho" }).click();
-  const order = additional.locator(".cost-additional-order-card").filter({ hasText: `Moletom adicional QA ${suffix}` });
-  await expect(order).toContainText("Rascunho · sem pagamento");
-  await order.getByLabel("Principal externo em BRL").fill("8,00");
-  await order.getByRole("button", { name: "Registrar pedido pago" }).click();
-  await expect(order).toContainText("Pedido registrado");
-  await expect(order).toContainText("Base histórica do saldo: R$ 3,50 · Dinheiro novo: R$ 8,08 (inclui R$ 0,08 de taxa)");
+  await additional.getByRole("button", { name: "Continuar para o pagamento" }).click();
+  await expect(additional).toContainText("2. Confirme o pagamento");
+  await additional.getByLabel("Principal externo em BRL").fill("8,00");
+  await additional.getByRole("button", { name: "Confirmar compra", exact: true }).click();
+  await expect(additional).toContainText("3. Associe as unidades ao pacote");
+  await expect(additional).toContainText("Base de saldo R$ 3,50 · Dinheiro novo R$ 8,08 (taxas R$ 0,08)");
+  await additional.getByRole("button", { name: "Associar ao pacote" }).click();
+  await expect(additional).toBeHidden();
+  await expect(page.getByText("Pedido adicional", { exact: true }).filter({ visible: true })).toBeVisible();
 
-  await page.locator(".cost-progressive-toggle").nth(1).click();
+  await expect(page.getByRole("button", { name: /^Pacotes / })).toHaveAttribute("aria-expanded", "true");
   const packageCard = page.locator(".cost-package").first();
   await packageCard.locator(".cost-package-toggle").click();
-  await packageCard.getByRole("button", { name: /Ações para/ }).click();
-  await page.getByRole("menuitem", { name: "Editar conteúdo", exact: true }).click();
-  const editor = page.getByRole("dialog").filter({ hasText: "Editar conteúdo" });
-  await editor.getByRole("button", { name: "Incluir unidades disponíveis" }).click();
-  await editor.getByRole("button", { name: "Salvar conteúdo" }).click();
   await expect(packageCard).toContainText(`Moletom adicional QA ${suffix}`);
 
   await page.setViewportSize({ width: 1440, height: 1000 });

@@ -40,7 +40,7 @@ describe("package cost progressive presentation", () => {
       },
     });
 
-    expect(packageCostPresentation(detail).nextAction).toEqual({ label: "Confirmar pagamento dos produtos", section: "products", target: "products-paid" });
+    expect(packageCostPresentation(detail).nextAction).toEqual({ label: "Confirmar pagamento dos produtos", section: "payments", target: "products-paid" });
   });
 
   it("counts revenue payments among package follow-ups and closes only after them", () => {
@@ -59,6 +59,6 @@ describe("package cost progressive presentation", () => {
 
     const presentation = packageCostPresentation(detail);
     expect(presentation.nextAction).toEqual({ label: "Confirmar pagamento da Receita de Pacote 1", section: "packages", target: "package-customs-paid-p1", packageId: "p1" });
-    expect(presentation.packagesSummary).toContain("1 pagamento pendente");
+    expect(presentation.packagesSummary).toContain("1 custo pendente");
   });
 });

@@ -56,18 +56,17 @@ test("finalized purchase gets a separate cost tracking with payment, package, an
   expect(firstViewport.actionBottom).toBeLessThanOrEqual(firstViewport.height);
   await captureMobileUx("packages-first-screen-320", false);
   await page.setViewportSize({ width: 1440, height: 1000 });
-  const productsSection = page.getByRole("button", { name: /Produtos e pagamento/ });
-  await expect(productsSection).toHaveAttribute("aria-expanded", "false");
-  await expect(page.getByRole("table")).toBeHidden();
-  const packagesSection = page.locator(".cost-progressive-toggle").nth(1);
-  await expect(packagesSection).toHaveAttribute("aria-expanded", "false");
-  await packagesSection.click();
+  const productsSection = page.getByRole("button", { name: /Produtos e custos/ });
+  await expect(productsSection).toHaveAttribute("aria-expanded", "true");
+  await expect(page.getByRole("table")).toBeVisible();
+  const packagesSection = page.locator(".cost-progressive-toggle").nth(2);
+  await expect(packagesSection).toHaveAttribute("aria-expanded", "true");
   await expect(page.locator(".cost-package-toggle")).toHaveAttribute("aria-expanded", "false");
   await packagesSection.click();
-  await expect(page.getByRole("button", { name: /Divisão por pessoa/ })).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByRole("button", { name: /Divisão por pessoa/ })).toHaveAttribute("aria-expanded", "true");
   await page.getByRole("button", { name: /Informar frete China de Tênis/ }).click();
   await expect(page.locator(".cost-table").getByRole("button", { name: "Editar", exact: true })).toBeFocused();
-  for (let column = 1; column <= 6; column++) await expect(page.locator(".cost-table thead th").nth(column)).toHaveCSS("text-align", "right");
+  for (let column = 1; column <= 4; column++) await expect(page.locator(".cost-table thead th").nth(column)).toHaveCSS("text-align", "right");
   await capture("products-1440");
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator(".cost-product-mobile-list")).toBeVisible();
@@ -76,7 +75,7 @@ test("finalized purchase gets a separate cost tracking with payment, package, an
   await page.locator(".cost-product-mobile-card").evaluate(element => element.scrollIntoView({ block: "start" }));
   await capture("products-390", false);
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.locator(".cost-table").getByRole("button", { name: "Ver composição", exact: true }).click();
+  await page.locator(".cost-table").getByRole("button", { name: "Todos os detalhes", exact: true }).click();
   const composition = page.getByRole("dialog");
   await expect(composition.getByRole("heading", { name: "Composição dos custos" })).toBeVisible();
   await expect(composition.getByText("Tênis de teste", { exact: true })).toBeVisible();
@@ -86,25 +85,29 @@ test("finalized purchase gets a separate cost tracking with payment, package, an
   await capture("product-breakdown-390", false);
   await page.setViewportSize({ width: 1440, height: 1000 });
   await composition.getByRole("button", { name: "Fechar" }).click();
-  await expect(page.locator(".cost-table").getByRole("button", { name: "Ver composição", exact: true })).toBeFocused();
+  await expect(page.locator(".cost-table").getByRole("button", { name: "Todos os detalhes", exact: true })).toBeFocused();
   await page.locator(".cost-table").getByRole("button", { name: "Editar", exact: true }).click();
   let dialog = page.getByRole("dialog");
   await dialog.getByLabel("Frete China por unidade").selectOption("known");
   await dialog.getByLabel("Valor em R$").nth(1).fill("10,00");
   await dialog.getByRole("button", { name: "Salvar custos", exact: true }).click();
+  await page.getByRole("button", { name: /^Pagamentos e reembolsos/ }).click();
+  await page.getByRole("button", { name: "Conferir pagamento dos produtos", exact: true }).click();
+  await expect(page.getByRole("button", { name: /^Pagamentos e reembolsos/ })).toHaveAttribute("aria-expanded", "true");
+  await expect(page.locator('[data-cost-target="products-method"]')).toBeFocused();
   await page.locator(".cost-product-payment select").selectOption("pix");
   await page.getByRole("button", { name: "Marcar como pago", exact: true }).click();
   const payment = page.locator(".cost-product-payment");
   await expect(payment.locator(".cost-product-payment-summary > div")).toHaveCount(4);
   await expect(payment.getByText("Pago", { exact: true })).toBeVisible();
-  await expect(payment.getByText("Parcial", { exact: true })).toBeVisible();
+  await expect(page.locator(".cost-summary-status")).toHaveText("Parcial");
   await expect(payment.getByRole("status", { name: "Pagamento pago" })).toBeVisible();
   await expect(payment.getByRole("button", { name: "Pagamento confirmado", exact: true })).toHaveCount(0);
   await expect(payment.getByText("Reembolso recebido", { exact: true })).toHaveCount(0);
   await expect(payment.getByText("A receber", { exact: true })).toHaveCount(0);
   await expect(payment.getByText("Informações de reembolso aparecem apenas quando houver itens reembolsados.")).toHaveCount(0);
   await page.getByText("Custos do produto atualizados", { exact: true }).waitFor({ state: "hidden" });
-  for (const [width, height] of [[320, 640], [360, 800], [390, 844], [430, 932], [768, 1000], [1440, 1000]] as const) {
+  for (const [width, height] of [[320, 640], [360, 800], [390, 844], [430, 932], [768, 1000], [1280, 1000], [1440, 1000]] as const) {
     await page.setViewportSize({ width, height });
     const dimensions = await payment.evaluate(element => ({
       width: element.clientWidth,
@@ -129,7 +132,11 @@ test("finalized purchase gets a separate cost tracking with payment, package, an
   await expect(page.getByRole("button", { name: "Marcar como pago", exact: true })).toBeEnabled();
   await page.getByRole("button", { name: "Marcar como pago", exact: true }).click();
   await page.getByRole("button", { name: /Informar frete Brasil de Pacote 1/i }).click();
-  await expect(page.locator(".cost-charge-summary").first().getByRole("button", { name: "Informar Frete Brasil", exact: true })).toBeFocused();
+  const freightAction = page.locator(".cost-charge-summary").first().getByRole("button", { name: "Informar valor frete", exact: true });
+  await expect(freightAction).toBeFocused();
+  const idleDecoration = await freightAction.evaluate(element => getComputedStyle(element).textDecorationColor);
+  await freightAction.hover();
+  await expect.poll(() => freightAction.evaluate(element => getComputedStyle(element).textDecorationColor)).not.toBe(idleDecoration);
   await expect(page.locator(".cost-package-toggle")).toHaveAttribute("aria-expanded", "true");
   await page.getByText("Custos do produto atualizados", { exact: true }).waitFor({ state: "hidden" });
   await capture("package-open-1440");
@@ -144,7 +151,7 @@ test("finalized purchase gets a separate cost tracking with payment, package, an
   await contentEditor.getByRole("button", { name: "Cancelar", exact: true }).click();
   await expect(page.locator(".cost-package-items")).toContainText("1 unidade");
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.locator(".cost-charge-summary").nth(0).getByRole("button", { name: "Informar Frete Brasil", exact: true }).click();
+  await page.locator(".cost-charge-summary").nth(0).getByRole("button", { name: "Informar valor frete", exact: true }).click();
   dialog = page.getByRole("dialog");
   await expect(dialog).toHaveCSS("opacity", "1");
   await capture("charge-form-1440", false);
@@ -158,7 +165,7 @@ test("finalized purchase gets a separate cost tracking with payment, package, an
   await dialog.getByLabel("Método de pagamento").selectOption("pix");
   await dialog.getByRole("button", { name: "Salvar cobrança", exact: true }).click();
   await page.getByRole("button", { name: "Marcar como pago", exact: true }).click();
-  await page.locator(".cost-charge-summary").nth(1).getByRole("button", { name: "Informar Receita", exact: true }).click();
+  await page.locator(".cost-charge-summary").nth(1).getByRole("button", { name: "Informar taxa receita", exact: true }).click();
   dialog = page.getByRole("dialog");
   await dialog.getByLabel("Estado do valor").selectOption("no_charge");
   await dialog.getByRole("button", { name: "Salvar cobrança", exact: true }).click();
@@ -171,7 +178,7 @@ test("finalized purchase gets a separate cost tracking with payment, package, an
   await page.getByLabel("Motivo").fill("Ajuste solicitado na revisão QA");
   await page.getByRole("button", { name: "Confirmar reabertura", exact: true }).click();
   await expect(page.getByText("Custos abertos", { exact: true })).toBeVisible();
-  for (const [width, height] of [[320, 640], [360, 800], [390, 844], [430, 932], [768, 1000], [1440, 1000]] as const) {
+  for (const [width, height] of [[320, 640], [360, 800], [390, 844], [430, 932], [768, 1000], [1280, 1000], [1440, 1000]] as const) {
     await page.setViewportSize({ width, height });
     const dimensions = await page.evaluate(() => ({ viewport: window.innerWidth, content: document.documentElement.scrollWidth }));
     expect(dimensions.content, `Horizontal overflow at ${dimensions.viewport}px: ${dimensions.content}px`).toBeLessThanOrEqual(dimensions.viewport);

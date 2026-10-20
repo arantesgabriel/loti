@@ -136,3 +136,7 @@ Approved scope is only V1 + V1.1 from [`24_HUBBUY_QC_IMPORT_PLAN.md`](24_HUBBUY_
 ## HubBuy balance and mixed payments — 17 October 2026
 
 Approved local implementation follows [`26_HUBBUY_BALANCE_AND_MIXED_PAYMENTS_PLAN.md`](26_HUBBUY_BALANCE_AND_MIXED_PAYMENTS_PLAN.md). D1: CNY credits preserve proportional individual economic rights even though the group normally uses one HubBuy account for the shared order. D2: another member's share may fund an order as an explicit CNY advance, with manual recording of actual settlement and no transfer processing. D3: additional orders and packages remain within the same open tracking and verified account. This narrowly extends the prior exchange/balance/payment exclusions. It does not authorize real account data, production migration, external configuration, deployment or publication.
+
+## Additional product presentation — 19 October 2026
+
+Approved UI refinement: show additional-order products inline with **Custos por produto**, with a single **Pedido adicional** origin flag on each item. Remove the standalone Pedidos adicionais section. A single action opens a drawer that records the item and its own payment, then associates its available units with an eligible package in the same tracking/account. Keep the original purchase charge, additional-order payment snapshots, balance rights, refunds and package validation independent and unchanged. This is a presentation/workflow update; it does not authorize QC Phase 3 imagery or cross-tracking package associations.

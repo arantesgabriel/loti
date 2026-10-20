@@ -64,7 +64,6 @@ export function RefundsSection({ detail, locked, busy, requestItemId, onRequestC
   detail: Detail; locked: boolean; busy: boolean; requestItemId: string | null; onRequestClose: () => void; onDetails: (itemId: string) => void; mutate: Mutate;
 }) {
   const [activeRefundId, setActiveRefundId] = useState<string | null>(null);
-  const [desktopDetailsOpen, setDesktopDetailsOpen] = useState(false);
   const [mode, setMode] = useState<"receive" | "correct" | "void" | "edit">("receive");
   const refundItems: RefundItem[] = [
     ...detail.items.map(item => ({ id: item.id, origin: "purchase" as const, original: item.original, calculation: item.calculation, refunds: item.refunds,
@@ -98,15 +97,7 @@ export function RefundsSection({ detail, locked, busy, requestItemId, onRequestC
         <div><h2 id="refunds-title">Reembolsos</h2><p>{receivedItems > 0 ? `${receivedItems} ${receivedItems === 1 ? "item reembolsado" : "itens reembolsados"} nesta compra.` : requested.length > 0 ? "Aguardando recebimento do reembolso." : "Histórico de registros anulados."}{requested.length > 0 && receivedItems > 0 ? ` ${requested.length} ${requested.length === 1 ? "solicitação a receber" : "solicitações a receber"}.` : ""}</p></div>
         <div className="refunds-total"><span>Total reembolsado</span><strong>{formatMoney(detail.refundsSummary.receivedCents)}</strong>{requested.length > 0 && <small>A receber: {formatMoney(detail.refundsSummary.requestedCents)}</small>}</div>
       </header>
-      <button className="refunds-desktop-summary" type="button" aria-expanded={desktopDetailsOpen} aria-controls="refunds-detail-list" onClick={() => setDesktopDetailsOpen(value => !value)}>
-        <span className="refunds-desktop-summary-values">
-          {requested.length > 0 && <span className="refunds-desktop-summary-row"><span>A receber</span><strong>{formatMoney(detail.refundsSummary.requestedCents)}</strong></span>}
-          {received.length > 0 && <span className="refunds-desktop-summary-row"><span>Total recebido</span><strong>{formatMoney(detail.refundsSummary.receivedCents)}</strong></span>}
-          {requested.length === 0 && received.length === 0 && <span className="refunds-desktop-summary-row"><span>Histórico anulado</span><strong>{voided.length} {voided.length === 1 ? "registro" : "registros"}</strong></span>}
-        </span>
-        <span className="sr-only">{desktopDetailsOpen ? "Ocultar" : "Ver"} detalhes por produto</span><ChevronDown size={16} aria-hidden="true"/>
-      </button>
-      <div className="refunds-list" id="refunds-detail-list" data-expanded={desktopDetailsOpen}>
+      <div className="refunds-list" id="refunds-detail-list" data-expanded="true">
         {[...requested, ...received].map(refund => <RefundRow key={refund.id} refund={refund} detail={detail} item={itemByCostId.get(refund.costItemId)} locked={locked} busy={busy} onDetails={onDetails} onAction={openRefund} />)}
         {voided.length > 0 && <details className="refunds-voided"><summary>Histórico anulado · {voided.length}</summary>{voided.map(refund => <RefundRow key={refund.id} refund={refund} detail={detail} item={itemByCostId.get(refund.costItemId)} locked={locked} busy={busy} onDetails={onDetails} onAction={openRefund} />)}</details>}
       </div>

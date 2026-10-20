@@ -658,6 +658,12 @@ O primeiro gate completo revelou uma contenção SQLite na corrida entre recebim
 
 Nenhum saldo HubBuy real, refund antigo, RAM/Elixir, taxa, cotação, acerto entre pessoas ou pacote físico foi registrado ou conciliado. Esta execução não acessou nem alterou o banco remoto, não publicou versão, não configurou R2/Cloudflare/secrets e não executou transferências. A aplicação em produção depende de autorização operacional específica, backup recuperável, bloqueio coordenado de escritores, migração explícita, conciliação fornecida pelos responsáveis e smoke test posterior.
 
+### Aditivo de experiência — 19 de outubro de 2026
+
+O usuário aprovou consolidar a apresentação dos pedidos adicionais em **Custos por produto**. Cada item registrado aparece como uma linha normal de custo com a única etiqueta de origem **Pedido adicional**; o pagamento e os valores históricos próprios do pedido permanecem no detalhe do produto. Foi removida a seção Pedidos adicionais.
+
+O comando **Adicionar produto** abre um drawer com as etapas de dados do produto, confirmação do pagamento observado e associação das unidades disponíveis a um pacote elegível no mesmo acompanhamento/conta. Rascunhos podem ser retomados pelo drawer; um item pago que ainda não foi associado mantém ação inline na sua linha. A inclusão continua usando os serviços de pagamento e alocação existentes, sem mudança de schema ou cálculos. A cobrança da compra original permanece separada e não passa a incluir adicionais.
+
 ### Correção de produtos adicionais pagos — 20 de outubro de 2026
 
 O usuário autorizou reutilizar a ação **Editar** dos produtos normais e incluir

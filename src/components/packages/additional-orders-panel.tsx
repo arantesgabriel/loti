@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CircleCheck, Clock3, Plus, ShoppingBag } from "lucide-react";
+import { ArrowRight, Package, Plus, ShoppingBag } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -9,12 +9,11 @@ import { Confirm, Surface } from "@/components/ui/surface";
 import type { CostTrackingView } from "@/lib/domain/package-cost-reading";
 import { allocateExactMinor } from "@/lib/domain/hubbuy-balance-calculations";
 import { formatBrlMinor, formatCnyMinor, parseFinancialMinor } from "@/lib/domain/financial-money";
-import { QcGalleryButton } from "@/components/qc/qc-components";
 import { costRequest } from "./package-cost-client";
 
 type Detail = CostTrackingView;
 type Order = Detail["productOrders"][number];
-type FinancingPosition = Order["items"][number]["financingPositions"][number];
+export type FinancingPosition = Order["items"][number]["financingPositions"][number];
 type Balance = { accountId: string; rights: { personId: string; availableCnyMinor: number; availableHistoricalBrlCents: number }[] };
 type AdvanceDraft = { component: "product" | "china"; beneficiaryId: string; lenderId: string; amount: string };
 
@@ -26,8 +25,12 @@ function readMinor(value: string, currency: "CNY" | "BRL", label: string) {
   } catch (error) { throw new Error(error instanceof Error ? error.message : `Valor inválido: ${label}.`); }
 }
 
-export function AdditionalOrdersPanel({ detail, locked, busy, onRefundRequest, mutate }: { detail: Detail; locked: boolean; busy: boolean; onRefundRequest: (costItemId: string) => void; mutate: (operation: string, rest: Record<string, unknown>) => Promise<boolean> }) {
+export function AdditionalOrdersPanel({ detail, locked, busy, mutate, createPackage, resumeOrderId, onResumeHandled }: {
+  detail: Detail; locked: boolean; busy: boolean; mutate: (operation: string, rest: Record<string, unknown>, mayInvalidatePayment?: boolean) => Promise<boolean>;
+  createPackage: () => Promise<boolean>; resumeOrderId: string | null; onResumeHandled: () => void;
+}) {
   const activeAccounts = detail.hubbuyAccounts.filter(account => account.status === "active");
+  const [open, setOpen] = useState(false), [activeOrderId, setActiveOrderId] = useState<string | null>(null), [autoSelectLatestDraft, setAutoSelectLatestDraft] = useState(false);
   const [accountId, setAccountId] = useState(activeAccounts[0]?.id ?? "");
   const [name, setName] = useState(""); const [url, setUrl] = useState(""); const [platform, setPlatform] = useState("Taobao");
   const [variant, setVariant] = useState(""); const [quantity, setQuantity] = useState("1");
@@ -40,7 +43,7 @@ export function AdditionalOrdersPanel({ detail, locked, busy, onRefundRequest, m
   const [externalBrl, setExternalBrl] = useState("");
   const [advances, setAdvances] = useState<AdvanceDraft[]>([]);
   const [discardOrder, setDiscardOrder] = useState<Order | null>(null);
-  const [settlement, setSettlement] = useState<{ orderId: string; position: FinancingPosition } | null>(null);
+  const [packageId, setPackageId] = useState("");
 
   const accountKey = activeAccounts.map(account => account.id).join("|");
   const selectedAccountId = activeAccounts.some(account => account.id === accountId) ? accountId : activeAccounts[0]?.id ?? "";
@@ -52,6 +55,21 @@ export function AdditionalOrdersPanel({ detail, locked, busy, onRefundRequest, m
     });
     return () => { active = false; };
   }, [accountKey]);
+
+  const draftOrders = detail.productOrders.filter(order => order.kind === "additional" && order.state === "draft");
+  const selectedOrderId = resumeOrderId ?? activeOrderId;
+  const activeOrder = selectedOrderId
+    ? detail.productOrders.find(order => order.id === selectedOrderId && order.kind === "additional") ?? null
+    : autoSelectLatestDraft ? draftOrders[draftOrders.length - 1] ?? null : null;
+  const eligiblePackages = activeOrder?.state === "recorded"
+    ? detail.packages.filter(pkg => pkg.logisticsStatus === "preparing" && pkg.contentSealSource === null && pkg.contentSealedAt === null && (!pkg.accountId || pkg.accountId === activeOrder.accountId))
+    : [];
+  const selectedPackageId = eligiblePackages.some(pkg => pkg.id === packageId) ? packageId : eligiblePackages[0]?.id ?? "";
+  const unassignedUnits = activeOrder?.state === "recorded" ? activeOrder.items.reduce((sum, row) => {
+    const shippingQuantity = row.calculation?.shippingQuantity ?? row.quantity;
+    const assigned = detail.packages.reduce((total, pkg) => total + (pkg.items.find(item => item.costItemId === row.cost.id)?.quantity ?? 0), 0);
+    return sum + Math.max(0, shippingQuantity - assigned);
+  }, 0) : 0;
 
   async function createOrder(event: React.FormEvent) {
     event.preventDefault();
@@ -70,7 +88,7 @@ export function AdditionalOrdersPanel({ detail, locked, busy, onRefundRequest, m
           nativeChinaState: chinaFree ? "no_charge" : "known", nativeChinaCnyMinor: china,
           participants: participantIds.map(personId => ({ personId, weightMode: "equal", weight: 1 })) }],
       } });
-      if (ok) { setName(""); setUrl(""); setVariant(""); setProductCny(""); setChinaCny(""); setProductFree(false); setChinaFree(false); setAdvances([]); toast.success("Rascunho de pedido criado."); }
+      if (ok) { setName(""); setUrl(""); setVariant(""); setProductCny(""); setChinaCny(""); setProductFree(false); setChinaFree(false); setAdvances([]); setActiveOrderId(null); setAutoSelectLatestDraft(true); toast.success("Produto registrado. Confirme o pagamento para incluir no pacote."); }
     } catch (error) { toast.error(error instanceof Error ? error.message : "Confira os campos do pedido."); }
   }
 
@@ -143,45 +161,62 @@ export function AdditionalOrdersPanel({ detail, locked, busy, onRefundRequest, m
         balanceFunding: estimate.requests.map(row => ({ costItemId: row.costItemId, costComponent: row.component, beneficiaryId: row.beneficiaryId, lenderId: row.lenderId, cnyMinor: row.cnyMinor })),
         external,
       } });
-      if (ok) toast.success("Pagamento do pedido registrado.");
+      if (ok) { setActiveOrderId(order.id); setAutoSelectLatestDraft(false); toast.success("Pagamento registrado. Agora associe as unidades ao pacote."); }
     } catch (error) { toast.error(error instanceof Error ? error.message : "Confira a composição do pagamento."); }
   }
 
   async function confirmDiscard() {
     if (!discardOrder) return;
     const ok = await mutate("order.additional.void", { orderId: discardOrder.id, input: { expectedRevision: detail.tracking.revision, idempotencyKey: crypto.randomUUID(), reason: "Rascunho descartado antes da compra." } });
-    if (ok) { setDiscardOrder(null); toast.success("Rascunho descartado."); }
+    if (ok) { setDiscardOrder(null); setActiveOrderId(null); setAutoSelectLatestDraft(false); toast.success("Rascunho descartado."); }
   }
 
-  return <section className="cost-additional-orders" aria-labelledby="additional-orders-title">
-    <div className="cost-section-heading"><div><h2 id="additional-orders-title"><ShoppingBag size={18} aria-hidden="true"/> Pedidos adicionais</h2><p className="muted">Cada pedido fica neste acompanhamento, com seus próprios itens, conta e pagamento.</p></div></div>
-    {!locked && <form className="cost-additional-order-create" onSubmit={event => void createOrder(event)}>
+  async function associateWithPackage(order: Order) {
+    const pkg = detail.packages.find(value => value.id === selectedPackageId);
+    if (!pkg) { toast.error("Escolha ou crie um pacote em preparação para associar o produto."); return; }
+    const costRows = [
+      ...detail.items.map(item => ({ id: item.id, shippingQuantity: item.calculation?.shippingQuantity ?? item.original.quantity })),
+      ...detail.productOrders.filter(value => value.kind === "additional" && value.state === "recorded").flatMap(value => value.items.map(row => ({ id: row.cost.id, shippingQuantity: row.calculation?.shippingQuantity ?? row.quantity }))),
+    ];
+    const additions = new Map(order.items.map(row => {
+      const assigned = detail.packages.reduce((sum, existing) => sum + (existing.items.find(item => item.costItemId === row.cost.id)?.quantity ?? 0), 0);
+      return [row.cost.id, Math.max(0, (row.calculation?.shippingQuantity ?? row.quantity) - assigned)];
+    }));
+    if ([...additions.values()].every(quantity => quantity === 0)) { toast.error("Todas as unidades deste pedido já estão associadas a pacotes."); return; }
+    const allocations = costRows.map(line => {
+      const currentlyAssigned = pkg.items.find(item => item.costItemId === line.id)?.quantity ?? 0;
+      const assignedOutside = detail.packages.filter(existing => existing.id !== pkg.id).reduce((sum, existing) => sum + (existing.items.find(item => item.costItemId === line.id)?.quantity ?? 0), 0);
+      const add = additions.get(line.id) ?? 0;
+      return { costItemId: line.id, quantity: Math.min(line.shippingQuantity - assignedOutside, currentlyAssigned + add) };
+    });
+    const ok = await mutate("package.allocations", { input: { expectedRevision: detail.tracking.revision, packageId: pkg.id, allocations } }, true);
+    if (ok) { setOpen(false); setActiveOrderId(null); setAutoSelectLatestDraft(false); setPackageId(""); onResumeHandled(); toast.success(`Produto associado a ${pkg.name}.`); }
+  }
+
+  const estimate = activeOrder?.state === "draft" ? preview(activeOrder) : null;
+
+  return <>
+    {!locked && <Button className="cost-additional-order-trigger" type="button" variant="outline" disabled={busy} onClick={() => setOpen(true)}><Plus size={16}/><span>Adicionar produto</span>{draftOrders.length > 0 && <span className="cost-draft-count">{draftOrders.length} rascunhos</span>}</Button>}
+    <Surface sheet open={open || !!resumeOrderId} title={activeOrder?.state === "recorded" ? "Associar ao pacote" : activeOrder?.state === "draft" ? "Confirmar compra" : "Adicionar produto comprado"} subtitle={activeOrder?.items[0]?.item?.name} description="Registre o item, confirme o pagamento observado e associe as unidades a um pacote." onOpenChange={value => { if (!busy) { setOpen(value); if (!value) { setActiveOrderId(null); setAutoSelectLatestDraft(false); onResumeHandled(); } } }} className="cost-additional-order-surface">
+      {!activeOrder && <>
+      {!locked && <form className="cost-additional-order-create" onSubmit={event => void createOrder(event)}>
+      <p className="cost-order-step-title"><strong>1. Dados do produto</strong><span>A compra adicional mantém seu próprio pagamento.</span></p>
       <label>Conta HubBuy<select required value={selectedAccountId} onChange={event => setAccountId(event.target.value)}><option value="">Escolher conta conciliada</option>{activeAccounts.map(account => <option key={account.id} value={account.id}>{account.label} · {formatCnyMinor(account.balanceCnyMinor)}</option>)}</select></label>
       <div className="cost-additional-order-fields"><label>Produto<input required maxLength={200} value={name} onChange={event => setName(event.target.value)} placeholder="Nome do produto"/></label><label>Link<input required type="url" maxLength={2048} value={url} onChange={event => setUrl(event.target.value)} placeholder="https://…"/></label><label>Plataforma<input required maxLength={100} value={platform} onChange={event => setPlatform(event.target.value)} /></label><label>Variação<input maxLength={500} value={variant} onChange={event => setVariant(event.target.value)} placeholder="Opcional"/></label><label>Quantidade<input required type="number" min={1} max={10000} value={quantity} onChange={event => setQuantity(event.target.value)}/></label>
         <label>Preço produto · CNY<input inputMode="decimal" disabled={productFree} value={productCny} onChange={event => setProductCny(event.target.value)} placeholder="0,00"/></label><label>Frete China · CNY<input inputMode="decimal" disabled={chinaFree} value={chinaCny} onChange={event => setChinaCny(event.target.value)} placeholder="0,00"/></label>
         <label className="cost-order-free"><input type="checkbox" checked={productFree} onChange={event => setProductFree(event.target.checked)}/> Sem cobrança de produto</label><label className="cost-order-free"><input type="checkbox" checked={chinaFree} onChange={event => setChinaFree(event.target.checked)}/> Sem cobrança de frete China</label></div>
       <fieldset className="cost-order-participants"><legend>Dividir o custo igualmente</legend>{detail.members.map(member => <label key={member.id}><input type="checkbox" checked={participantIds.includes(member.id)} onChange={event => setParticipantIds(current => event.target.checked ? [...current, member.id] : current.filter(id => id !== member.id))}/>{member.name}</label>)}</fieldset>
-      <Button type="submit" variant="outline" disabled={busy || !activeAccounts.length}><Plus size={15}/>Criar rascunho</Button>
-      {!activeAccounts.length && <small className="muted">Cadastre uma conta HubBuy ativa na <Link href="/packages/accounts">gestão de contas</Link> para criar pedidos adicionais.</small>}
+      <Button type="submit" disabled={busy || !activeAccounts.length}><ShoppingBag size={15}/>Continuar para o pagamento</Button>
+      {!activeAccounts.length && <small className="muted">Cadastre uma conta HubBuy ativa na <Link href="/packages/accounts">gestão de contas</Link> para registrar o pedido.</small>}
     </form>}
-    <div className="cost-additional-order-list">{detail.productOrders.filter(order => order.kind === "additional").map(order => {
-      const estimate = order.state === "draft" ? preview(order) : null;
-      return <article className="cost-additional-order-card" key={order.id}>
-        <div className="cost-additional-order-heading"><div><strong>{order.externalReference ?? `Pedido adicional · ${order.items.length} ${order.items.length === 1 ? "item" : "itens"}`}</strong><small>{order.account?.label ?? "Conta removida"} · {order.state === "recorded" ? "Pedido registrado" : order.state === "voided" ? "Rascunho descartado" : "Rascunho · sem pagamento"}</small></div><span className={order.state === "recorded" ? "paid" : "pending"}>{order.state === "recorded" ? <CircleCheck size={14}/> : <Clock3 size={14}/>} {order.state === "recorded" ? formatCnyMinor(order.nativeCnyMinor ?? 0) : "Rascunho"}</span></div>
-        <ul>{order.items.map(row => <li key={row.cost.id}><span><strong>{row.item?.name ?? "Produto"}</strong><small>{row.quantity} un. · {row.participants.map(person => person.name).join(" · ")}</small><small>{row.calculation?.shippingQuantity ?? row.quantity} unidades enviáveis · {formatBrlMinor(row.calculation?.receivedRefundCents ?? 0)} reembolsados</small>{row.item && order.state === "recorded" && <QcGalleryButton purchaseId={detail.purchase.id} itemId={`additional:${row.item.id}`} itemName={row.item.name} canManageHere triggerLabel="Ver QC"/>}</span><span className="cost-additional-order-item-actions">{formatCnyMinor((row.cost.nativeProductCnyMinor ?? 0) + (row.cost.nativeChinaCnyMinor ?? 0))}{!locked && order.state === "recorded" && (row.calculation?.shippingQuantity ?? 0) > 0 && <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => onRefundRequest(row.cost.id)}>Registrar cancelamento</Button>}</span></li>)}</ul>
-        {order.state === "recorded" && <p className="cost-order-payment-note">Base histórica do saldo: {formatBrlMinor(order.historicalBrlCents)} · Dinheiro novo: {formatBrlMinor(order.newMoneyBrlCents)} (inclui {formatBrlMinor(order.feeBrlCents)} de taxa)</p>}
-        {order.items.flatMap(row => row.financingPositions.filter(position => position.openCnyMinor > 0).map(position => {
-          const lender = detail.members.find(member => member.id === position.lenderId)?.name ?? "Financiador";
-          const beneficiary = detail.members.find(member => member.id === position.beneficiaryId)?.name ?? "Beneficiário";
-          return <div className="cost-order-financing-position" key={position.consumptionId}>
-            <span><strong>{beneficiary} → {lender}</strong><small>Em aberto: {formatCnyMinor(position.openCnyMinor)} · base histórica {formatBrlMinor(position.openHistoricalBrlCents)}</small></span>
-            {!locked && order.state === "recorded" && <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => setSettlement({ orderId: order.id, position })}>Registrar acerto</Button>}
-          </div>;
-        }))}
-        {!locked && order.state === "draft" && order.accountId && <form className="cost-additional-order-payment" onSubmit={event => void payOrder(order, event)}>
-          <div><strong>Confirmar pagamento ocorrido</strong><small>Saldo próprio previsto: {formatCnyMinor(estimate?.ownUsed ?? 0)} · Adiantamento de outra pessoa: {formatCnyMinor(estimate?.crossUsed ?? 0)} · Complemento: {formatCnyMinor(estimate?.externalCnyMinor ?? 0)}</small></div>
+    {draftOrders.length > 0 && <details className="cost-order-existing-drafts"><summary>Retomar rascunho pendente ({draftOrders.length})</summary><div>{draftOrders.map(order => <button key={order.id} type="button" disabled={busy} onClick={() => { setActiveOrderId(order.id); setAutoSelectLatestDraft(false); }}><span><strong>{order.items[0]?.item?.name ?? "Produto adicional"}</strong><small>{order.account?.label ?? "Conta HubBuy"} · falta confirmar pagamento</small></span><ArrowRight size={16}/></button>)}</div></details>}
+      </>}
+      {activeOrder?.state === "draft" && activeOrder.accountId && <div className="cost-additional-order-flow">
+        <p className="cost-order-step-title"><strong>2. Confirme o pagamento</strong><span>{activeOrder.items.map(row => row.item?.name ?? "Produto").join(" · ")} · {formatCnyMinor(activeOrder.nativeCnyMinor ?? 0)}</span></p>
+        <form className="cost-additional-order-payment" onSubmit={event => void payOrder(activeOrder, event)}>
+          <div><strong>Pagamento observado</strong><small>Saldo próprio previsto: {formatCnyMinor(estimate?.ownUsed ?? 0)} · Adiantamento: {formatCnyMinor(estimate?.crossUsed ?? 0)} · Complemento: {formatCnyMinor(estimate?.externalCnyMinor ?? 0)}</small></div>
           <label className="cost-order-free"><input type="checkbox" checked={useOwnBalance} onChange={event => setUseOwnBalance(event.target.checked)}/> Usar o saldo próprio dos participantes</label>
-          <div className="cost-order-advance-list"><strong>Adiantamentos explícitos em CNY · opcional</strong>{advances.map((advance, index) => <div className="cost-order-advance" key={index}>
+          <div className="cost-order-advance-list"><strong>Adiantamento explícito em CNY · opcional</strong>{advances.map((advance, index) => <div className="cost-order-advance" key={index}>
             <label>Quem recebe<select value={advance.beneficiaryId} onChange={event => updateAdvance(index, { beneficiaryId: event.target.value, lenderId: advance.lenderId === event.target.value ? "" : advance.lenderId })}><option value="">Escolher pessoa</option>{detail.members.map(member => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
             <label>Quem financia<select value={advance.lenderId} onChange={event => updateAdvance(index, { lenderId: event.target.value })}><option value="">Escolher financiador</option>{detail.members.filter(member => member.id !== advance.beneficiaryId).map(member => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
             <label>Componente<select value={advance.component} onChange={event => updateAdvance(index, { component: event.target.value as "product" | "china" })}><option value="product">Produto</option><option value="china">Frete China</option></select></label>
@@ -190,20 +225,25 @@ export function AdditionalOrdersPanel({ detail, locked, busy, onRefundRequest, m
           </div>)}<Button type="button" variant="outline" size="sm" onClick={() => setAdvances(current => [...current, { component: "product", beneficiaryId: "", lenderId: "", amount: "" }])}>Adicionar adiantamento</Button></div>
           {(estimate?.externalCnyMinor ?? 0) > 0 && <><label>Método do complemento<select value={paymentMethod} onChange={event => setPaymentMethod(event.target.value as "pix" | "card")}><option value="pix">PIX · {detail.settings.pixBps / 100}%</option><option value="card">Cartão · {detail.settings.cardBps / 100}%</option></select></label><label>Principal externo em BRL<input inputMode="decimal" required value={externalBrl} onChange={event => setExternalBrl(event.target.value)} placeholder="0,00"/></label></>}
           {estimate?.error && <small className="error" role="alert">{estimate.error}</small>}
-          <Button type="submit" disabled={busy || !!estimate?.error || (estimate?.externalCnyMinor ?? 0) > 0 && !externalBrl.trim()}>{busy ? "Salvando…" : "Registrar pedido pago"}</Button>
-          <Button type="button" variant="outline" disabled={busy} onClick={() => setDiscardOrder(order)}>Descartar rascunho</Button>
-        </form>}
-      </article>;
-    })}</div>
+          <Button type="submit" disabled={busy || !!estimate?.error || (estimate?.externalCnyMinor ?? 0) > 0 && !externalBrl.trim()}>{busy ? "Salvando…" : "Confirmar compra"}</Button>
+          <Button type="button" variant="outline" disabled={busy} onClick={() => setDiscardOrder(activeOrder)}>Descartar rascunho</Button>
+        </form>
+      </div>}
+      {activeOrder?.state === "recorded" && <div className="cost-additional-order-flow">
+        <p className="cost-order-step-title"><strong>3. Associe as unidades ao pacote</strong><span>O pagamento deste pedido está registrado.</span></p>
+        <div className="cost-order-payment-note">{activeOrder.account?.label ?? "Conta HubBuy"} · {formatCnyMinor(activeOrder.nativeCnyMinor ?? 0)} · Base de saldo {formatBrlMinor(activeOrder.historicalBrlCents)} · Dinheiro novo {formatBrlMinor(activeOrder.newMoneyBrlCents)} (taxas {formatBrlMinor(activeOrder.feeBrlCents)})</div>
+        {unassignedUnits > 0 ? <>
+          {eligiblePackages.length > 0 ? <label>Pacote<select value={selectedPackageId} onChange={event => setPackageId(event.target.value)}>{eligiblePackages.map(pkg => <option key={pkg.id} value={pkg.id}>{pkg.name}{pkg.accountId ? " · conta compatível" : " · vincular conta HubBuy"}</option>)}</select></label> : <p className="muted">Não há pacote em preparação compatível com esta conta.</p>}
+          <p className="cost-package-association-note">{unassignedUnits} {unassignedUnits === 1 ? "unidade será associada" : "unidades serão associadas"} ao pacote escolhido.</p>
+          <div className="form-actions"><Button type="button" variant="outline" disabled={busy} onClick={() => void createPackage()}>Criar pacote</Button><Button type="button" disabled={busy || !selectedPackageId} onClick={() => void associateWithPackage(activeOrder)}><Package size={15}/>Associar ao pacote</Button></div>
+        </> : <><p className="muted">Todas as unidades deste pedido já estão associadas a um pacote.</p><Button type="button" onClick={() => { setOpen(false); setActiveOrderId(null); onResumeHandled(); }}>Concluir</Button></>}
+      </div>}
+    </Surface>
     <Confirm open={!!discardOrder} title="Descartar este rascunho?" description="O rascunho e seus itens ficam no histórico como descartados. Nenhum saldo ou pagamento será lançado." label="Descartar rascunho" danger busy={busy} onOpenChange={open => { if (!open && !busy) setDiscardOrder(null); }} onConfirm={() => void confirmDiscard()}/>
-    {settlement && <FinancingSettlementSurface orderId={settlement.orderId} position={settlement.position} detail={detail} busy={busy} onClose={() => setSettlement(null)} onSubmit={async input => {
-      const ok = await mutate("order.additional.settle", { input });
-      if (ok) { setSettlement(null); toast.success("Acerto da posição registrado."); }
-    }}/>}
-  </section>;
+  </>;
 }
 
-function FinancingSettlementSurface({ orderId, position, detail, busy, onClose, onSubmit }: {
+export function FinancingSettlementSurface({ orderId, position, detail, busy, onClose, onSubmit }: {
   orderId: string; position: FinancingPosition; detail: Detail; busy: boolean; onClose: () => void; onSubmit: (input: unknown) => Promise<void>;
 }) {
   const [amountCny, setAmountCny] = useState(formatCnyMinor(position.openCnyMinor));

@@ -7025,6 +7025,26 @@ details .details-fields {
 .cost-hubbuy-account-head { flex-wrap: wrap; }
 .cost-hubbuy-account-head > div { flex: 1 1 180px; overflow-wrap: anywhere; }
 .cost-account-create small { color: var(--text-secondary, #625b57); font-size: 12px; line-height: 1.45; }
+.cost-products-heading { align-items: end; }
+.cost-products-heading-actions { display: flex; align-items: center; gap: 18px; }
+.cost-additional-order-trigger { flex: 0 0 auto; gap: 8px; }
+.cost-draft-count { padding: 2px 7px; border-radius: 999px; background: var(--surface-muted, #f5f1ee); color: var(--text-secondary, #625b57); font-size: 11px; }
+.cost-additional-origin-flag { display: inline-flex; width: fit-content; padding: 2px 7px; border: 1px solid var(--border, #e9e3df); border-radius: 999px; color: var(--text-secondary, #625b57); font-size: 10px; font-weight: 600; line-height: 1.35; }
+.cost-unit-note { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; }
+.cost-product-mobile-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cost-order-step-title { display: grid; gap: 4px; margin: 0; }
+.cost-order-step-title strong { color: var(--text-primary, #221d21); font-size: 15px; }
+.cost-order-step-title span { color: var(--text-secondary, #625b57); font-size: 12px; line-height: 1.45; }
+.cost-order-existing-drafts { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--border, #e9e3df); border-radius: 12px; }
+.cost-order-existing-drafts summary { cursor: pointer; color: var(--text-secondary, #625b57); font-size: 13px; font-weight: 600; }
+.cost-order-existing-drafts > div { display: grid; gap: 6px; }
+.cost-order-existing-drafts button { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border: 0; border-top: 1px solid var(--border, #e9e3df); background: transparent; color: var(--text-primary, #221d21); text-align: left; cursor: pointer; }
+.cost-order-existing-drafts button span { display: grid; gap: 3px; }
+.cost-order-existing-drafts button small { color: var(--text-secondary, #625b57); font-size: 12px; }
+.cost-package-association-note { margin: 0; color: var(--text-secondary, #625b57); font-size: 13px; }
+.cost-additional-order-flow { display: grid; gap: 14px; }
+.cost-additional-order-surface .cost-order-payment-note { padding: 12px; border-radius: 10px; background: var(--background, #faf8f6); line-height: 1.5; }
+.cost-additional-order-surface > .surface-body > label { display: grid; gap: 5px; color: var(--text-secondary, #625b57); font-size: 13px; }
 @media (max-width: 680px) {
   .cost-account-create { align-items: stretch; flex-direction: column; }
   .cost-account-event-values { grid-template-columns: 1fr; }
@@ -7034,5 +7054,10 @@ details .details-fields {
   .cost-order-settlement-amount { grid-template-columns: 1fr; }
   .cost-order-financing-position { align-items: flex-start; flex-direction: column; }
   .cost-additional-order-item-actions { align-items: flex-end; }
+  .cost-products-heading { align-items: flex-start; }
+  .cost-products-heading-actions { align-items: flex-end; flex-direction: column-reverse; gap: 10px; }
+  .cost-additional-order-trigger { min-height: 42px; }
+  .cost-products-total { text-align: right; }
+  .cost-product-mobile-actions { width: 100%; }
   .cost-additional-order-payment > .cost-order-free, .cost-additional-order-payment > button, .cost-additional-order-payment > .error { grid-column: auto; }
 }

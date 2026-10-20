@@ -1,6 +1,6 @@
 import type { CostTrackingView } from "./package-cost-reading";
 
-export type CostSectionKey = "products" | "packages" | "people";
+export type CostSectionKey = "products" | "payments" | "packages" | "people";
 export type CostNextAction = { label: string; section: CostSectionKey; target: string; packageId?: string };
 
 function countedUnits(count: number, singular: string, plural: string) {
@@ -26,10 +26,10 @@ function nextAction(detail: CostTrackingView): CostNextAction | null {
 
   const products = detail.calculation.productsCharge;
   if (products.baseCents !== null && products.baseCents > 0 && (products.paymentMethod === null || products.feeBps === null)) {
-    return { label: "Conferir pagamento dos produtos", section: "products", target: "products-method" };
+    return { label: "Conferir pagamento dos produtos", section: "payments", target: "products-method" };
   }
   if (products.totalCents !== null && products.paymentStatus === "pending") {
-    return { label: "Confirmar pagamento dos produtos", section: "products", target: "products-paid" };
+    return { label: "Confirmar pagamento dos produtos", section: "payments", target: "products-paid" };
   }
 
   if (detail.calculation.summary.assignedUnits < detail.calculation.summary.shippingUnits) {
@@ -58,24 +58,21 @@ function nextAction(detail: CostTrackingView): CostNextAction | null {
   }
 
   const requested = detail.refunds.find(refund => refund.status === "requested");
-  if (requested) return { label: `Conferir reembolso de ${detail.items.find(item => item.id === requested.costItemId)?.original.name ?? "produto"}`, section: "products", target: "refunds-section" };
+  if (requested) return { label: `Conferir reembolso de ${detail.items.find(item => item.id === requested.costItemId)?.original.name ?? "produto"}`, section: "payments", target: "refunds-section" };
 
   return { label: "Encerrar custos", section: "products", target: "close-costs" };
-}
-
-function pendingProductPayment(detail: CostTrackingView) {
-  const charge = detail.productsCharge;
-  if (!charge) return "Pagamento pendente";
-  return charge.paymentStatus === "paid" ? "Produtos pagos" : "Pagamento pendente";
 }
 
 export function packageCostPresentation(detail: CostTrackingView) {
   const pricePending = detail.items.filter(item => item.effectivePriceState === "pending").length;
   const chinaPending = detail.items.filter(item => item.chinaFreightState === "pending").length;
-  const distinctParticipants = new Set(detail.items.flatMap(item => item.participants.map(person => person.personId)));
+  const additionalItems = (detail.productOrders ?? []).filter(order => order.kind === "additional" && order.state === "recorded").flatMap(order => order.items);
+  const productCount = detail.items.length + additionalItems.length;
+  const distinctParticipants = new Set([...detail.items, ...additionalItems].flatMap(item => item.participants.map(person => person.personId)));
   const packageCharges = detail.packages.flatMap(pkg => [pkg.brazilFreightCharge, pkg.customsCharge]).filter(Boolean);
   const pendingPackagePayments = packageCharges.filter(charge => charge?.valueState === "known" && charge.paymentStatus === "pending").length;
   const pendingPackageValues = packageCharges.filter(charge => !charge || charge.valueState === "pending").length;
+  const pendingPackageCosts = pendingPackagePayments + pendingPackageValues;
   const totalCents = detail.calculation.summary.totalCents ?? detail.calculation.summary.partialCents;
   const isPartial = detail.calculation.summary.totalCents === null;
   const packageCount = detail.packages.length;
@@ -89,19 +86,17 @@ export function packageCostPresentation(detail: CostTrackingView) {
     hasKnownAmount: detail.calculation.summary.hasKnownAmount,
     isPartial,
     productsSummary: [
-      `${detail.items.length} ${detail.items.length === 1 ? "produto" : "produtos"}`,
+      `${productCount} ${productCount === 1 ? "produto" : "produtos"}`,
       countedUnits(unitCount, "unidade comprada", "unidades compradas"),
       ...(detail.calculation.summary.cancelledUnits ? [countedUnits(detail.calculation.summary.cancelledUnits, "unidade cancelada", "unidades canceladas")] : []),
       ...(detail.refundsSummary.requestedCount ? [`${detail.refundsSummary.requestedCount} ${detail.refundsSummary.requestedCount === 1 ? "reembolso solicitado" : "reembolsos solicitados"}`] : []),
       ...(pricePending ? [missingValueLabel(pricePending, "preço efetivo", "preços efetivos")] : []),
       ...(chinaPending ? [missingValueLabel(chinaPending, "frete China", "fretes China")] : []),
-      pendingProductPayment(detail),
     ].join(" · "),
     packagesSummary: [
       `${packageCount} ${packageCount === 1 ? "pacote" : "pacotes"}`,
-      `${assignedUnits}/${shippingUnits} unidades enviáveis distribuídas`,
-      ...(pendingPackageValues ? [missingValueLabel(pendingPackageValues, "valor", "valores")] : []),
-      ...(pendingPackagePayments ? [`${pendingPackagePayments} ${pendingPackagePayments === 1 ? "pagamento pendente" : "pagamentos pendentes"}`] : []),
+      `${assignedUnits}/${shippingUnits} unidades distribuídas`,
+      ...(pendingPackageCosts ? [`${pendingPackageCosts} ${pendingPackageCosts === 1 ? "custo pendente" : "custos pendentes"}`] : []),
     ].join(" · "),
     peopleSummary: [
       `${distinctParticipants.size} ${distinctParticipants.size === 1 ? "participante" : "participantes"}`,
