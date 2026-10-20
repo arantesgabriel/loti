@@ -8,6 +8,8 @@ import type { CostTrackingView } from "@/lib/domain/package-cost-reading";
 import { formatBrlMinor, formatCnyMinor, parseFinancialMinor } from "@/lib/domain/financial-money";
 import { costRequest, basisPointsFromPercent, percentInputFromBasisPoints } from "./package-cost-client";
 import "./additional-product-editor.css";
+import { additionalProductTotal, productPriceEntry } from "@/lib/domain/additional-product-pricing";
+import { AdditionalProductPriceInput } from "./additional-product-price-input";
 
 type Preview = { balanceBeforeCnyMinor: number; balanceAfterCnyMinor: number; historicalBrlCents: number; principalBrlCents: number; feeBrlCents: number; totalCostBrlCents: number };
 const inputMinor = (value: number) => (value / 100).toFixed(2).replace(".", ",");
@@ -29,7 +31,7 @@ export function AdditionalProductEditor({ detail, itemId, busy, onClose, mutate 
   const [name, setName] = useState(item.name), [url, setUrl] = useState(item.url);
   const [variant, setVariant] = useState(item.variant ?? ""), [notes, setNotes] = useState(item.notes ?? "");
   const [quantity, setQuantity] = useState(String(item.quantity));
-  const [product, setProduct] = useState(inputMinor(row.cost.nativeProductCnyMinor ?? 0));
+  const [productPrice, setProductPrice] = useState(() => productPriceEntry(row.cost.nativeProductCnyMinor ?? 0, item.quantity));
   const [china, setChina] = useState(inputMinor(row.cost.nativeChinaCnyMinor ?? 0));
   const [mode, setMode] = useState<"equal" | "percentage" | "fixed">(row.participants[0]?.weightMode ?? "equal");
   const [weights, setWeights] = useState(Object.fromEntries(row.participants.map(person => [person.personId, percentInputFromBasisPoints(person.weightMode === "percentage" ? person.weight : Math.round(10_000 / row.participants.length))])));
@@ -61,11 +63,13 @@ export function AdditionalProductEditor({ detail, itemId, busy, onClose, mutate 
       const bps = basisPointsFromPercent(fee);
       if (external && bps === null) throw new Error("Informe uma taxa válida entre 0 e 100%.");
       const brl = external ? minor(externalBrl, "BRL") : 0;
+      const productTotal = additionalProductTotal(productPrice.value, Number(quantity), productPrice.basis);
+      if (productTotal === null) throw new Error("Informe o preço do produto em CNY.");
       const input = {
         expectedRevision: detail.tracking.revision, expectedAccountRevision: account.data.account.revision,
         idempotencyKey: crypto.randomUUID(), reason, confirmedIncorrectRegistration: confirmed,
         itemId, name, url, variant: variant || null, notes: notes || null, quantity: Number(quantity),
-        nativeProductCnyMinor: minor(product, "CNY"), nativeChinaCnyMinor: minor(china, "CNY"),
+        nativeProductCnyMinor: productTotal, nativeChinaCnyMinor: minor(china, "CNY"),
         composition: { mode, participants: row.participants.map(person => ({ personId: person.personId, weight: mode === "equal" ? 1 : mode === "fixed" ? person.weight : basisPointsFromPercent(weights[person.personId]) ?? -1 })) },
         useOwnBalance: useBalance,
         balanceFunding: advances.map(advance => ({ costItemId: itemId, costComponent: advance.component, beneficiaryId: advance.beneficiaryId, lenderId: advance.lenderId, cnyMinor: minor(advance.amount, "CNY") })),
@@ -86,7 +90,7 @@ export function AdditionalProductEditor({ detail, itemId, busy, onClose, mutate 
     relatedCorrections.push(correction);
     historyOrderId = correction.previousOrderId;
   }
-  return <Surface sheet open title="Custos do produto" subtitle={item.name} description="Corrija o registro do pedido adicional e confira novamente o pagamento. Os valores em CNY são totais do produto, para todas as unidades." onOpenChange={open => { if (!open && !disabled) onClose(); }}>
+  return <Surface sheet open title="Custos do produto" subtitle={item.name} description="Corrija o registro do pedido adicional e confira novamente o pagamento. O preço por unidade é multiplicado pela quantidade; o frete China é informado como total." onOpenChange={open => { if (!open && !disabled) onClose(); }}>
     <form className="cost-correction-form" onChange={() => { setPreview(null); setError(""); }} onSubmit={event => { event.preventDefault(); if (!disabled) void prepare(); }}>
       <fieldset disabled={disabled}>
         <label>Produto<input required maxLength={200} value={name} onChange={event => setName(event.target.value)}/></label>
@@ -94,7 +98,8 @@ export function AdditionalProductEditor({ detail, itemId, busy, onClose, mutate 
         <label>Variação<input maxLength={500} value={variant} onChange={event => setVariant(event.target.value)}/></label>
         <label>Observações<textarea maxLength={2000} value={notes} onChange={event => setNotes(event.target.value)}/></label>
         <label>Quantidade<input required type="number" min={1} max={10000} value={quantity} onChange={event => setQuantity(event.target.value)}/></label>
-        <div className="form-row"><label>Preço do produto — total (CNY)<input required inputMode="decimal" value={product} onChange={event => setProduct(event.target.value)}/></label><label>Frete China — total (CNY)<input required inputMode="decimal" value={china} onChange={event => setChina(event.target.value)}/></label></div>
+        <AdditionalProductPriceInput entry={productPrice} quantity={Number(quantity)} onChange={setProductPrice} required/>
+        <label>Frete China — total (CNY)<input required inputMode="decimal" value={china} onChange={event => setChina(event.target.value)}/></label>
         <p className="muted">Informe 0,00 para um componente sem cobrança. O custo em reais do saldo é obtido dos créditos usados.</p>
         <label>Divisão entre pessoas<select value={mode} onChange={event => setMode(event.target.value as typeof mode)}><option value="equal">Divisão igual</option><option value="percentage">Percentuais</option>{row.participants[0]?.weightMode === "fixed" && <option value="fixed">Proporção original</option>}</select></label>
         {row.participants.map(person => mode === "percentage" ? <label key={person.personId}>{person.name} (%)<input required inputMode="decimal" value={weights[person.personId]} onChange={event => setWeights(current => ({ ...current, [person.personId]: event.target.value }))}/></label> : <p key={person.personId}>{person.name} · {mode === "equal" ? "Divisão igual" : "Proporção original"}</p>)}

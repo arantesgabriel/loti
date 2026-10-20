@@ -10,6 +10,8 @@ import type { CostTrackingView } from "@/lib/domain/package-cost-reading";
 import { allocateExactMinor } from "@/lib/domain/hubbuy-balance-calculations";
 import { formatBrlMinor, formatCnyMinor, parseFinancialMinor } from "@/lib/domain/financial-money";
 import { costRequest } from "./package-cost-client";
+import { additionalProductTotal, productPriceEntry, type ProductPriceEntry } from "@/lib/domain/additional-product-pricing";
+import { AdditionalProductPriceInput } from "./additional-product-price-input";
 
 type Detail = CostTrackingView;
 type Order = Detail["productOrders"][number];
@@ -39,7 +41,7 @@ export function AdditionalOrdersPanel({ detail, locked, busy, mutate, createPack
   const [accountId, setAccountId] = useState(activeAccounts[0]?.id ?? "");
   const [name, setName] = useState(""); const [url, setUrl] = useState(""); const [platform, setPlatform] = useState("Taobao");
   const [variant, setVariant] = useState(""); const [quantity, setQuantity] = useState("1");
-  const [productCny, setProductCny] = useState(""); const [chinaCny, setChinaCny] = useState("");
+  const [productPrice, setProductPrice] = useState<ProductPriceEntry>({ basis: "unit", value: "" }); const [chinaCny, setChinaCny] = useState("");
   const [productFree, setProductFree] = useState(false); const [chinaFree, setChinaFree] = useState(false);
   const [participantIds, setParticipantIds] = useState<string[]>(detail.members.map(member => member.id));
   const [balances, setBalances] = useState<Record<string, Balance>>({});
@@ -82,7 +84,7 @@ export function AdditionalOrdersPanel({ detail, locked, busy, mutate, createPack
     setEditingDraftId(order.id);
     setAccountId(order.accountId ?? activeAccounts[0]?.id ?? "");
     setName(item.name); setUrl(item.url); setPlatform(item.platform); setVariant(item.variant ?? ""); setQuantity(String(row.quantity));
-    setProductCny(minorToInput(row.cost.nativeProductCnyMinor)); setChinaCny(minorToInput(row.cost.nativeChinaCnyMinor));
+    setProductPrice(productPriceEntry(row.cost.nativeProductCnyMinor, row.quantity)); setChinaCny(minorToInput(row.cost.nativeChinaCnyMinor));
     setProductFree(row.cost.nativeProductState === "no_charge"); setChinaFree(row.cost.nativeChinaState === "no_charge");
     setParticipantIds(row.participants.map(person => person.personId));
   }
@@ -95,7 +97,7 @@ export function AdditionalOrdersPanel({ detail, locked, busy, mutate, createPack
       if (!participantIds.length) throw new Error("Escolha ao menos uma pessoa para dividir o item.");
       const itemQuantity = Number(quantity);
       if (!Number.isInteger(itemQuantity) || itemQuantity < 1 || itemQuantity > 10_000) throw new Error("Informe uma quantidade entre 1 e 10.000.");
-      const productAmount = productFree ? null : parseFinancialMinor(productCny, "CNY");
+      const productAmount = productFree ? null : additionalProductTotal(productPrice.value, itemQuantity, productPrice.basis);
       const chinaAmount = chinaFree ? null : parseFinancialMinor(chinaCny, "CNY");
       const ok = await mutate("order.additional.update_draft", { orderId: editingDraftId, input: {
         expectedRevision: detail.tracking.revision, idempotencyKey: crypto.randomUUID(), accountId: selectedAccountId,
@@ -120,7 +122,8 @@ export function AdditionalOrdersPanel({ detail, locked, busy, mutate, createPack
       if (!participantIds.length) throw new Error("Escolha ao menos uma pessoa para dividir o item.");
       const itemQuantity = Number(quantity);
       if (!Number.isInteger(itemQuantity) || itemQuantity < 1 || itemQuantity > 10_000) throw new Error("Informe uma quantidade entre 1 e 10.000.");
-      const product = productFree ? null : readMinor(productCny, "CNY", "o preço do produto em CNY");
+      const product = productFree ? null : additionalProductTotal(productPrice.value, itemQuantity, productPrice.basis);
+      if (!productFree && product === null) throw new Error("Informe o preço do produto em CNY.");
       const china = chinaFree ? null : readMinor(chinaCny, "CNY", "o frete China em CNY");
       if (!name.trim() || !url.trim()) throw new Error("Informe o nome e o link do produto.");
       const ok = await mutate("order.additional.create", { input: {
@@ -130,7 +133,7 @@ export function AdditionalOrdersPanel({ detail, locked, busy, mutate, createPack
           nativeChinaState: chinaFree ? "no_charge" : "known", nativeChinaCnyMinor: china,
           participants: participantIds.map(personId => ({ personId, weightMode: "equal", weight: 1 })) }],
       } });
-      if (ok) { setName(""); setUrl(""); setVariant(""); setProductCny(""); setChinaCny(""); setProductFree(false); setChinaFree(false); setAdvances([]); setActiveOrderId(null); setAutoSelectLatestDraft(true); toast.success("Produto registrado. Confirme o pagamento para incluir no pacote."); }
+      if (ok) { setName(""); setUrl(""); setVariant(""); setQuantity("1"); setProductPrice({ basis: "unit", value: "" }); setChinaCny(""); setProductFree(false); setChinaFree(false); setAdvances([]); setActiveOrderId(null); setAutoSelectLatestDraft(true); toast.success("Produto registrado. Confirme o pagamento para incluir no pacote."); }
     } catch (error) { toast.error(error instanceof Error ? error.message : "Confira os campos do pedido."); }
   }
 
@@ -246,8 +249,9 @@ export function AdditionalOrdersPanel({ detail, locked, busy, mutate, createPack
       <p className="cost-order-step-title"><strong>{isEditingDraft ? "Editar dados do produto" : "1. Dados do produto"}</strong><span>{isEditingDraft ? "Ajuste o rascunho antes de confirmar o pagamento." : "A compra adicional mantém seu próprio pagamento."}</span></p>
       <label>Conta HubBuy<select required value={selectedAccountId} onChange={event => setAccountId(event.target.value)}><option value="">Escolher conta conciliada</option>{activeAccounts.map(account => <option key={account.id} value={account.id}>{account.label} · {formatCnyMinor(account.balanceCnyMinor)}</option>)}</select></label>
       <div className="cost-additional-order-fields"><label>Produto<input required maxLength={200} value={name} onChange={event => setName(event.target.value)} placeholder="Nome do produto"/></label><label>Link<input required type="url" maxLength={2048} value={url} onChange={event => setUrl(event.target.value)} placeholder="https://…"/></label><label>Plataforma<input required maxLength={100} value={platform} onChange={event => setPlatform(event.target.value)} /></label><label>Variação<input maxLength={500} value={variant} onChange={event => setVariant(event.target.value)} placeholder="Opcional"/></label><label>Quantidade<input required type="number" min={1} max={10000} value={quantity} onChange={event => setQuantity(event.target.value)}/></label>
-        <label>Preço produto · CNY<input inputMode="decimal" disabled={productFree} value={productCny} onChange={event => setProductCny(event.target.value)} placeholder="0,00"/></label><label>Frete China · CNY<input inputMode="decimal" disabled={chinaFree} value={chinaCny} onChange={event => setChinaCny(event.target.value)} placeholder="0,00"/></label>
-        <label className="cost-order-free"><input type="checkbox" checked={productFree} disabled={productCny.trim().length > 0} onChange={event => setProductFree(event.target.checked)}/> Sem cobrança de produto</label><label className="cost-order-free"><input type="checkbox" checked={chinaFree} disabled={chinaCny.trim().length > 0} onChange={event => setChinaFree(event.target.checked)}/> Sem cobrança de frete China</label></div>
+        <AdditionalProductPriceInput entry={productPrice} quantity={Number(quantity)} onChange={setProductPrice} disabled={productFree}/><label>Frete China — total (CNY)<input inputMode="decimal" disabled={chinaFree} value={chinaCny} onChange={event => setChinaCny(event.target.value)} placeholder="0,00"/></label>
+        <label className="cost-order-free"><input type="checkbox" checked={productFree} disabled={productPrice.value.trim().length > 0} onChange={event => setProductFree(event.target.checked)}/> Sem cobrança de produto</label><label className="cost-order-free"><input type="checkbox" checked={chinaFree} disabled={chinaCny.trim().length > 0} onChange={event => setChinaFree(event.target.checked)}/> Sem cobrança de frete China</label></div>
+      <p className="muted">O frete China informado é o total para todas as unidades deste produto.</p>
       <fieldset className="cost-order-participants"><legend>Dividir o custo igualmente</legend>{detail.members.map(member => <label key={member.id}><input type="checkbox" checked={participantIds.includes(member.id)} onChange={event => setParticipantIds(current => event.target.checked ? [...current, member.id] : current.filter(id => id !== member.id))}/>{member.name}</label>)}</fieldset>
       {isEditingDraft ? <div className="form-actions"><Button type="button" variant="outline" disabled={busy} onClick={() => setEditingDraftId(null)}>Voltar ao pagamento</Button><Button type="submit" disabled={busy || !activeAccounts.length}><ShoppingBag size={15}/>Salvar alterações</Button></div> : <Button type="submit" disabled={busy || !activeAccounts.length}><ShoppingBag size={15}/>Continuar para o pagamento</Button>}
       {!activeAccounts.length && <small className="muted">Cadastre uma conta HubBuy ativa na <Link href="/packages/accounts">gestão de contas</Link> para registrar o pedido.</small>}

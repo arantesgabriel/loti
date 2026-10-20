@@ -4,12 +4,36 @@ import { hubbuyAccounts, hubbuyBalanceConsumptions, memberBalanceFinancingEntrie
 import { hubbuyBalanceServices } from "@/lib/domain/hubbuy-balance-services";
 import { packageCostServices } from "@/lib/domain/package-cost-services";
 import { fixture, type Fixture } from "./helpers";
+import { additionalProductTotal } from "@/lib/domain/additional-product-pricing";
 
 let f: Fixture;
 beforeEach(async () => { f = await fixture(); });
 afterEach(() => f.client.close());
 
 describe("additional product orders", () => {
+  it("keeps two unit prices, total China freight, payment, member shares and partial refund consistent after reload", async () => {
+    const purchase = await f.alice.savePurchase({ name: "Duas unidades sintéticas" });
+    await f.alice.finalizePurchase(purchase!.id, true);
+    const accounts = hubbuyBalanceServices(f.db, "alice");
+    const account = await accounts.createAccount({ workspaceId: "workspace", idempotencyKey: "two-unit-account", label: "Conta sintética", confirmZeroBalance: true });
+    const service = packageCostServices(f.db, "alice"), tracking = await service.startTracking(purchase!.id);
+    let detail = await service.getTracking(tracking.id);
+    const created = await service.createAdditionalOrder(tracking.id, { expectedRevision: detail.tracking.revision, idempotencyKey: "two-unit-draft", accountId: account.accountId, items: [{ name: "Elixir QA", url: "https://shop.test/elixir", platform: "Taobao", visualKey: "generic", quantity: 2, itemOrder: 0, nativeProductState: "known", nativeProductCnyMinor: additionalProductTotal("18,06", 2, "unit"), nativeChinaState: "known", nativeChinaCnyMinor: 2000, participants: [{ personId: "alice", weightMode: "equal", weight: 1 }, { personId: "bob", weightMode: "equal", weight: 1 }] }] });
+    detail = await service.getTracking(tracking.id);
+    await service.recordAdditionalOrderPayment(tracking.id, created.orderId, { expectedRevision: detail.tracking.revision, idempotencyKey: "two-unit-payment", paymentMethod: "pix", principalBrlCents: 5612, conversionCnyMinor: 5612, conversionBrlCents: 5612 });
+    detail = await packageCostServices(f.db, "alice").getTracking(tracking.id);
+    const order = detail.productOrders.find(order => order.id === created.orderId)!;
+    expect(order).toMatchObject({ nativeCnyMinor: 5612, totalCostBrlCents: 5668, items: [{ quantity: 2, cost: { nativeProductCnyMinor: 3612, nativeChinaCnyMinor: 2000 } }] });
+    expect(detail.memberTotals.map(person => person.totalCents)).toEqual([2834, 2834]);
+    expect(order.items[0].calculation?.components.slice(0, 2).map(component => component.amountCents)).toEqual([3612, 2000]);
+    const originalComponents = order.paymentComponents;
+    detail = await service.requestRefund(tracking.id, { expectedRevision: detail.tracking.revision, costItemId: order.items[0].cost.id, quantity: 1, requestedProductCents: 1806, requestedChinaCents: 1000, reason: "Cancelamento sintético de uma unidade", packageRemovals: [], unassignedQuantity: 1 });
+    expect(detail.calculation.summary.partialCents).toBe(5668);
+    detail = await service.receiveRefund(tracking.id, detail.refunds[0].id, { expectedRevision: detail.tracking.revision, receivedProductCents: 1806, receivedChinaCents: 1000, destination: "external", confirmed: true });
+    expect(detail.calculation.summary.partialCents).toBe(2862);
+    expect(detail.productOrders.find(order => order.id === created.orderId)?.paymentComponents).toEqual(originalComponents);
+    expect(detail.financialDisplay.items[0]).toMatchObject({ purchasedQuantity: 2, remainingQuantity: 1 });
+  });
   it("preserves the original paid Pix charge through a balance-only additional order and reload", async () => {
     const purchase = await f.alice.savePurchase({ name: "Compra original paga" });
     await f.alice.saveManualItem({ name: "Camisa", url: "https://shop.test/shirt", unitPriceCents: 3_058, personId: "alice", quantity: 1 });

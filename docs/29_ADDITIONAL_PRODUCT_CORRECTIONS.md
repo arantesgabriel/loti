@@ -11,9 +11,12 @@ dados e pagamento observado → informar motivo → conferir a prévia →
 confirmar correção. A interface usa o mesmo `ProductCostActions` dos produtos
 originais, tanto na tabela quanto nos cartões mobile.
 
-São editáveis nome, link, variação, observações, quantidade, totais CNY de
-produto/China, modalidade/proporções entre as pessoas originais e fontes do
-pagamento. CNY é total da linha, não preço unitário. Saldo carrega a base BRL
+São editáveis nome, link, variação, observações, quantidade, preço do produto em
+CNY, frete China total, modalidade/proporções entre as pessoas originais e fontes do
+pagamento. O formulário usa preço por unidade por padrão e mostra quantidade ×
+preço = total; permite informar explicitamente o total das unidades. O frete China
+é sempre o total da linha. API e persistência continuam recebendo totais CNY.
+Saldo carrega a base BRL
 histórica; principal externo, conversão efetiva e taxa são informados novamente.
 Saldo alheio exige direcionamento explícito. Participantes originais são mantidos.
 
@@ -105,3 +108,42 @@ Não registrar correções reais automaticamente.
 Sem publicação, migração remota, alteração de contas/saldos reais ou
 configuração de infraestrutura. A migração do ambiente utilizado pelo usuário
 permanece um passo operacional explícito antes de ativar este código.
+
+### Correção de preço por unidade — 20 de outubro de 2026
+
+Inclusão, edição de rascunho e correção paga compartilham a entrada de preço:
+duas unidades a ¥18,06 geram produto total ¥36,12, somado ao frete China total
+informado. A composição explicita unitário, quantidade e total. A conversão usa
+inteiros/BigInt com limite financeiro; pagamento, saldo, rateio e refunds continuam
+consumindo os totais existentes, sem multiplicação adicional no domínio.
+
+Ao reabrir um registro, um total divisível pela quantidade recupera o unitário
+exato; os demais abrem no modo total, preservando cada centavo. Trocar para
+unitário quando não há divisão exata exige informar um novo preço. Nenhum dado
+antigo é recalculado automaticamente; corrigir valores reais exige o fluxo pago
+motivado e a confirmação do pagamento observado. Produtos normais mantêm seus
+cálculos unitários. Esta mudança não exige schema/migração ou publicação.
+
+O drawer de inclusão também permanece montado quando o primeiro produto é
+confirmado em um acompanhamento sem unidades restantes (por cancelamentos),
+permitindo continuar para a associação ao pacote. O teste de saldo usa a
+composição agrupada de reembolsos da interface atual.
+
+Validação local desta correção: typecheck, lint e build passaram; 44 testes
+direcionados passaram. A suíte completa executou 381 testes: 372 passaram,
+7 foram ignorados e 2 falharam com SQLite BUSY nos cenários multiprocesso
+de correção paga e descarte de conta (`purchase-order-corrections.test.ts` e
+`hubbuy-account-deletion-concurrency.test.ts`). Esses serviços não foram
+alterados por esta correção; o primeiro já falhava na investigação. Não
+considerar o gate global aprovado enquanto essas pendências persistirem.
+
+Chromium: `additional-product-edit.spec.ts` e `hubbuy-balance.spec.ts` passaram
+com o build local de produção e bancos descartáveis exclusivos. Cobertura:
+preço total histórico não divisível, cancelamento sem escrita, correção paga,
+2 × ¥18,06, alternância unitário/total, edição de rascunho para 3 e 2 unidades,
+pagamento misto, recarga, preservação da cobrança original e associação do
+primeiro produto após cancelamentos. Seletores antigos de reembolso/etiqueta
+foram alinhados à interface atual. Capturas inspecionadas em
+`artifacts/qa/additional-product-edit/unit-price-{320,390,1440}.png` e
+`correction-preview-{desktop,mobile}.png`; sem overflow nos tamanhos verificados.
+Nenhuma publicação, migração ou alteração de dados reais foi executada.

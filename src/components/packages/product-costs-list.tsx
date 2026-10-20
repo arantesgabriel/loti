@@ -9,6 +9,7 @@ import { QcGalleryButton } from "@/components/qc/qc-components";
 import type { CostTrackingView } from "@/lib/domain/package-cost-reading";
 import { formatMoney } from "@/lib/domain/money";
 import { formatCnyMinor } from "@/lib/domain/financial-money";
+import { productPriceSummary } from "@/lib/domain/additional-product-pricing";
 import "./product-costs.css";
 
 type Detail = CostTrackingView;
@@ -272,11 +273,13 @@ function RowComposition({
       {item.additional && (
         <p className="cost-inline-note">
           Produto{" "}
-          {nativeAmountLabel(
+          {item.additional.cost.nativeProductState === "known" && item.additional.cost.nativeProductCnyMinor !== null
+            ? productPriceSummary(item.additional.cost.nativeProductCnyMinor, item.quantity)
+            : nativeAmountLabel(
             item.additional.cost.nativeProductState,
             item.additional.cost.nativeProductCnyMinor,
           )}{" "}
-          · Frete China{" "}
+          · Frete China total{" "}
           {nativeAmountLabel(
             item.additional.cost.nativeChinaState,
             item.additional.cost.nativeChinaCnyMinor,
@@ -353,8 +356,8 @@ export function ProductCostsList(props: Props) {
   const operationalSubtotal = combineDisplayMoney(rows.map(item => item.display.remaining.total));
   if (!rows.length)
     return (
-      <>
-        <div className="cost-products-toolbar">{props.toolbar}</div>
+      <div className="cost-hybrid-products">
+        <div className="cost-products-toolbar"><div key="actions">{props.toolbar}</div></div>
         <div className="cost-products-empty">
           <p className="muted cost-empty-note">
             {detail.financialDisplay.refundGroups.length
@@ -363,7 +366,7 @@ export function ProductCostsList(props: Props) {
           </p>
           {detail.financialDisplay.refundGroups[0] && <Button variant="outline" onClick={() => props.onRefundDetails(detail.financialDisplay.refundGroups[0].costItemId)}>Ver reembolsos</Button>}
         </div>
-      </>
+      </div>
     );
   return (
     <div className="cost-hybrid-products">
@@ -372,7 +375,7 @@ export function ProductCostsList(props: Props) {
           {rows.length} {rows.length === 1 ? "produto" : "produtos"} · {remainingUnits} {remainingUnits === 1 ? "unidade" : "unidades"} no pedido
           <span>Abra a composição para consultar custos e ações.</span>
         </p>
-        <div>{props.toolbar}</div>
+        <div key="actions">{props.toolbar}</div>
       </div>
       <div className="cost-table-wrap">
         <table className="cost-table cost-compact-table">
