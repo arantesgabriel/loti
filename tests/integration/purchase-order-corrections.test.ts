@@ -3,6 +3,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
+import { hubbuyBalanceConsumptions } from "@/lib/db/schema";
 import { financialOperations, hubbuyAccounts, hubbuyBalanceEntries, hubbuyExternalItems, purchaseAdditionalOrderItems, purchaseCostOrders, purchaseItemCosts, purchaseOrderCorrections, purchasePackageItems, purchasePaymentAllocations, purchasePaymentComponents, qcAdditionalPresentations } from "@/lib/db/schema";
 import { hubbuyBalanceServices } from "@/lib/domain/hubbuy-balance-services";
 import { packageCostServices } from "@/lib/domain/package-cost-services";
@@ -102,6 +103,40 @@ describe("paid additional order corrections", () => {
     expect(detail.calculation.summary.shippingUnits).toBe(2);
     expect(detail.calculation.summary.partialCents).toBe(3_897 + 1_542);
     expect(detail.productsCharge).toEqual(s.originalCharge);
+  });
+
+  it("corrects China freight after product funding exhausts an earlier credit lot", async () => {
+    const s = await setup();
+    const first = await s.service.correctAdditionalOrder(s.trackingId, s.orderId, s.input);
+    const detail = await s.service.getTracking(s.trackingId);
+    const order = detail.productOrders.find(row => row.id === first.replacementOrderId)!;
+    const balance = await s.accounts.getAccountBalance(s.accountId);
+    const input = {
+      ...s.input,
+      idempotencyKey: "correct-freight-across-lots",
+      expectedRevision: detail.tracking.revision,
+      expectedAccountRevision: balance.account.revision,
+      itemId: order.items[0].cost.id,
+      nativeChinaCnyMinor: 100,
+    };
+    const preview = await s.service.correctAdditionalOrder(s.trackingId, order.id, input, true);
+    expect(preview).toMatchObject({ balanceBeforeCnyMinor: 500, balanceAfterCnyMinor: 400, historicalBrlCents: 1_619, feeBrlCents: 0 });
+    expect((await s.accounts.getAccountBalance(s.accountId)).ledgerBalanceCnyMinor).toBe(500);
+    const result = await s.service.correctAdditionalOrder(s.trackingId, order.id, input);
+    expect(result).toMatchObject({ balanceAfterCnyMinor: 400, historicalBrlCents: 1_619 });
+    const corrected = await s.service.getTracking(s.trackingId);
+    const replacement = corrected.productOrders.find(row => row.id === result.replacementOrderId)!;
+    const allocations = await f.db.select().from(purchasePaymentAllocations).all();
+    const consumptionRows = await f.db.select().from(hubbuyBalanceConsumptions).all();
+    const replacementIds = new Set(allocations.filter(row => row.costItemId === replacement.items[0].cost.id).map(row => row.id));
+    const used = consumptionRows.filter(row => replacementIds.has(row.paymentAllocationId!));
+    expect(used).toHaveLength(3);
+    expect(used.every(row => row.amountCnyMinor > 0)).toBe(true);
+    expect(used.reduce((sum, row) => sum + row.amountCnyMinor, 0)).toBe(2_100);
+    expect(used.reduce((sum, row) => sum + row.historicalBrlCents, 0)).toBe(1_619);
+    expect(await s.accounts.getAccountBalance(s.accountId)).toMatchObject({ reconciled: true, ledgerBalanceCnyMinor: 400, rights: [{ personId: "alice", availableCnyMinor: 400, availableHistoricalBrlCents: 308 }] });
+    expect(corrected.productsCharge).toEqual(s.originalCharge);
+    await expect(s.service.correctAdditionalOrder(s.trackingId, order.id, input)).resolves.toMatchObject({ replayed: true, replacementOrderId: result.replacementOrderId });
   });
 
   it("rejects foreign access, stale versions, invalid composition and insufficient funds without partial writes", async () => {

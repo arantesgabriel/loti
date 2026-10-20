@@ -86,6 +86,30 @@ describe("HubBuy balance calculations", () => {
     expect([first.historicalBrlCents, second.historicalBrlCents, last.historicalBrlCents]).toEqual([1, 1, 0]);
   });
 
+  it("skips exhausted FIFO lots when a later component consumes the remaining balance", () => {
+    const lots = [
+      { creditId: "old", sequence: 0, availableCnyMinor: 500, availableHistoricalBrlCents: 385 },
+      { creditId: "compensation", sequence: 1, availableCnyMinor: 2_000, availableHistoricalBrlCents: 1_542 },
+    ];
+    const product = previewFifoConsumption(2_000, lots);
+    for (const used of product.consumptions) {
+      const lot = lots.find(row => row.creditId === used.creditId)!;
+      lot.availableCnyMinor -= used.cnyMinor;
+      lot.availableHistoricalBrlCents -= used.historicalBrlCents;
+    }
+    const freight = previewFifoConsumption(100, lots);
+    expect(freight).toEqual({
+      consumptions: [{ creditId: "compensation", sequence: 1, cnyMinor: 100, historicalBrlCents: 77 }],
+      consumedCnyMinor: 100,
+      historicalBrlCents: 77,
+    });
+    expect(previewFifoConsumption(0, lots).consumptions).toEqual([]);
+    expect(previewFifoConsumption(400, [
+      { creditId: "exhausted", sequence: 0, availableCnyMinor: 0, availableHistoricalBrlCents: 0 },
+      { creditId: "zero-brl", sequence: 1, availableCnyMinor: 400, availableHistoricalBrlCents: 0 },
+    ]).consumptions).toEqual([{ creditId: "zero-brl", sequence: 1, cnyMinor: 400, historicalBrlCents: 0 }]);
+  });
+
   it("allocates a refund proportionally across source capacities without exceeding them", () => {
     expect(allocateRefundAcrossSources(25_000, [
       { id: "balance", order: 0, remainingRefundableCnyMinor: 30_000, remainingHistoricalBrlCents: 21_000 },

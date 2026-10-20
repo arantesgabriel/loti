@@ -243,6 +243,8 @@ export function previewFifoConsumption(amountCnyMinor: number, eligibleLots: Ava
   const consumptions: { creditId: string; sequence: number; cnyMinor: number; historicalBrlCents: number }[] = [];
   for (const lot of lots) {
     if (remaining === 0) break;
+    // Earlier payment components may have exhausted this lot in the same transaction.
+    if (lot.availableCnyMinor === 0) continue;
     const cnyMinor = Math.min(remaining, lot.availableCnyMinor);
     const historicalBrlCents = cnyMinor === lot.availableCnyMinor
       ? lot.availableHistoricalBrlCents
