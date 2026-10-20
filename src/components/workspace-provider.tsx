@@ -3,6 +3,7 @@ import { useRouter } from "next/navigation";
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
 import { toast, Toaster } from "sonner";
 import type { ClientData } from "@/lib/domain/services";
+import { qcScope, resetQcClient, setQcClientScope } from "@/components/qc/qc-client-state";
 export type Operation = "favorite.save" | "favorite.delete" | "collection.save" | "collection.delete" | "preference.view" | "purchase.save" | "purchase.finalize" | "item.favorite" | "item.save" | "item.delete" | "item.status" | "item.status.person";
 type RefreshResult = "success" | "unauthenticated" | "unavailable";
 type Workspace = { data: ClientData; busy: boolean; mutate: (operation: Operation, input?: unknown, id?: string, message?: string) => Promise<boolean>; refresh: () => Promise<RefreshResult>; updateProfileName: (name: string) => Promise<RefreshResult> };
@@ -11,11 +12,15 @@ export function WorkspaceProvider({ initialData, children }: { initialData: Clie
   const router = useRouter();
   const [data, setData] = useState(initialData), [busy, setBusy] = useState(false);
   const dataVersion = useRef(0);
+  useEffect(() => {
+    setQcClientScope(qcScope(data.currentUser.id, data.workspaceId));
+    return resetQcClient;
+  }, [data.currentUser.id, data.workspaceId]);
   const refresh = useCallback(async (): Promise<RefreshResult> => {
     const version = ++dataVersion.current;
     try {
       const response = await fetch("/api/app", { cache: "no-store" });
-      if (response.status === 401) { router.replace("/login?reason=session-expired"); router.refresh(); return "unauthenticated"; }
+      if (response.status === 401) { resetQcClient(); router.replace("/login?reason=session-expired"); router.refresh(); return "unauthenticated"; }
       if (!response.ok) return "unavailable";
       const nextData = await response.json() as ClientData;
       if (version === dataVersion.current) setData(nextData);
@@ -37,7 +42,7 @@ export function WorkspaceProvider({ initialData, children }: { initialData: Clie
     try {
       const response = await fetch("/api/app", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ operation, input, id }) });
       const result = await response.json();
-      if (!response.ok) { toast.error(result.error ?? "Não foi possível salvar."); if (response.status === 401) router.replace("/login"); router.refresh(); return false; }
+      if (!response.ok) { toast.error(result.error ?? "Não foi possível salvar."); if (response.status === 401) { resetQcClient(); router.replace("/login"); } router.refresh(); return false; }
       dataVersion.current += 1; setData(result.data); toast.success(message); return true;
     } catch { toast.error("Não foi possível conectar. Tente novamente."); return false; } finally { setBusy(false); }
   }

@@ -1,4 +1,5 @@
 "use client";
+import { resetQcClient } from "@/components/qc/qc-client-state";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -36,7 +37,7 @@ export function InviteScreen({ token }: { token: string }) {
   }
   async function switchAccount() {
     setBusy(true); setError("");
-    try { const result = await authClient.signOut(); if (result.error) { setError("Não foi possível sair. Tente novamente."); return; } router.replace(loginLink); router.refresh(); }
+    try { const result = await authClient.signOut(); if (result.error) { setError("Não foi possível sair. Tente novamente."); return; } resetQcClient(); router.replace(loginLink); router.refresh(); }
     catch { setError("Não foi possível conectar. Tente novamente."); }
     finally { setBusy(false); }
   }

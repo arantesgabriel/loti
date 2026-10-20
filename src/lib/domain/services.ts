@@ -39,7 +39,7 @@ export function createServices(db: AppDatabase, userId: string) {
       return { ...item, participants: stored.map((participant, index) => ({ ...participant, shareCents: allocation.participants[index].amountCents })) };
     });
     return {
-      currentUser, members, favorites: favoriteRows, collections: collectionRows,
+      workspaceId, currentUser, members, favorites: favoriteRows, collections: collectionRows,
       purchases: allPurchases, items, view: preference?.favoritesView ?? "list" as "list" | "cards",
     };
   }
