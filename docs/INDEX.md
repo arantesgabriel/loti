@@ -37,6 +37,7 @@ Authentication email extension: [`31_AUTH_EMAIL_SECURITY_PLAN.md`](31_AUTH_EMAIL
 | `28_HUBBUY_ACCOUNT_DELETION_PLAN.md` | Logical deletion of unused HubBuy accounts, retained audit, concurrency guards and local validation |
 | `30_REFUNDS_FINANCIAL_READABILITY_PLAN.md` | Approved handoff for remaining-product costs, grouped refund tables, retained cancellation costs and progressive payment history |
 | `32_QC_IMPORT_PERFORMANCE_PLAN.md` | Phased execution plan for bounded QC import pipelines, five-photo batches, preview byte reuse, grouped persistence, automatic continuation and synthetic benchmarks |
+| `33_QC_VIEWER_PERFORMANCE_PLAN.md` | Implementation plan for private QC preview caching, conditional HTTP revalidation, batched presentation reads, visibility-based loading and performance validation |
 | `audits/2026-10-17_HUBBUY_BALANCE_AND_MIXED_PAYMENTS.md` | Technical and functional investigation supporting the HubBuy balance and mixed-payment proposal |
 | `design/REFERENCES.md` | Figma and palette inspiration URLs |
 | `design/PACKAGES_AND_COSTS_REFERENCES.md` | Approved A/B/C/D visual references, images and acceptance for Pacotes e custos |
