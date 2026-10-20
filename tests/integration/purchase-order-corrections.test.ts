@@ -72,7 +72,7 @@ describe("paid additional order corrections", () => {
     expect(await f.db.select().from(purchaseItemCosts).where(eq(purchaseItemCosts.id, oldCost!.id)).get()).toEqual(oldCost);
     expect(await f.db.select().from(purchasePaymentComponents).where(eq(purchasePaymentComponents.orderId, s.orderId)).all()).toEqual(oldComponents);
     expect((await f.db.select().from(purchasePaymentAllocations).all()).filter(row => oldAllocations.some(old => old.id === row.id))).toEqual(oldAllocations);
-    expect(await s.accounts.getAccountBalance(s.accountId)).toMatchObject({ reconciled: true, ledgerBalanceCnyMinor: 500, rights: [{ personId: "alice", availableCnyMinor: 500, availableHistoricalBrlCents: 385 }] });
+    expect(await s.accounts.getAccountBalance(s.accountId)).toMatchObject({ reconciled: true, ledgerBalanceCnyMinor: 500, rights: [{ personId: "alice", availableCnyMinor: 500, availableHistoricalBrlCents: 385, origins: [{ kind: "restored_balance", label: "Saldo restaurado por correção", trackingId: null, availableCnyMinor: 500, availableHistoricalBrlCents: 385 }] }] });
     await expect(s.service.correctAdditionalOrder(s.trackingId, s.orderId, s.input)).resolves.toMatchObject({ replacementOrderId: result.replacementOrderId, replayed: true });
     await expect(s.service.correctAdditionalOrder(s.trackingId, s.orderId, { ...s.input, reason: "Outro motivo" })).rejects.toMatchObject({ code: "IDEMPOTENCY_CONFLICT" });
     expect(await f.db.select().from(purchaseOrderCorrections).all()).toHaveLength(1);

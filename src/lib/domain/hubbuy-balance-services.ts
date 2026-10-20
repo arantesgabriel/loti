@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, asc, eq, gt, inArray, isNull, lte } from "drizzle-orm";
+import { and, asc, eq, getTableColumns, gt, inArray, isNull, lte } from "drizzle-orm";
 import { z } from "zod";
 import type { AppDatabase } from "../db/connection";
 import {
@@ -17,6 +17,8 @@ import type { CostTransaction } from "./purchase-cost-initialization";
 import { serializeDomainTransaction } from "./transaction-lock";
 import { previewFifoConsumption } from "./hubbuy-balance-calculations";
 import { accountDeletionBlockCode, accountDeletionBlockMessage, accountDiscardEligible } from "./hubbuy-account-lifecycle";
+import { presentIndividualRights, type AvailableCreditShare } from "./hubbuy-rights-presentation";
+import { readRefundProductOrigins } from "./hubbuy-rights-reading";
 
 const MAX_MINOR = 1_000_000_000_000;
 const minorSchema = z.number().int().min(0).max(MAX_MINOR);
@@ -111,14 +113,14 @@ async function calculateLedgerState(tx: Transaction, account: Account) {
   const entries = await tx.select().from(hubbuyBalanceEntries)
     .where(eq(hubbuyBalanceEntries.accountId, account.id))
     .orderBy(asc(hubbuyBalanceEntries.sequence)).all();
-  const creditIds = entries.filter(entry => entry.direction === "credit").map(entry => entry.id);
-  const shares = creditIds.length
-    ? await tx.select().from(hubbuyBalanceCreditShares).where(inArray(hubbuyBalanceCreditShares.creditEntryId, creditIds)).orderBy(asc(hubbuyBalanceCreditShares.allocationOrder)).all()
-    : [];
-  const shareIds = shares.map(share => share.id);
-  const consumptions = shareIds.length
-    ? await tx.select().from(hubbuyBalanceConsumptions).where(inArray(hubbuyBalanceConsumptions.creditShareId, shareIds)).all()
-    : [];
+  const shares = await tx.select(getTableColumns(hubbuyBalanceCreditShares)).from(hubbuyBalanceCreditShares)
+    .innerJoin(hubbuyBalanceEntries, eq(hubbuyBalanceEntries.id, hubbuyBalanceCreditShares.creditEntryId))
+    .where(and(eq(hubbuyBalanceEntries.accountId, account.id), eq(hubbuyBalanceEntries.direction, "credit")))
+    .orderBy(asc(hubbuyBalanceCreditShares.allocationOrder)).all();
+  const consumptions = await tx.select(getTableColumns(hubbuyBalanceConsumptions)).from(hubbuyBalanceConsumptions)
+    .innerJoin(hubbuyBalanceCreditShares, eq(hubbuyBalanceCreditShares.id, hubbuyBalanceConsumptions.creditShareId))
+    .innerJoin(hubbuyBalanceEntries, eq(hubbuyBalanceEntries.id, hubbuyBalanceCreditShares.creditEntryId))
+    .where(and(eq(hubbuyBalanceEntries.accountId, account.id), eq(hubbuyBalanceEntries.direction, "credit"))).all();
   const signedBalance = entries.reduce((sum, entry) => sum + (entry.direction === "credit" ? BigInt(entry.amountCnyMinor) : -BigInt(entry.amountCnyMinor)), 0n);
   if (signedBalance < 0n || signedBalance > BigInt(MAX_MINOR)) throw new DomainError("O ledger da conta está divergente ou negativo.", 409, "BALANCE_RECONCILIATION_REQUIRED");
   const sharesByCredit = new Map<string, typeof shares>();
@@ -144,16 +146,20 @@ async function calculateLedgerState(tx: Transaction, account: Account) {
     }
   }
   const balances = new Map<string, { personId: string; availableCnyMinor: bigint; availableHistoricalBrlCents: bigint }>();
+  const availableShares: AvailableCreditShare[] = [];
   for (const share of shares) {
     const consumed = consumedByShare.get(share.id) ?? { cny: 0n, brl: 0n };
     const availableCnyMinor = BigInt(share.amountCnyMinor) - consumed.cny;
     const availableHistoricalBrlCents = BigInt(share.historicalBrlCents) - consumed.brl;
     if (availableCnyMinor < 0n || availableHistoricalBrlCents < 0n) throw new DomainError("O consumo excedeu os direitos de um lote.", 409, "BALANCE_RECONCILIATION_REQUIRED");
+    if (availableCnyMinor === 0n && availableHistoricalBrlCents > 0n) reconciled = false;
+    availableShares.push({ id: share.id, creditEntryId: share.creditEntryId, personId: share.personId, availableCnyMinor: Number(availableCnyMinor), availableHistoricalBrlCents: Number(availableHistoricalBrlCents) });
     const current = balances.get(share.personId) ?? { personId: share.personId, availableCnyMinor: 0n, availableHistoricalBrlCents: 0n };
     current.availableCnyMinor += availableCnyMinor;
     current.availableHistoricalBrlCents += availableHistoricalBrlCents;
     balances.set(share.personId, current);
   }
+  if ([...balances.values()].reduce((sum, row) => sum + row.availableCnyMinor, 0n) !== signedBalance) reconciled = false;
   return {
     ledgerBalanceCnyMinor: Number(signedBalance),
     reconciled,
@@ -161,6 +167,7 @@ async function calculateLedgerState(tx: Transaction, account: Account) {
     entries,
     shares,
     consumptions,
+    availableShares,
   };
 }
 
@@ -535,13 +542,15 @@ export function hubbuyBalanceServices(db: AppDatabase, userId: string) {
     return db.transaction(async tx => {
       const account = await requireAccount(tx, userId, accountId);
       const state = await calculateLedgerState(tx, account);
+      const remainingCreditIds = new Set(state.availableShares.filter(share => share.availableCnyMinor !== 0 || share.availableHistoricalBrlCents !== 0).map(share => share.creditEntryId));
+      const products = await readRefundProductOrigins(tx, account, state.entries.filter(entry => entry.sourceType === "refund_received" && remainingCreditIds.has(entry.id)).map(entry => entry.sourceId));
       const reconciliation = await tx.select().from(hubbuyReconciliationRuns).where(eq(hubbuyReconciliationRuns.accountId, accountId)).get();
       const reconciliationEvents = await tx.select().from(hubbuyReconciliationEvents).where(eq(hubbuyReconciliationEvents.accountId, accountId)).orderBy(asc(hubbuyReconciliationEvents.occurredAt), asc(hubbuyReconciliationEvents.recordedAt)).all();
       return {
         account,
         ledgerBalanceCnyMinor: state.ledgerBalanceCnyMinor,
         reconciled: state.reconciled && state.ledgerBalanceCnyMinor === account.balanceCnyMinor,
-        rights: state.rights,
+        rights: presentIndividualRights(state.rights, state.availableShares, state.entries, products),
         reconciliation: reconciliation ? { ...reconciliation, events: reconciliationEvents } : null,
       };
     });

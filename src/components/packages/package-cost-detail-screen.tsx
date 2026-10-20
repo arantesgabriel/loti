@@ -10,6 +10,7 @@ import {
   CircleCheck,
   LockKeyhole,
   MoreVertical,
+  Minus,
   Package,
   Pencil,
   Plus,
@@ -40,6 +41,7 @@ import { AdditionalProductEditor } from "./additional-product-editor";
 import "./purchase-cost-header.css";
 import "./package-cost-layout.css";
 import "./package-cost-v4.css";
+import "./package-content-editor.css";
 import { RefundsSection } from "./refunds-section";
 import {
   AdditionalOrdersPanel,
@@ -1734,10 +1736,10 @@ function PackageCard({
     }
   }
 
-  function updateAllocation(itemId: string, maximum: number, value: string) {
+  function updateAllocation(itemId: string, maximum: number, value: number) {
     setAllocationDraft((current) => ({
       ...current,
-      [itemId]: Math.min(maximum, Math.max(0, Number(value) || 0)),
+      [itemId]: Math.min(maximum, Math.max(1, value)),
     }));
   }
 
@@ -1769,6 +1771,21 @@ function PackageCard({
   }
   const packageActions = !locked && (
     <div className="cost-package-header-actions">
+      <div className="cost-package-direct-actions">
+        <Button variant="outline" size="sm" disabled={busy} onClick={editPackage}>
+          <Pencil size={15} aria-hidden="true" />Editar pacote
+        </Button>
+        <Button variant="outline" size="sm" disabled={busy || contentSealed} onClick={editContent} data-cost-target={`package-content-${pkg.id}`}>
+          <Package size={15} aria-hidden="true" />{contentSealed ? "Conteúdo selado" : "Editar conteúdo"}
+        </Button>
+        {contentSealed && pkg.logisticsStatus === "preparing" && (
+          <Button variant="ghost" size="sm" disabled={busy} onClick={() => { setUnsealReason(""); setUnsealOpen(true); }}>Reabrir conteúdo com motivo</Button>
+        )}
+        {canDeleteEmptyPackage && (
+          <Button variant="ghost" size="sm" disabled={busy} onClick={() => setRemoveConfirmOpen(true)}><Trash2 size={15} aria-hidden="true" />Excluir pacote vazio</Button>
+        )}
+      </div>
+      <div className="cost-package-mobile-actions">
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
           <Button
@@ -1820,6 +1837,7 @@ function PackageCard({
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
+      </div>
     </div>
   );
   return (
@@ -1998,6 +2016,7 @@ function PackageCard({
       <Surface
         sheet
         open={allocationEditorOpen}
+        className="cost-package-content-editor"
         title="Editar conteúdo"
         subtitle={pkg.name}
         description="Distribua as unidades físicas. O restante continua disponível nos outros pacotes."
@@ -2007,7 +2026,7 @@ function PackageCard({
       >
         <form onSubmit={(event) => void saveContent(event)}>
           <div className="cost-allocation-edit-list">
-            {allocationLines.map((item) => {
+            {allocationLines.filter(item => item.shippingQuantity > 0 && (allocationDraft[item.id] ?? 0) > 0).map((item) => {
               const inOtherPackages = detail.packages
                 .filter((other) => other.id !== pkg.id)
                 .reduce(
@@ -2035,25 +2054,23 @@ function PackageCard({
                       {maximum - quantity}
                     </small>
                   </span>
-                  <label>
-                    Unidades neste pacote
-                    <input
-                      aria-label={`${item.name} neste pacote`}
-                      type="number"
-                      min="0"
-                      max={maximum}
-                      step="1"
-                      disabled={busy}
-                      value={quantity}
-                      onChange={(event) =>
-                        updateAllocation(item.id, maximum, event.target.value)
-                      }
-                    />
-                  </label>
+                  <div className="cost-allocation-controls">
+                    <span id={`allocation-label-${pkg.id}-${item.id}`}>Unidades neste pacote</span>
+                    <div className="cost-allocation-control-row">
+                      <div className="cost-allocation-stepper" role="group" aria-labelledby={`allocation-label-${pkg.id}-${item.id}`}>
+                        <Button type="button" variant="ghost" size="icon" aria-label={`Aumentar quantidade de ${item.name}`} disabled={busy || quantity >= maximum} onClick={() => updateAllocation(item.id, maximum, quantity + 1)}><Plus size={16} aria-hidden="true" /></Button>
+                        <output aria-label={`${item.name} neste pacote`} aria-live="polite">{quantity}</output>
+                        <Button type="button" variant="ghost" size="icon" aria-label={`Diminuir quantidade de ${item.name}`} disabled={busy || quantity <= 1} onClick={() => updateAllocation(item.id, maximum, quantity - 1)}><Minus size={16} aria-hidden="true" /></Button>
+                      </div>
+                      <Button type="button" variant="ghost" size="icon" aria-label={`Tirar ${item.name} do pacote`} title="Tirar produto do pacote" disabled={busy} onClick={() => setAllocationDraft(current => ({ ...current, [item.id]: 0 }))}><Trash2 size={17} aria-hidden="true" /></Button>
+                    </div>
+                  </div>
                 </div>
               );
             })}
+            {!allocationLines.some(item => item.shippingQuantity > 0 && (allocationDraft[item.id] ?? 0) > 0) && <p className="muted" role="status">Nenhum produto neste pacote. Inclua as unidades disponíveis ou salve para remover os produtos.</p>}
           </div>
+          <div className="cost-allocation-footer">
           <Button
             className="cost-allocate-remaining"
             type="button"
@@ -2093,6 +2110,7 @@ function PackageCard({
             <Button type="submit" disabled={busy}>
               {busy ? "Salvando…" : "Salvar conteúdo"}
             </Button>
+          </div>
           </div>
         </form>
       </Surface>

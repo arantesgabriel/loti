@@ -160,6 +160,8 @@ describe("package product refunds", () => {
     const requested = await service.requestRefund(tracking.id, { expectedRevision: detail.tracking.revision, costItemId: item.id, quantity: 1, requestedProductCents: 10_000, requestedChinaCents: 0, reason: "Cancelou uma unidade", packageRemovals: [{ packageId: pkg.id, quantity: 1 }], unassignedQuantity: 0 });
     await expect(service.saveItemCosts(tracking.id, { expectedRevision: requested.tracking.revision, itemId: item.id, effectivePriceState: "known", effectivePriceUnitCents: 9_000, chinaFreightState: "known", chinaFreightUnitCents: 1_000 })).rejects.toMatchObject({ code: "REFUND_PRODUCTS_LOCKED" });
     await expect(service.saveAllocations(tracking.id, { expectedRevision: requested.tracking.revision, packageId: pkg.id, allocations: [{ costItemId: item.id, quantity: 2 }] })).rejects.toMatchObject({ code: "REFUND_INELIGIBLE_UNITS" });
+    const received = await service.receiveRefund(tracking.id, requested.refunds[0].id, { expectedRevision: requested.tracking.revision, receivedProductCents: 10_000, receivedChinaCents: 0, confirmed: true });
+    await expect(service.saveAllocations(tracking.id, { expectedRevision: received.tracking.revision, packageId: pkg.id, allocations: [{ costItemId: item.id, quantity: 2 }] })).rejects.toMatchObject({ code: "REFUND_INELIGIBLE_UNITS" });
   });
 
   it("locks composition only for items with an active refund while protecting all original bases", async () => {

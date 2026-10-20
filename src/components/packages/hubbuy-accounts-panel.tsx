@@ -2,18 +2,20 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { Archive, ArrowDown, ArrowUp, ChevronDown, ChevronRight, Coins, FileCheck2, Info, Plus, Search, Trash2, UserRound } from "lucide-react";
+import { Archive, ArrowDown, ArrowUp, ChevronDown, ChevronRight, Coins, Info, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Confirm } from "@/components/ui/surface";
 import type { CostTrackingView } from "@/lib/domain/package-cost-reading";
 import { formatBrlMinor, formatCnyMinor, parseFinancialMinor } from "@/lib/domain/financial-money";
 import { costRequest } from "./package-cost-client";
+import type { IndividualRight } from "@/lib/domain/hubbuy-rights-presentation";
+import { HubBuyIndividualRights } from "./hubbuy-individual-rights";
 import "./hubbuy-accounts.css";
 
 type Detail = CostTrackingView;
 type Account = Detail["hubbuyAccounts"][number] & { canActivateWithZero?: boolean; canDelete?: boolean; canDiscardIncorrectRegistration?: boolean; deletionBlockReason?: string | null };
-type AccountBalance = { account: Account; ledgerBalanceCnyMinor: number; reconciled: boolean; rights: { personId: string; availableCnyMinor: number; availableHistoricalBrlCents: number }[]; reconciliation: null | { mode: "chronological" | "remainder"; priorActivityDescription: string | null; priorActivityOccurredAt: Date | null; events: { id: string; eventType: "legacy_receipt" | "synthetic_use"; description: string; sourceReference: string | null; amountCnyMinor: number; historicalBrlCents: number; occurredAt: Date; recordedAt: Date | null }[] } };
+type AccountBalance = { account: Account; ledgerBalanceCnyMinor: number; reconciled: boolean; rights: IndividualRight[]; reconciliation: null | { mode: "chronological" | "remainder"; priorActivityDescription: string | null; priorActivityOccurredAt: Date | null; events: { id: string; eventType: "legacy_receipt" | "synthetic_use"; description: string; sourceReference: string | null; amountCnyMinor: number; historicalBrlCents: number; occurredAt: Date; recordedAt: Date | null }[] } };
 type Statement = { entries: { id: string; sequence: number; direction: "credit" | "debit"; amountCnyMinor: number; historicalBrlCents: number | null; sourceType: string; occurredAt: Date | null; operationRecordedAt: Date | null; reason: string | null; balanceAfterCnyMinor: number }[]; nextAfterSequence: number | null };
 const localDateTime = () => { const date = new Date(Date.now() - new Date().getTimezoneOffset() * 60_000); return date.toISOString().slice(0, 16); };
 const formatBrlCents = formatBrlMinor;
@@ -304,10 +306,7 @@ export function HubBuyAccountsPanel({ workspaceId, members, initialAccounts }: {
               <span className="hubbuy-balance-brl">{historicalBrl === undefined ? balanceErrors[account.id] ? "Base histórica indisponível" : "Carregando base histórica…" : formatBrlCents(historicalBrl)} <small>· base histórica</small></span>
               <span className="hubbuy-balance-symbol" aria-hidden="true"><Coins size={32} strokeWidth={1.5}/></span>
             </div>
-            <div className="hubbuy-account-facts" aria-busy={!!balanceLoading[account.id]}>
-              <div className="hubbuy-account-fact"><FileCheck2 size={23} aria-hidden="true"/><div><h3>Última revisão</h3><p>Revisão {account.revision} · carteira CNY · ledger {balance ? formatCnyMinor(balance.ledgerBalanceCnyMinor) : balanceErrors[account.id] ? "indisponível" : "carregando…"}</p></div></div>
-              <div className="hubbuy-account-fact"><UserRound size={23} aria-hidden="true"/><div><h3>Direitos individuais</h3>{balance ? balance.rights.length ? balance.rights.map(right => <p key={right.personId}><strong>{members.find(member => member.id === right.personId)?.name ?? "Membro"}</strong><span>{formatCnyMinor(right.availableCnyMinor)} · {formatBrlCents(right.availableHistoricalBrlCents)}</span></p>) : <p>Sem direitos remanescentes.</p> : <p>{balanceErrors[account.id] ? "Direitos indisponíveis." : "Carregando direitos…"}</p>}</div></div>
-            </div>
+            <HubBuyIndividualRights rights={balance?.rights} members={members} loading={!!balanceLoading[account.id]} failed={!!balanceErrors[account.id]} reconciled={!!balance?.reconciled && account.status !== "reconciling"}/>
             {balanceErrors[account.id] && <div className="hubbuy-load-error" role="alert"><p>{balanceErrors[account.id]}</p><Button size="sm" variant="outline" disabled={balanceLoading[account.id]} onClick={() => void loadBalance(account.id)}>Tentar novamente</Button></div>}
             {!account.canDelete && account.deletionBlockReason && <div className="hubbuy-account-notice"><Info size={19} aria-hidden="true"/><p>{account.deletionBlockReason}</p></div>}
             {account.status === "reconciling" && reconcilingId === account.id && <div className="cost-account-reconcile">
