@@ -16,6 +16,7 @@ import { validateHubbuySourceUrl } from "../qc/download";
 import { generateQcPreview, QC_PREVIEW, type GeneratedQcPreview } from "../qc/preview";
 import { measureQcStage, noopQcMetrics, withQcMetricContext, type QcMetricCollector } from "../qc/metrics";
 import { FifoSemaphore, SerialQueue, withQcDatabaseQueueContext } from "../qc/concurrency";
+import { matchesQcEtag, qcPreviewEtag, qcPreviewVersion } from "../qc/preview-http";
 
 type ManagerConfig = { managerId?: string | null; storage?: QcStorage; download?: typeof downloadHubbuyImage; validate?: typeof validateQcImage; makePreview?: typeof generateQcPreview; now?: () => number; metrics?: QcMetricCollector; pipelineConcurrency?: number; sleep?: (ms: number) => Promise<void>; random?: () => number; signal?: AbortSignal };
 type QcRestoreSnapshot = { imageId: string; revision: number; r2Key: string; sourceUrlHash: string; contentSha256: string | null; preview: { revision: number; r2Key: string } | null };
@@ -119,7 +120,11 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
     return source.select({ id: purchaseAdditionalOrderItems.id }).from(purchaseAdditionalOrderItems)
       .innerJoin(purchaseCostOrders, eq(purchaseAdditionalOrderItems.orderId, purchaseCostOrders.id))
       .innerJoin(purchaseCostTrackings, eq(purchaseCostOrders.trackingId, purchaseCostTrackings.id))
-      .where(and(eq(purchaseAdditionalOrderItems.id, target.id), eq(purchaseCostOrders.kind, "additional"), eq(purchaseCostOrders.state, "recorded"), sql`NOT EXISTS (SELECT 1 FROM ${purchaseOrderCorrections} WHERE ${purchaseOrderCorrections.previousOrderId} = ${purchaseCostOrders.id})`, eq(purchaseCostTrackings.purchaseId, purchaseId))).get();
+      .where(and(eq(purchaseAdditionalOrderItems.id, target.id), additionalTargetCondition(purchaseId))).get();
+  }
+
+  function additionalTargetCondition(purchaseId: string) {
+    return and(eq(purchaseCostOrders.kind, "additional"), eq(purchaseCostOrders.state, "recorded"), sql`NOT EXISTS (SELECT 1 FROM ${purchaseOrderCorrections} WHERE ${purchaseOrderCorrections.previousOrderId} = ${purchaseCostOrders.id})`, eq(purchaseCostTrackings.purchaseId, purchaseId));
   }
 
   async function rate(purchaseId: string, operation: QcRateOperation) {
@@ -318,55 +323,65 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
       ? await db.select({ revision: qcPresentations.revision, imageId: sql<string | null>`CASE WHEN ${hubbuyExternalItems.id} IS NOT NULL THEN ${qcImages.id} ELSE NULL END` }).from(qcPresentations).leftJoin(qcImages, and(eq(qcPresentations.primaryImageId, qcImages.id), eq(qcImages.status, "ready"), eq(qcImages.deleteState, "none"))).leftJoin(hubbuyExternalItems, and(eq(qcImages.externalItemId, hubbuyExternalItems.id), eq(hubbuyExternalItems.purchaseId, purchaseId), eq(hubbuyExternalItems.purchaseItemId, target.id))).where(eq(qcPresentations.purchaseItemId, target.id)).get()
       : await db.select({ revision: qcAdditionalPresentations.revision, imageId: sql<string | null>`CASE WHEN ${hubbuyExternalItems.id} IS NOT NULL THEN ${qcImages.id} ELSE NULL END` }).from(qcAdditionalPresentations).leftJoin(qcImages, and(eq(qcAdditionalPresentations.primaryImageId, qcImages.id), eq(qcImages.status, "ready"), eq(qcImages.deleteState, "none"))).leftJoin(hubbuyExternalItems, and(eq(qcImages.externalItemId, hubbuyExternalItems.id), eq(hubbuyExternalItems.purchaseId, purchaseId), eq(hubbuyExternalItems.additionalOrderItemId, target.id))).where(eq(qcAdditionalPresentations.additionalOrderItemId, target.id)).get();
     const imageIds = rows.map(row => row.image.id);
-    const previews = imageIds.length ? await db.select({ imageId: qcImagePreviews.imageId }).from(qcImagePreviews).where(and(inArray(qcImagePreviews.imageId, imageIds), eq(qcImagePreviews.status, "ready"), eq(qcImagePreviews.deleteState, "none"))).all() : [];
-    const previewIds = new Set(previews.map(row => row.imageId));
+    const previews = imageIds.length ? await db.select().from(qcImagePreviews).where(and(inArray(qcImagePreviews.imageId, imageIds), eq(qcImagePreviews.status, "ready"), eq(qcImagePreviews.deleteState, "none"))).all() : [];
+    const previewVersions = new Map(previews.map(row => [row.imageId, qcPreviewVersion(row)]));
     const manage = !!managerId && managerId === userId;
-    return { itemId: target.key, pageOffset: offset, totalCount, presentationRevision: presentation?.revision ?? 0, primaryImageId: presentation?.imageId ?? null, canSetCover: manage, images: rows.map(row => ({ id: row.image.id, previewUrl: previewIds.has(row.image.id) ? `/api/qc/images/${encodeURIComponent(row.image.id)}/preview` : null, width: row.image.width, height: row.image.height, occurrence: row.occurrence })), nextOffset: offset + rows.length < totalCount ? offset + rows.length : null };
+    return { itemId: target.key, pageOffset: offset, totalCount, presentationRevision: presentation?.revision ?? 0, primaryImageId: presentation?.imageId ?? null, canSetCover: manage, images: rows.map(row => ({ id: row.image.id, previewVersion: previewVersions.get(row.image.id) ?? null, previewUrl: previewVersions.has(row.image.id) ? `/api/qc/images/${encodeURIComponent(row.image.id)}/preview?v=${previewVersions.get(row.image.id)}` : null, width: row.image.width, height: row.image.height, occurrence: row.occurrence })), nextOffset: offset + rows.length < totalCount ? offset + rows.length : null };
   }
 
   async function getQcPresentations(purchaseId: string, itemIds: string[]) {
     await authorizedPurchase(purchaseId);
-    if (!Array.isArray(itemIds) || itemIds.length > 20 || itemIds.some(id => typeof id !== "string" || !id || id.length > 200) || new Set(itemIds).size !== itemIds.length) throw new DomainError("A solicitação de capas QC deve conter até 20 produtos distintos.", 400, "QC_PRESENTATION_BATCH_INVALID");
-    if (!itemIds.length) return { purchaseId, items: [] };
-    const owned = await db.select({ id: purchaseItems.id }).from(purchaseItems).where(and(eq(purchaseItems.purchaseId, purchaseId), inArray(purchaseItems.id, itemIds))).all();
-    if (owned.length !== itemIds.length) throw new DomainError("Um produto não pertence a esta compra.", 404, "QC_ITEM_NOT_FOUND");
-    const counts = await db.select({ itemId: hubbuyExternalItems.purchaseItemId, total: count() }).from(qcImages).innerJoin(hubbuyExternalItems, eq(qcImages.externalItemId, hubbuyExternalItems.id)).where(and(eq(hubbuyExternalItems.purchaseId, purchaseId), inArray(hubbuyExternalItems.purchaseItemId, itemIds), eq(qcImages.status, "ready"), eq(qcImages.deleteState, "none"))).groupBy(hubbuyExternalItems.purchaseItemId).all();
-    const coverRows = await db.select({
-      itemId: qcPresentations.purchaseItemId,
-      revision: qcPresentations.revision,
-      imageId: sql<string | null>`CASE WHEN ${hubbuyExternalItems.id} IS NOT NULL THEN ${qcImages.id} ELSE NULL END`,
-      width: qcImages.width,
-      height: qcImages.height,
-      occurrence: sql<string>`coalesce(${hubbuyExternalItems.skuInfo}, ${hubbuyExternalItems.title}, 'Ocorrência HubBuy')`,
-    }).from(qcPresentations)
-      .leftJoin(qcImages, and(eq(qcPresentations.primaryImageId, qcImages.id), eq(qcImages.status, "ready"), eq(qcImages.deleteState, "none")))
-      .leftJoin(hubbuyExternalItems, and(eq(qcImages.externalItemId, hubbuyExternalItems.id), eq(hubbuyExternalItems.purchaseId, purchaseId), eq(hubbuyExternalItems.purchaseItemId, qcPresentations.purchaseItemId)))
-      .where(inArray(qcPresentations.purchaseItemId, itemIds)).all();
-    const idsSql = sql.join(itemIds.map(id => sql`${id}`), sql`, `);
-    const previewRows = await db.all(sql<{ purchase_item_id: string; image_id: string; width: number | null; height: number | null; occurrence: string }>`WITH ranked AS (
-      SELECT h.purchase_item_id, q.id AS image_id, q.width, q.height, coalesce(h.sku_info, h.title, 'Ocorrência HubBuy') AS occurrence,
-        row_number() OVER (PARTITION BY h.purchase_item_id ORDER BY q.ordinal, q.created_at, q.id) AS row_number
-      FROM qc_images q JOIN hubbuy_external_items h ON h.id = q.external_item_id
-      JOIN qc_image_previews p ON p.image_id = q.id AND p.status = 'ready' AND p.delete_state = 'none'
-      WHERE h.purchase_id = ${purchaseId} AND h.purchase_item_id IN (${idsSql}) AND q.status = 'ready' AND q.delete_state = 'none'
-    ) SELECT purchase_item_id, image_id, width, height, occurrence FROM ranked WHERE row_number <= 3 ORDER BY purchase_item_id, row_number`) as { purchase_item_id: string; image_id: string; width: number | null; height: number | null; occurrence: string }[];
-    const countsByItem = new Map(counts.map(row => [row.itemId!, Number(row.total)]));
-    const covers = new Map(coverRows.map(row => [row.itemId, { revision: row.revision, imageId: row.imageId }]));
-    const coverImageIds = [...new Set(coverRows.flatMap(row => row.imageId ? [row.imageId] : []))];
-    const readyCoverIds = coverImageIds.length ? await db.select({ imageId: qcImagePreviews.imageId }).from(qcImagePreviews).where(and(inArray(qcImagePreviews.imageId, coverImageIds), eq(qcImagePreviews.status, "ready"), eq(qcImagePreviews.deleteState, "none"))).all() : [];
-    const readyCoverIdSet = new Set(readyCoverIds.map(row => row.imageId));
-    const previewsByItem = new Map<string, typeof previewRows>();
-    for (const row of previewRows) {
-      const list = previewsByItem.get(row.purchase_item_id) ?? [];
-      list.push(row); previewsByItem.set(row.purchase_item_id, list);
-    }
-    const canSetCover = !!managerId && managerId === userId;
-    return { purchaseId, items: itemIds.map(itemId => {
-      const previews = previewsByItem.get(itemId) ?? [];
-      const total = countsByItem.get(itemId) ?? 0;
-      const cover = covers.get(itemId);
-      const selectedCover = coverRows.find(row => row.itemId === itemId && row.imageId === cover?.imageId);
-      return { purchaseItemId: itemId, qcCount: total, primaryImageId: cover?.imageId ?? null, presentationRevision: cover?.revision ?? 0, coverPreview: cover?.imageId && readyCoverIdSet.has(cover.imageId) && selectedCover ? { imageId: cover.imageId, previewUrl: `/api/qc/images/${encodeURIComponent(cover.imageId)}/preview`, occurrence: selectedCover.occurrence, width: selectedCover.width, height: selectedCover.height } : null, canSetCover, previews: previews.map(row => ({ imageId: row.image_id, previewUrl: `/api/qc/images/${encodeURIComponent(row.image_id)}/preview`, occurrence: row.occurrence, width: row.width, height: row.height })), remainingCount: Math.max(0, total - previews.length) };
+    if (!Array.isArray(itemIds) || itemIds.length > 20 || itemIds.some(id => typeof id !== "string" || !id || id.length > 220)) throw new DomainError("A solicitação de capas QC deve conter até 20 produtos distintos.", 400, "QC_PRESENTATION_BATCH_INVALID");
+    const targets = itemIds.map(parseTargetKey);
+    if (targets.some(target => !target.id || target.id.length > 200) || new Set(targets.map(target => target.key)).size !== targets.length) throw new DomainError("Destinos QC inválidos ou repetidos.", 400, "QC_PRESENTATION_BATCH_INVALID");
+    if (!targets.length) return { purchaseId, items: [] };
+    const originalIds = targets.filter(target => target.origin === "purchase").map(target => target.id);
+    const additionalIds = targets.filter(target => target.origin === "additional").map(target => target.id);
+    const owned = originalIds.length ? await db.select({ id: purchaseItems.id }).from(purchaseItems).where(and(eq(purchaseItems.purchaseId, purchaseId), inArray(purchaseItems.id, originalIds))).all() : [];
+    const additional = additionalIds.length ? await db.select({ id: purchaseAdditionalOrderItems.id }).from(purchaseAdditionalOrderItems)
+      .innerJoin(purchaseCostOrders, eq(purchaseAdditionalOrderItems.orderId, purchaseCostOrders.id))
+      .innerJoin(purchaseCostTrackings, eq(purchaseCostOrders.trackingId, purchaseCostTrackings.id))
+      .where(and(inArray(purchaseAdditionalOrderItems.id, additionalIds), additionalTargetCondition(purchaseId))).all() : [];
+    if (owned.length + additional.length !== targets.length) throw new DomainError("Um produto não pertence a esta compra.", 404, "QC_ITEM_NOT_FOUND");
+    const keys = JSON.stringify(targets.map(target => target.key));
+    // Bounded sets per kind, never one gallery/query per product.
+    const targetKey = sql`CASE WHEN h.purchase_item_id IS NOT NULL THEN 'purchase:' || h.purchase_item_id ELSE 'additional:' || h.additional_order_item_id END`;
+    const counts = await db.all<{ item_key: string; total: number }>(sql`
+      SELECT ${targetKey} AS item_key, count(*) AS total FROM qc_images q JOIN hubbuy_external_items h ON h.id = q.external_item_id
+      WHERE h.purchase_id = ${purchaseId} AND ${targetKey} IN (SELECT value FROM json_each(${keys})) AND q.status = 'ready' AND q.delete_state = 'none'
+      GROUP BY item_key`);
+    const presentations = await db.all<{ item_key: string; image_id: string | null; revision: number }>(sql`
+      WITH presentations AS (
+        SELECT 'purchase:' || purchase_item_id AS item_key, primary_image_id, revision FROM qc_presentations
+        UNION ALL SELECT 'additional:' || additional_order_item_id, primary_image_id, revision FROM qc_additional_presentations
+      ) SELECT p.item_key, CASE WHEN h.id IS NOT NULL THEN q.id ELSE NULL END AS image_id, p.revision
+      FROM presentations p LEFT JOIN qc_images q ON q.id = p.primary_image_id AND q.status = 'ready' AND q.delete_state = 'none'
+      LEFT JOIN hubbuy_external_items h ON h.id = q.external_item_id AND h.purchase_id = ${purchaseId} AND ${targetKey} = p.item_key
+      WHERE p.item_key IN (SELECT value FROM json_each(${keys}))`);
+    const rows = await db.all<{ item_key: string; image_id: string; width: number; height: number; occurrence: string; sha256: string; transform_version: string; r2_key: string; revision: number }>(sql`
+      WITH presentations AS (
+        SELECT 'purchase:' || purchase_item_id AS item_key, primary_image_id FROM qc_presentations
+        UNION ALL SELECT 'additional:' || additional_order_item_id, primary_image_id FROM qc_additional_presentations
+      ), ranked AS (
+        SELECT ${targetKey} AS item_key, q.id AS image_id, p.width, p.height,
+          coalesce(h.sku_info, h.title, 'Ocorrência HubBuy') AS occurrence, p.sha256, p.transform_version, p.r2_key, p.revision,
+          row_number() OVER (PARTITION BY ${targetKey} ORDER BY CASE WHEN q.id = c.primary_image_id THEN 0 ELSE 1 END, q.ordinal, q.created_at, q.id) AS position
+        FROM qc_images q JOIN hubbuy_external_items h ON h.id = q.external_item_id
+        JOIN qc_image_previews p ON p.image_id = q.id AND p.status = 'ready' AND p.delete_state = 'none'
+        LEFT JOIN presentations c ON c.item_key = ${targetKey}
+        WHERE h.purchase_id = ${purchaseId} AND ${targetKey} IN (SELECT value FROM json_each(${keys})) AND q.status = 'ready' AND q.delete_state = 'none'
+      ) SELECT * FROM ranked WHERE position <= 4 ORDER BY item_key, position`);
+    const countsByKey = new Map(counts.map(row => [row.item_key, Number(row.total)]));
+    const covers = new Map(presentations.map(row => [row.item_key, row]));
+    return { purchaseId, items: targets.map(target => {
+      const presentation = covers.get(target.key), total = countsByKey.get(target.key) ?? 0;
+      const previews = rows.filter(row => row.item_key === target.key).map(row => {
+        const previewVersion = qcPreviewVersion({ sha256: row.sha256, transformVersion: row.transform_version, r2Key: row.r2_key, revision: row.revision });
+        return { imageId: row.image_id, previewVersion, previewUrl: `/api/qc/images/${encodeURIComponent(row.image_id)}/preview?v=${previewVersion}`, width: row.width, height: row.height, occurrence: row.occurrence };
+      });
+      const coverPreview = previews.find(row => row.imageId === presentation?.image_id) ?? null;
+      const thumbnails = previews.filter(row => row.imageId !== presentation?.image_id).slice(0, 3);
+      return { itemId: target.key, purchaseItemId: target.id, qcCount: total, primaryImageId: presentation?.image_id ?? null, presentationRevision: presentation?.revision ?? 0, coverPreview, canSetCover: !!managerId && managerId === userId, previews: thumbnails, remainingCount: Math.max(0, total - thumbnails.length - (coverPreview ? 1 : 0)) };
     }) };
   }
 
@@ -379,16 +394,22 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
     return { sourceUrl: validateHubbuySourceUrl(sources?.sourceUrl ?? image.sourceUrl).toString() };
   }
 
-  async function getPreview(imageId: string) {
+  async function readPreview(imageId: string, ifNoneMatch: string | null = null) {
     const image = await db.select().from(qcImages).where(and(eq(qcImages.id, imageId), eq(qcImages.status, "ready"), eq(qcImages.deleteState, "none"))).get();
     const external = image ? await db.select().from(hubbuyExternalItems).where(eq(hubbuyExternalItems.id, image.externalItemId)).get() : null;
     if (!image || !external || !targetKeyForExternal(external) || !await resolveTarget(db, external.purchaseId, targetKeyForExternal(external)!)) throw new DomainError("Preview QC não encontrado.", 404, "QC_IMAGE_NOT_FOUND");
     await rate(external.purchaseId, "preview");
     const preview = await db.select().from(qcImagePreviews).where(and(eq(qcImagePreviews.imageId, imageId), eq(qcImagePreviews.status, "ready"), eq(qcImagePreviews.deleteState, "none"))).get();
     if (!preview || !preview.sha256 || !preview.byteSize) throw new DomainError("Preview QC ainda não está disponível.", 404, "QC_PREVIEW_NOT_FOUND");
-    const bytes = await storage.get(preview.r2Key, QC_PREVIEW.maxBytes);
+    const etag = qcPreviewEtag(userId, qcPreviewVersion(preview));
+    if (matchesQcEtag(ifNoneMatch, etag)) return { etag, bytes: null };
+    const bytes = await storage.get(preview.r2Key, QC_PREVIEW.maxBytes, config.signal);
     if (bytes.byteLength !== preview.byteSize || createHash("sha256").update(bytes).digest("hex") !== preview.sha256) throw new DomainError("O preview QC falhou na verificação de integridade.", 502, "QC_PREVIEW_INVALID");
-    return bytes;
+    return { etag, bytes };
+  }
+
+  async function getPreview(imageId: string) {
+    return (await readPreview(imageId)).bytes!;
   }
 
   async function setPresentationCover(purchaseId: string, itemId: string, imageId: string, expectedRevision: number) {
@@ -1401,5 +1422,5 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
   }
 
   const contextual = <Args extends unknown[], Result>(operation: (...args: Args) => Promise<Result>) => (...args: Args) => withQcMetricContext(metrics, () => withQcDatabaseQueueContext(databaseQueue, () => operation(...args)));
-  return { authorizedPurchase: contextual(authorizedPurchase), rate: contextual(rate), addEvent: contextual(addEvent), getTargets: contextual(getTargets), getQcSummary: contextual(getQcSummary), getGallery: contextual(getGallery), getQcPresentations: contextual(getQcPresentations), getOriginalSource: contextual(getOriginalSource), getPreview: contextual(getPreview), setPresentationCover: contextual(setPresentationCover), prepare: contextual(prepare), getImport: contextual(getImport), confirmImport: contextual(confirmImport), resolvePendingOccurrence: contextual(resolvePendingOccurrence), runBatch: contextual(runBatch), runImportBatch: contextual(runImportBatch), deleteImage: contextual(deleteImage), fallback: contextual(fallback), managerId, storage, download, validate, now, metrics };
+  return { authorizedPurchase: contextual(authorizedPurchase), rate: contextual(rate), addEvent: contextual(addEvent), getTargets: contextual(getTargets), getQcSummary: contextual(getQcSummary), getGallery: contextual(getGallery), getQcPresentations: contextual(getQcPresentations), getOriginalSource: contextual(getOriginalSource), getPreview: contextual(getPreview), readPreview: contextual(readPreview), setPresentationCover: contextual(setPresentationCover), prepare: contextual(prepare), getImport: contextual(getImport), confirmImport: contextual(confirmImport), resolvePendingOccurrence: contextual(resolvePendingOccurrence), runBatch: contextual(runBatch), runImportBatch: contextual(runImportBatch), deleteImage: contextual(deleteImage), fallback: contextual(fallback), managerId, storage, download, validate, now, metrics };
 }
