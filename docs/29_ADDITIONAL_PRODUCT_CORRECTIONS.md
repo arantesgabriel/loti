@@ -147,3 +147,23 @@ foram alinhados à interface atual. Capturas inspecionadas em
 `artifacts/qa/additional-product-edit/unit-price-{320,390,1440}.png` e
 `correction-preview-{desktop,mobile}.png`; sem overflow nos tamanhos verificados.
 Nenhuma publicação, migração ou alteração de dados reais foi executada.
+
+### Correção do consumo FIFO ao editar frete — 20 de outubro de 2026
+
+O pagamento distribui saldo entre produtos e frete China sequencialmente. Um
+lote esgotado pelo produto permanecia na lista em memória e gerava um consumo
+CNY zero ao calcular o frete seguinte, rejeitado pelo CHECK
+`hubbuy_consumption_cny`. O cálculo FIFO agora ignora lotes sem CNY disponível;
+consumos positivos com base histórica BRL zero continuam válidos.
+
+A regressão unitária cobre lotes esgotados e a integração reproduz uma segunda
+correção paga com frete China, prévia sem escrita, fechamento dos valores CNY/BRL,
+saldo restante, cobrança original preservada e replay idempotente. A correção é
+de código, sem alteração de schema ou necessidade de migração. A publicação
+continua sendo uma ação operacional separada.
+
+Validação local: regressão reproduzida antes do ajuste; 25 testes direcionados
+passaram (o caso multiprocesso foi excluído dessa execução), typecheck, lint e
+build passaram. Suíte completa: 375 passaram, 7 ignorados e 1 falhou no caso
+preexistente de confirmações em processos independentes com `SQLITE_BUSY`.
+O gate global permanece com essa pendência; ela não é o CHECK de consumo zero.
