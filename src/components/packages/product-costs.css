@@ -112,6 +112,8 @@
 .refund-group-product > div { display: grid; gap: 3px; min-width: 0; }
 .refund-group-product strong { overflow-wrap: anywhere; font-size: 11px; }
 .refund-group-product small { color: var(--muted); font-size: 10px; }
+.refund-group-mobile-heading > .cost-compact-identity { grid-column: 1 / -1; width: 100%; }
+.refund-product > .cost-compact-identity { flex: 1 1 100%; gap: 10px; }
 .refund-group-amounts { display: grid; gap: 4px; }
 .refund-group-amounts span { display: flex; flex-wrap: wrap; gap: 3px 6px; font-size: 10px; }
 .refund-group-amounts strong { font-size: 11px; }
@@ -233,6 +235,8 @@
   .refund-group-mobile { display: grid; gap: 8px; min-width: 0; padding: 13px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); }
   .refund-group-mobile-heading { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 9px; min-width: 0; }
   .refund-group-mobile-heading > .category-marker { width: 32px; height: 32px; }
+  .refund-group-mobile-heading { grid-template-columns: minmax(0, 1fr) auto; }
+  .refund-group-mobile-heading > .cost-compact-identity { grid-column: 1 / -1; }
   .refund-group-mobile-name { display: grid; gap: 4px; min-width: 0; }
   .refund-group-mobile-name > strong { overflow-wrap: anywhere; font-size: 11px; }
   .refund-group-mobile-name > small { color: var(--muted); font-size: 10px; line-height: 1.4; }
@@ -252,6 +256,7 @@
 }
 @media (max-width: 359px) {
   .refund-group-mobile-heading { grid-template-columns: auto minmax(0, 1fr); }
+  .refund-group-mobile-heading > .cost-compact-identity { grid-column: 1 / -1; flex-wrap: wrap; }
   .refund-group-mobile-heading > strong { grid-column: 2; max-width: none; text-align: left; }
   .cost-payment-order-heading { gap: 5px 8px; }
   .cost-history-order li span { text-align: left; }

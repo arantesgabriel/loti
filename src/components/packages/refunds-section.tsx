@@ -44,6 +44,22 @@ function itemUnitsSummary(item: RefundItem) {
   return `${purchased} ${purchased === 1 ? "unidade comprada" : "unidades compradas"} · ${cancelled} ${cancelled === 1 ? "unidade cancelada" : "unidades canceladas"} · ${shipping} ${shipping === 1 ? "unidade enviável" : "unidades enviáveis"}`;
 }
 
+function RefundQcIdentity({ purchaseId, itemId, itemName, visualKey, subtitle }: {
+  purchaseId: string; itemId: string; itemName: string; visualKey: string; subtitle: string;
+}) {
+  return <QcGalleryButton
+    purchaseId={purchaseId}
+    itemId={itemId}
+    itemName={itemName}
+    canManageHere
+    costThumbnails="desktop"
+    costIdentity={{
+      marker: <ProductCategoryMarker visualKey={visualKey}/>,
+      label: <span className="cost-product-identity-text"><strong>{itemName}</strong><small>{subtitle}</small></span>,
+    }}
+  />;
+}
+
 function firstAvailableUnit(item: RefundItem, quantity: number) {
   let start = 0;
   for (const refund of item.refunds.filter(row => row.status !== "voided").sort((a, b) => a.unitStart - b.unitStart)) {
@@ -116,7 +132,7 @@ export function RefundsSection({ detail, locked, busy, requestItemId, onRequestC
       {groups.length > 0 && <>
         <div className="refunds-table-wrap"><table className="refunds-table"><caption className="sr-only">Reembolsos agrupados por produto</caption><thead><tr><th>Produto</th><th>Qtd.</th><th>Valor do item</th><th>Custo mantido</th><th>Recebido</th><th>Situação e detalhes</th></tr></thead><tbody>
           {groups.map(group => { const open = !!expandedGroups[group.costItemId], status = refundGroupStatus(group.refunds); return <Fragment key={group.costItemId}>
-            <tr><td><div className="refund-group-product">{group.item && <ProductCategoryMarker visualKey={group.item.original.visualKey}/>}<div><strong>{group.item ? itemLabel(group.item) : "Produto"}</strong><small>{group.refunds.flatMap(refund => refund.participants.map(person => person.name)).filter((name, index, all) => all.indexOf(name) === index).join(" · ")}</small>{group.item && <QcGalleryButton purchaseId={detail.purchase.id} itemId={`${group.item.origin}:${group.item.original.id}`} itemName={itemLabel(group.item)} canManageHere triggerLabel="Ver QC"/>}</div></div></td>
+            <tr><td>{group.item ? <RefundQcIdentity purchaseId={detail.purchase.id} itemId={`${group.item.origin}:${group.item.original.id}`} itemName={itemLabel(group.item)} visualKey={group.item.original.visualKey} subtitle={group.refunds.flatMap(refund => refund.participants.map(person => person.name)).filter((name, index, all) => all.indexOf(name) === index).join(" · ")}/> : <strong>Produto</strong>}</td>
               <td>{group.cancelledQuantity}</td>
               <td><strong>{formatMoney(group.display.cancelled?.productCents ?? 0)}</strong><small>Produto cancelado</small></td>
               <td><strong>{formatMoney(group.retainedCents)}</strong><small>{group.awaitingReceipt ? "Mantido até agora" : "Não devolvido"}</small></td>
@@ -127,9 +143,8 @@ export function RefundsSection({ detail, locked, busy, requestItemId, onRequestC
           </Fragment>; })}
         </tbody></table></div>
         <div className="refunds-groups-mobile">{groups.map(group => { const open = !!expandedGroups[group.costItemId], status = refundGroupStatus(group.refunds); return <article className="refund-group-mobile" key={group.costItemId}>
-          <div className="refund-group-mobile-heading">{group.item && <ProductCategoryMarker visualKey={group.item.original.visualKey}/>}<div className="refund-group-mobile-name"><strong>{group.item ? itemLabel(group.item) : "Produto"}</strong><small>{group.cancelledQuantity} {group.cancelledQuantity === 1 ? "unidade cancelada" : "unidades canceladas"} · {status.label}</small></div><strong>{formatMoney(group.retainedCents)}</strong></div>
+          <div className="refund-group-mobile-heading">{group.item ? <RefundQcIdentity purchaseId={detail.purchase.id} itemId={`${group.item.origin}:${group.item.original.id}`} itemName={itemLabel(group.item)} visualKey={group.item.original.visualKey} subtitle={`${group.cancelledQuantity} ${group.cancelledQuantity === 1 ? "unidade cancelada" : "unidades canceladas"} · ${status.label}`}/> : <span className="refund-group-mobile-name"><strong>Produto</strong></span>}<strong>{formatMoney(group.retainedCents)}</strong></div>
           <div className="refund-group-mobile-amounts">{group.refunds.some(refund => refund.status === "received") && <span>Recebido {formatMoney(group.receivedCents)}</span>}{group.requestedCents > 0 && <span>A receber {formatMoney(group.requestedCents)}</span>}</div>
-          {group.item && <QcGalleryButton purchaseId={detail.purchase.id} itemId={`${group.item.origin}:${group.item.original.id}`} itemName={itemLabel(group.item)} canManageHere triggerLabel="Ver QC"/>}
           <Button className="refund-details-toggle refund-group-toggle" size="sm" variant="outline" data-cost-target={`refund-group-${group.costItemId}`} aria-expanded={open} aria-controls={`refund-group-panel-mobile-${group.costItemId}`} onClick={() => setExpandedGroups(current => ({ ...current, [group.costItemId]: !current[group.costItemId] }))}>{open ? "Fechar composição" : "Ver composição"}<ChevronDown size={16} aria-hidden="true"/></Button>
           {open && <RefundGroupDetails id={`refund-group-panel-mobile-${group.costItemId}`} group={group} detail={detail} item={group.item} locked={locked} busy={busy} onDetails={onDetails} onAction={openRefund}/>}</article>; })}</div>
       </>}
@@ -192,8 +207,7 @@ function RefundRow({ grouped, refund, detail, item, capacity, locked, busy, onDe
   return <article className={`refund-row status-${refund.status}`} id={`refund-${refund.id}`}>
     <div className="refund-row-summary">
       <div className="refund-product">
-        {item && <ProductCategoryMarker visualKey={item.original.visualKey}/>}
-        <div><h3>{name}</h3><p>{refund.participants.length === 1 ? "Usuário" : "Participantes"}: {refund.participants.map(person => person.name).join(" · ")}</p>{item && <QcGalleryButton purchaseId={detail.purchase.id} itemId={`${item.origin}:${item.original.id}`} itemName={name} canManageHere triggerLabel="Ver QC"/>}</div>
+        {item ? <RefundQcIdentity purchaseId={detail.purchase.id} itemId={`${item.origin}:${item.original.id}`} itemName={name} visualKey={item.original.visualKey} subtitle={refund.participants.map(person => person.name).join(" · ")}/> : <div><h3>{name}</h3><p>{refund.participants.map(person => person.name).join(" · ")}</p></div>}
       </div>
       <div className="refund-context"><span className="refund-status"><StatusIcon size={14} aria-hidden="true"/>{received ? amount === 0 ? "Recebimento encerrado sem devolução" : "Recebimento registrado" : refund.status === "requested" ? "Aguardando reembolso" : "Anulado"}</span><p><time dateTime={date.toISOString()}>{date.toLocaleDateString("pt-BR", { day: "numeric", month: "short", year: "numeric", timeZone: "America/Sao_Paulo" }).replaceAll(" de ", " ")}</time><span aria-hidden="true"> · </span>{refund.status === "voided" ? refund.voidReason : refund.reason}</p></div>
       <div className="refund-amount"><strong>{refund.status === "voided" ? "Sem crédito ativo" : formatMoney(amount)}</strong><small>{refund.status === "requested" ? "Valor solicitado" : paymentMethod ? `Pagamento original · ${paymentMethod}` : ""}</small></div>
