@@ -96,11 +96,11 @@ test("edits a paid additional product using the existing action and confirms its
   await additional.getByLabel("Link", { exact: true }).fill("https://shop.test/elixir-two");
   await additional.getByLabel("Quantidade", { exact: true }).fill("2");
   await additional.getByLabel("Preço do produto por unidade (CNY)").fill("18,06");
-  await additional.getByLabel("Frete China — total (CNY)").fill("20,00");
+  await additional.getByLabel("Frete China total (CNY)").fill("20,00");
   await expect(additional).toContainText("2 × ¥ 18,06 = ¥ 36,12 no total");
-  await additional.getByLabel("Informar preço por").selectOption("total");
+  await additional.getByLabel("Cobrar por").selectOption("total");
   await expect(additional.getByLabel("Preço do produto — total (CNY)")).toHaveValue("36,12");
-  await additional.getByLabel("Informar preço por").selectOption("unit");
+  await additional.getByLabel("Cobrar por").selectOption("unit");
   await expect(additional.getByLabel("Preço do produto por unidade (CNY)")).toHaveValue("18,06");
   for (const width of [320, 390, 1440]) {
     await page.setViewportSize({ width, height: width < 400 ? 844 : 1000 });
@@ -114,7 +114,7 @@ test("edits a paid additional product using the existing action and confirms its
   }
   await additional.getByRole("button", { name: "Continuar para o pagamento" }).click();
   await expect(additional).toContainText("¥ 56,12");
-  await additional.getByRole("button", { name: "Editar dados do produto" }).click();
+  await additional.getByRole("button", { name: "Editar", exact: true }).click();
   await expect(additional.getByLabel("Preço do produto por unidade (CNY)")).toHaveValue("18,06");
   await additional.getByLabel("Quantidade", { exact: true }).fill("3");
   await expect(additional).toContainText("3 × ¥ 18,06 = ¥ 54,18 no total");
@@ -122,7 +122,7 @@ test("edits a paid additional product using the existing action and confirms its
   await additional.getByRole("button", { name: "Salvar alterações", exact: true }).click();
   await additional.getByLabel("Principal externo em BRL").fill("40,00");
   await additional.getByRole("button", { name: "Confirmar compra", exact: true }).click();
-  await expect(additional).toContainText("3. Associe as unidades ao pacote");
+  await expect(additional).toContainText("2 unidades serão associadas ao pacote escolhido.");
   await additional.getByRole("button", { name: "Associar ao pacote", exact: true }).click();
   await page.reload();
   const twoUnitDetail = (await (await page.request.get(endpoint)).json()).data as CostTrackingView;

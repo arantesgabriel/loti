@@ -7061,3 +7061,223 @@ details .details-fields {
   .cost-product-mobile-actions { width: 100%; }
   .cost-additional-order-payment > .cost-order-free, .cost-additional-order-payment > button, .cost-additional-order-payment > .error { grid-column: auto; }
 }
+
+/* Additional-order drawers: shared structure for product entry and payment review. */
+.cost-additional-order-surface.sheet {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+}
+.cost-additional-order-surface .surface-head {
+  flex: 0 0 auto;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 24px 24px 16px;
+  border-bottom: 0;
+}
+.cost-additional-order-surface .surface-head > div { min-width: 0; }
+.cost-additional-order-surface .surface-head h2 { margin: 0; font-size: 21px; font-weight: 650; line-height: 1.3; }
+.cost-additional-order-surface .surface-head .muted { margin: 6px 0 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.cost-additional-order-surface .surface-head > button { flex: 0 0 auto; }
+.cost-additional-order-surface .surface-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 24px;
+}
+.cost-additional-order-create,
+.cost-additional-order-payment {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  min-height: 100%;
+  min-width: 0;
+  padding: 0 0 12px;
+}
+.cost-additional-order-create { border: 0; border-radius: 0; background: transparent; }
+.cost-additional-order-payment > * { align-self: stretch; width: 100%; }
+.cost-order-section {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.cost-order-section-title { margin: 0; color: var(--foreground); font-size: 15px; font-weight: 650; line-height: 1.35; }
+.cost-order-account-section select { border-color: color-mix(in srgb, var(--primary) 45%, var(--border)); background: color-mix(in srgb, var(--primary-soft) 30%, var(--surface)); }
+.cost-additional-order-surface select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 40px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23625b57' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px 16px;
+}
+.cost-order-value-grid > label > span,
+.cost-order-value-grid .additional-product-price-value label > span {
+  display: block;
+  min-height: 36px;
+  line-height: 1.35;
+}
+.cost-additional-order-create label,
+.cost-additional-order-payment > label,
+.cost-order-advance label,
+.cost-order-section label,
+.additional-product-price-value label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 1.35;
+}
+.cost-additional-order-create input,
+.cost-additional-order-create select,
+.cost-additional-order-payment input,
+.cost-additional-order-payment select,
+.cost-order-section input,
+.cost-order-section select { width: 100%; min-width: 0; min-height: 44px; }
+.cost-additional-order-fields,
+.cost-order-value-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 14px 12px; min-width: 0; }
+.additional-product-price-value { display: grid; gap: 5px; min-width: 0; }
+.additional-product-price-value small { min-height: 17px; color: var(--muted); font-size: 11px; line-height: 1.4; }
+.cost-order-free,
+.cost-order-own-balance {
+  display: flex !important;
+  align-items: center;
+  gap: 8px !important;
+  min-width: 0;
+  min-height: 32px;
+  color: var(--foreground) !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  line-height: 1.4 !important;
+}
+.cost-order-free input,
+.cost-order-own-balance input,
+.cost-order-participants input {
+  appearance: auto;
+  width: 16px !important;
+  min-width: 16px;
+  height: 16px;
+  min-height: 16px !important;
+  flex: 0 0 16px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--primary);
+}
+.cost-order-participants {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  margin: 0;
+  padding: 12px 0 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+.cost-order-participants legend { padding: 0; color: var(--muted); font-size: 13px; font-weight: 550; }
+.cost-order-participant-options { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.cost-order-participants label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 38px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.cost-order-participants label.is-selected { border-color: color-mix(in srgb, var(--primary) 35%, var(--border)); background: color-mix(in srgb, var(--primary-soft) 75%, var(--surface)); }
+.cost-order-participants label > span { min-width: 0; overflow-wrap: anywhere; }
+.cost-order-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: grid;
+  gap: 8px;
+  margin-top: auto;
+  padding: 12px 0 max(12px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+.cost-order-footer .button { width: 100%; min-width: 0; min-height: 46px; white-space: normal; }
+.cost-order-footer.is-edit-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.cost-additional-order-flow { display: flex; flex: 1 0 auto; flex-direction: column; gap: 12px; min-height: 100%; min-width: 0; }
+.cost-order-product-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.cost-order-summary-items { display: grid; gap: 10px; min-width: 0; }
+.cost-order-summary-item { display: grid; grid-template-columns: 36px minmax(0, 1fr); align-items: center; gap: 10px; min-width: 0; }
+.cost-order-summary-item > .category-marker { display: grid; width: 36px; height: 36px; flex: 0 0 36px; place-items: center; }
+.cost-order-summary-item > .category-marker svg { width: 22px; height: 22px; }
+.cost-order-summary-copy { display: grid; gap: 4px; min-width: 0; }
+.cost-order-summary-copy strong { color: var(--foreground); font-size: 14px; font-weight: 550; line-height: 1.4; overflow-wrap: anywhere; }
+.cost-order-summary-copy span { color: var(--muted); font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+.cost-order-summary-actions { display: grid; align-self: center; justify-items: end; gap: 8px; min-width: 82px; }
+.cost-order-summary-actions > strong { color: var(--foreground); font-size: 15px; font-weight: 650; font-variant-numeric: tabular-nums; text-align: right; overflow-wrap: anywhere; }
+.cost-order-summary-actions .button { min-height: 40px; padding: 8px 13px; }
+.cost-order-payment-section { display: grid; gap: 10px; min-width: 0; margin-top: 4px; padding-top: 14px; border-top: 1px solid var(--border); }
+.cost-order-payment-section h3 { margin: 0; color: var(--foreground); font-size: 16px; font-weight: 650; line-height: 1.35; }
+.cost-payment-summary { display: grid; min-width: 0; padding: 0 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
+.cost-payment-summary-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; min-height: 46px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.cost-payment-summary-row:last-child { border-bottom: 0; }
+.cost-payment-summary-row > span { min-width: 0; color: var(--muted); font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
+.cost-payment-summary-row > strong { flex: 0 0 auto; color: var(--foreground); font-size: 14px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.cost-payment-summary-row > strong.is-zero { color: var(--muted); font-weight: 500; }
+.cost-order-own-balance { min-height: 40px; font-size: 13px !important; }
+.cost-order-advance-list { display: grid; gap: 10px; min-width: 0; }
+.cost-order-add-advance { width: 100%; min-height: 44px; white-space: normal; }
+.cost-order-advance { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; min-width: 0; padding-top: 12px; border-top: 1px solid var(--border); }
+.cost-order-advance > button { grid-column: 1 / -1; justify-self: start; }
+.cost-order-external-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; min-width: 0; }
+.cost-order-external-fields label { display: grid; gap: 6px; min-width: 0; color: var(--muted); font-size: 13px; }
+.cost-order-external-fields select, .cost-order-external-fields input { width: 100%; min-width: 0; }
+.cost-additional-order-surface .cost-order-payment-note { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.cost-additional-order-surface .cost-order-existing-drafts { margin-bottom: 12px; }
+.cost-additional-order-surface .cost-package-association-note { overflow-wrap: anywhere; }
+
+@media (max-width: 767px) {
+  .cost-additional-order-surface.sheet { width: 100vw; max-height: 100dvh; border-radius: 0; }
+  .cost-additional-order-surface .surface-head { align-items: center; padding: max(12px, env(safe-area-inset-top)) 16px 14px; }
+  .cost-additional-order-surface .surface-head h2 { font-size: 20px; }
+  .cost-additional-order-surface .surface-body { padding: 0 16px; }
+  .cost-order-footer { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+  .cost-order-advance { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 380px) {
+  .cost-additional-order-surface .surface-head { padding-right: 12px; padding-left: 12px; }
+  .cost-additional-order-surface .surface-body { padding-right: 12px; padding-left: 12px; }
+  .cost-additional-order-fields, .cost-order-value-grid, .cost-order-external-fields, .cost-order-advance, .cost-order-footer.is-edit-actions { grid-template-columns: minmax(0, 1fr); }
+  .cost-order-value-grid > label > span, .cost-order-value-grid .additional-product-price-value label > span { min-height: 0; }
+  .cost-order-summary-item { grid-template-columns: 30px minmax(0, 1fr); gap: 8px; }
+  .cost-order-summary-item > .category-marker { width: 30px; height: 30px; flex-basis: 30px; }
+  .cost-order-summary-item > .category-marker svg { width: 19px; height: 19px; }
+  .cost-order-summary-actions { min-width: 68px; }
+}

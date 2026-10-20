@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowRight, Package, Plus, ShoppingBag } from "lucide-react";
+import { ArrowRight, Package, Plus } from "lucide-react";
 import { toast } from "sonner";
 import Link from "next/link";
+import { ProductCategoryMarker } from "@/components/shared";
 import { Button } from "@/components/ui/button";
 import { Confirm, Surface } from "@/components/ui/surface";
 import type { CostTrackingView } from "@/lib/domain/package-cost-reading";
@@ -11,7 +12,7 @@ import { allocateExactMinor } from "@/lib/domain/hubbuy-balance-calculations";
 import { formatBrlMinor, formatCnyMinor, parseFinancialMinor } from "@/lib/domain/financial-money";
 import { costRequest } from "./package-cost-client";
 import { additionalProductTotal, productPriceEntry, type ProductPriceEntry } from "@/lib/domain/additional-product-pricing";
-import { AdditionalProductPriceInput } from "./additional-product-price-input";
+import { AdditionalProductPriceModeField, AdditionalProductPriceValueField } from "./additional-product-price-input";
 
 type Detail = CostTrackingView;
 type Order = Detail["productOrders"][number];
@@ -240,45 +241,96 @@ export function AdditionalOrdersPanel({ detail, locked, busy, mutate, createPack
 
   const estimate = activeOrder?.state === "draft" ? preview(activeOrder) : null;
   const isEditingDraft = activeOrder?.state === "draft" && editingDraftId === activeOrder.id;
+  const drawerTitle = activeOrder?.state === "recorded"
+    ? "Associar ao pacote"
+    : isEditingDraft
+      ? "Editar produto comprado"
+      : activeOrder?.state === "draft"
+        ? "Confirmar compra"
+        : "Adicionar produto comprado";
+  const drawerDescription = activeOrder?.state === "recorded"
+    ? "Associe as unidades disponíveis a um pacote em preparação."
+    : isEditingDraft
+      ? "Edite os dados do produto antes de confirmar o pagamento."
+      : activeOrder?.state === "draft"
+        ? "Revise o item e confirme o pagamento."
+        : "Registre o item e associe as unidades a um pacote.";
+  const paymentSummary = [
+    { label: "Saldo próprio previsto", amount: estimate?.ownUsed ?? 0 },
+    { label: "Adiantamento", amount: estimate?.crossUsed ?? 0 },
+    { label: "Complemento", amount: estimate?.externalCnyMinor ?? 0 },
+  ];
+  const summaryHasUnknown = activeOrder?.items.some(row => row.cost.nativeProductState === "unknown" || row.cost.nativeChinaState === "unknown") ?? false;
 
   return <>
     {!locked && <Button className="cost-additional-order-trigger" type="button" variant="outline" disabled={busy} onClick={() => setOpen(true)}><Plus size={16}/><span>Adicionar produto</span>{draftOrders.length > 0 && <span className="cost-draft-count">{draftOrders.length} rascunhos</span>}</Button>}
-    <Surface sheet open={open || !!resumeOrderId} title={activeOrder?.state === "recorded" ? "Associar ao pacote" : isEditingDraft ? "Editar rascunho" : activeOrder?.state === "draft" ? "Confirmar compra" : "Adicionar produto comprado"} subtitle={activeOrder?.items[0]?.item?.name} description="Registre o item, confirme o pagamento observado e associe as unidades a um pacote." onOpenChange={value => { if (!busy) { setOpen(value); if (!value) { setActiveOrderId(null); setAutoSelectLatestDraft(false); setEditingDraftId(null); onResumeHandled(); } } }} className="cost-additional-order-surface">
+    <Surface sheet open={open || !!resumeOrderId} title={drawerTitle} description={drawerDescription} onOpenChange={value => { if (!busy) { setOpen(value); if (!value) { setActiveOrderId(null); setAutoSelectLatestDraft(false); setEditingDraftId(null); onResumeHandled(); } } }} className="cost-additional-order-surface">
       {(!activeOrder || isEditingDraft) && <>
       {!locked && <form className="cost-additional-order-create" onSubmit={event => void (isEditingDraft ? updateDraft(event) : createOrder(event))}>
-      <p className="cost-order-step-title"><strong>{isEditingDraft ? "Editar dados do produto" : "1. Dados do produto"}</strong><span>{isEditingDraft ? "Ajuste o rascunho antes de confirmar o pagamento." : "A compra adicional mantém seu próprio pagamento."}</span></p>
-      <label>Conta HubBuy<select required value={selectedAccountId} onChange={event => setAccountId(event.target.value)}><option value="">Escolher conta conciliada</option>{activeAccounts.map(account => <option key={account.id} value={account.id}>{account.label} · {formatCnyMinor(account.balanceCnyMinor)}</option>)}</select></label>
-      <div className="cost-additional-order-fields"><label>Produto<input required maxLength={200} value={name} onChange={event => setName(event.target.value)} placeholder="Nome do produto"/></label><label>Link<input required type="url" maxLength={2048} value={url} onChange={event => setUrl(event.target.value)} placeholder="https://…"/></label><label>Plataforma<input required maxLength={100} value={platform} onChange={event => setPlatform(event.target.value)} /></label><label>Variação<input maxLength={500} value={variant} onChange={event => setVariant(event.target.value)} placeholder="Opcional"/></label><label>Quantidade<input required type="number" min={1} max={10000} value={quantity} onChange={event => setQuantity(event.target.value)}/></label>
-        <AdditionalProductPriceInput entry={productPrice} quantity={Number(quantity)} onChange={setProductPrice} disabled={productFree}/><label>Frete China — total (CNY)<input inputMode="decimal" disabled={chinaFree} value={chinaCny} onChange={event => setChinaCny(event.target.value)} placeholder="0,00"/></label>
-        <label className="cost-order-free"><input type="checkbox" checked={productFree} disabled={productPrice.value.trim().length > 0} onChange={event => setProductFree(event.target.checked)}/> Sem cobrança de produto</label><label className="cost-order-free"><input type="checkbox" checked={chinaFree} disabled={chinaCny.trim().length > 0} onChange={event => setChinaFree(event.target.checked)}/> Sem cobrança de frete China</label></div>
-      <p className="muted">O frete China informado é o total para todas as unidades deste produto.</p>
-      <fieldset className="cost-order-participants"><legend>Dividir o custo igualmente</legend>{detail.members.map(member => <label key={member.id}><input type="checkbox" checked={participantIds.includes(member.id)} onChange={event => setParticipantIds(current => event.target.checked ? [...current, member.id] : current.filter(id => id !== member.id))}/>{member.name}</label>)}</fieldset>
-      {isEditingDraft ? <div className="form-actions"><Button type="button" variant="outline" disabled={busy} onClick={() => setEditingDraftId(null)}>Voltar ao pagamento</Button><Button type="submit" disabled={busy || !activeAccounts.length}><ShoppingBag size={15}/>Salvar alterações</Button></div> : <Button type="submit" disabled={busy || !activeAccounts.length}><ShoppingBag size={15}/>Continuar para o pagamento</Button>}
-      {!activeAccounts.length && <small className="muted">Cadastre uma conta HubBuy ativa na <Link href="/packages/accounts">gestão de contas</Link> para registrar o pedido.</small>}
-    </form>}
+        <section className="cost-order-section cost-order-account-section">
+          <h3 id="cost-order-account-title" className="cost-order-section-title">1. Conta HubBuy</h3>
+          <label><span className="sr-only">Conta HubBuy</span><select required value={selectedAccountId} onChange={event => setAccountId(event.target.value)}><option value="">Escolher conta conciliada</option>{activeAccounts.map(account => <option key={account.id} value={account.id}>{account.label} · {formatCnyMinor(account.balanceCnyMinor)}</option>)}</select></label>
+        </section>
+
+        <section className="cost-order-section" aria-labelledby="cost-order-item-title">
+          <h3 id="cost-order-item-title" className="cost-order-section-title">2. Dados do item</h3>
+          <div className="cost-additional-order-fields">
+            <label>Produto<input required maxLength={200} value={name} onChange={event => setName(event.target.value)} placeholder="Nome do produto"/></label>
+            <label>Link<input required type="url" maxLength={2048} value={url} onChange={event => setUrl(event.target.value)} placeholder="https://…"/></label>
+            <label>Plataforma<input required maxLength={100} value={platform} onChange={event => setPlatform(event.target.value)} /></label>
+            <label>Variação<input maxLength={500} value={variant} onChange={event => setVariant(event.target.value)} placeholder="Opcional"/></label>
+            <label>Quantidade<input required type="number" min={1} max={10000} value={quantity} onChange={event => setQuantity(event.target.value)}/></label>
+            <AdditionalProductPriceModeField entry={productPrice} quantity={Number(quantity)} onChange={setProductPrice} disabled={productFree} label="Cobrar por"/>
+          </div>
+        </section>
+
+        <section className="cost-order-section" aria-labelledby="cost-order-values-title">
+          <h3 id="cost-order-values-title" className="cost-order-section-title">3. Valores e divisão</h3>
+          <div className="cost-order-value-grid">
+            <AdditionalProductPriceValueField entry={productPrice} quantity={Number(quantity)} onChange={setProductPrice} disabled={productFree}/>
+            <label><span>Frete China total (CNY)</span><input inputMode="decimal" disabled={chinaFree} value={chinaCny} onChange={event => setChinaCny(event.target.value)} placeholder="0,00"/></label>
+            <label className="cost-order-free"><input type="checkbox" checked={productFree} disabled={productPrice.value.trim().length > 0} onChange={event => setProductFree(event.target.checked)}/> Sem cobrança de produto</label>
+            <label className="cost-order-free"><input type="checkbox" checked={chinaFree} disabled={chinaCny.trim().length > 0} onChange={event => setChinaFree(event.target.checked)}/> Sem cobrança de frete China</label>
+          </div>
+          <fieldset className="cost-order-participants"><legend>Dividir o custo igualmente</legend><div className="cost-order-participant-options">{detail.members.map(member => <label key={member.id} className={participantIds.includes(member.id) ? "is-selected" : ""}><input type="checkbox" checked={participantIds.includes(member.id)} onChange={event => setParticipantIds(current => event.target.checked ? [...current, member.id] : current.filter(id => id !== member.id))}/><span>{member.name}</span></label>)}</div></fieldset>
+        </section>
+
+        {isEditingDraft ? <div className="cost-order-footer is-edit-actions"><Button type="button" variant="outline" disabled={busy} onClick={() => setEditingDraftId(null)}>Voltar ao pagamento</Button><Button type="submit" disabled={busy || !activeAccounts.length}>{busy ? "Salvando…" : "Salvar alterações"}</Button></div> : <div className="cost-order-footer"><Button type="submit" disabled={busy || !activeAccounts.length}>{busy ? "Salvando…" : "Continuar para o pagamento"}</Button></div>}
+        {!activeAccounts.length && <small className="muted">Cadastre uma conta HubBuy ativa na <Link href="/packages/accounts">gestão de contas</Link> para registrar o pedido.</small>}
+      </form>}
     {!activeOrder && draftOrders.length > 0 && <details className="cost-order-existing-drafts"><summary>Retomar rascunho pendente ({draftOrders.length})</summary><div>{draftOrders.map(order => <button key={order.id} type="button" disabled={busy} onClick={() => { setActiveOrderId(order.id); setAutoSelectLatestDraft(false); setEditingDraftId(null); }}><span><strong>{order.items[0]?.item?.name ?? "Produto adicional"}</strong><small>{order.account?.label ?? "Conta HubBuy"} · falta confirmar pagamento</small></span><ArrowRight size={16}/></button>)}</div></details>}
       </>}
       {activeOrder?.state === "draft" && !isEditingDraft && activeOrder.accountId && <div className="cost-additional-order-flow">
-        <p className="cost-order-step-title"><strong>2. Confirme o pagamento</strong><span>{activeOrder.items.map(row => row.item?.name ?? "Produto").join(" · ")} · {formatCnyMinor(activeOrder.nativeCnyMinor ?? 0)}</span></p>
-        {!locked && activeOrder.items.length === 1 && <Button type="button" variant="outline" disabled={busy} onClick={() => beginDraftEdit(activeOrder)}>Editar dados do produto</Button>}
         <form className="cost-additional-order-payment" onSubmit={event => void payOrder(activeOrder, event)}>
-          <div><strong>Pagamento observado</strong><small>Saldo próprio previsto: {formatCnyMinor(estimate?.ownUsed ?? 0)} · Adiantamento: {formatCnyMinor(estimate?.crossUsed ?? 0)} · Complemento: {formatCnyMinor(estimate?.externalCnyMinor ?? 0)}</small></div>
-          <label className="cost-order-free"><input type="checkbox" checked={useOwnBalance} onChange={event => setUseOwnBalance(event.target.checked)}/> Usar o saldo próprio dos participantes</label>
-          <div className="cost-order-advance-list"><strong>Adiantamento explícito em CNY · opcional</strong>{advances.map((advance, index) => <div className="cost-order-advance" key={index}>
+          <article className="cost-order-product-summary" aria-label="Resumo do produto">
+            <div className="cost-order-summary-items">{activeOrder.items.map(row => <div className="cost-order-summary-item" key={row.cost.id}>
+              <ProductCategoryMarker visualKey={row.item?.visualKey ?? "generic"}/>
+              <div className="cost-order-summary-copy"><strong>{row.item?.name ?? "Produto"}</strong><span>{row.item?.platform ?? "Outro"} · {row.quantity} un.{row.item?.variant ? ` · ${row.item.variant}` : ""}</span></div>
+            </div>)}</div>
+            <div className="cost-order-summary-actions"><strong>{summaryHasUnknown || activeOrder.nativeCnyMinor === null ? "Pendente" : formatCnyMinor(activeOrder.nativeCnyMinor ?? 0)}</strong>{!locked && activeOrder.items.length === 1 && <Button type="button" variant="outline" disabled={busy} onClick={() => beginDraftEdit(activeOrder)}>Editar</Button>}</div>
+          </article>
+
+          <section className="cost-order-payment-section" aria-labelledby="cost-order-payment-title">
+            <h3 id="cost-order-payment-title">Pagamento</h3>
+            <div className="cost-payment-summary" role="group" aria-label="Resumo do pagamento previsto">
+              {paymentSummary.map(row => <div className="cost-payment-summary-row" key={row.label}><span>{row.label}</span><strong className={row.amount === 0 ? "is-zero" : ""}>{formatCnyMinor(row.amount)}</strong></div>)}
+            </div>
+          </section>
+
+          <label className="cost-order-own-balance"><input type="checkbox" checked={useOwnBalance} onChange={event => setUseOwnBalance(event.target.checked)}/> Usar saldo próprio dos participantes</label>
+          <div className="cost-order-advance-list">{advances.map((advance, index) => <div className="cost-order-advance" key={index}>
             <label>Quem recebe<select value={advance.beneficiaryId} onChange={event => updateAdvance(index, { beneficiaryId: event.target.value, lenderId: advance.lenderId === event.target.value ? "" : advance.lenderId })}><option value="">Escolher pessoa</option>{detail.members.map(member => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
             <label>Quem financia<select value={advance.lenderId} onChange={event => updateAdvance(index, { lenderId: event.target.value })}><option value="">Escolher financiador</option>{detail.members.filter(member => member.id !== advance.beneficiaryId).map(member => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
             <label>Componente<select value={advance.component} onChange={event => updateAdvance(index, { component: event.target.value as "product" | "china" })}><option value="product">Produto</option><option value="china">Frete China</option></select></label>
             <label>Valor CNY<input inputMode="decimal" value={advance.amount} onChange={event => updateAdvance(index, { amount: event.target.value })} placeholder="0,00"/></label>
             <Button type="button" variant="ghost" size="sm" onClick={() => setAdvances(current => current.filter((_, rowIndex) => rowIndex !== index))}>Remover adiantamento</Button>
-          </div>)}<Button type="button" variant="outline" size="sm" onClick={() => setAdvances(current => [...current, { component: "product", beneficiaryId: "", lenderId: "", amount: "" }])}>Adicionar adiantamento</Button></div>
-          {(estimate?.externalCnyMinor ?? 0) > 0 && <><label>Método do complemento<select value={paymentMethod} onChange={event => setPaymentMethod(event.target.value as "pix" | "card")}><option value="pix">PIX · {detail.settings.pixBps / 100}%</option><option value="card">Cartão · {detail.settings.cardBps / 100}%</option></select></label><label>Principal externo em BRL<input inputMode="decimal" required value={externalBrl} onChange={event => setExternalBrl(event.target.value)} placeholder="0,00"/></label></>}
+          </div>)}<Button type="button" variant="outline" className="cost-order-add-advance" onClick={() => setAdvances(current => [...current, { component: "product", beneficiaryId: "", lenderId: "", amount: "" }])}>Adicionar adiantamento</Button></div>
+          {(estimate?.externalCnyMinor ?? 0) > 0 && <div className="cost-order-external-fields"><label>Método do complemento<select value={paymentMethod} onChange={event => setPaymentMethod(event.target.value as "pix" | "card")}><option value="pix">PIX · {detail.settings.pixBps / 100}%</option><option value="card">Cartão · {detail.settings.cardBps / 100}%</option></select></label><label>Principal externo em BRL<input inputMode="decimal" required value={externalBrl} onChange={event => setExternalBrl(event.target.value)} placeholder="0,00"/></label></div>}
           {estimate?.error && <small className="error" role="alert">{estimate.error}</small>}
-          <Button type="submit" disabled={busy || !!estimate?.error || (estimate?.externalCnyMinor ?? 0) > 0 && !externalBrl.trim()}>{busy ? "Salvando…" : "Confirmar compra"}</Button>
-          <Button type="button" variant="outline" disabled={busy} onClick={() => setDiscardOrder(activeOrder)}>Descartar rascunho</Button>
+          <div className="cost-order-footer"><Button type="submit" disabled={busy || !!estimate?.error || (estimate?.externalCnyMinor ?? 0) > 0 && !externalBrl.trim()}>{busy ? "Salvando…" : "Confirmar compra"}</Button><Button type="button" variant="outline" disabled={busy} onClick={() => setDiscardOrder(activeOrder)}>Descartar rascunho</Button></div>
         </form>
       </div>}
       {activeOrder?.state === "recorded" && <div className="cost-additional-order-flow">
-        <p className="cost-order-step-title"><strong>3. Associe as unidades ao pacote</strong><span>O pagamento deste pedido está registrado.</span></p>
         <div className="cost-order-payment-note">{activeOrder.account?.label ?? "Conta HubBuy"} · {formatCnyMinor(activeOrder.nativeCnyMinor ?? 0)} · Base de saldo {formatBrlMinor(activeOrder.historicalBrlCents)} · Dinheiro novo {formatBrlMinor(activeOrder.newMoneyBrlCents)} (taxas {formatBrlMinor(activeOrder.feeBrlCents)})</div>
         {unassignedUnits > 0 ? <>
           {eligiblePackages.length > 0 ? <label>Pacote<select value={selectedPackageId} onChange={event => setPackageId(event.target.value)}>{eligiblePackages.map(pkg => <option key={pkg.id} value={pkg.id}>{pkg.name}{pkg.accountId ? " · conta compatível" : " · vincular conta HubBuy"}</option>)}</select></label> : <p className="muted">Não há pacote em preparação compatível com esta conta.</p>}
