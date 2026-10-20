@@ -1,5 +1,7 @@
 # Deployment — Vercel + Turso/libSQL
 
+Email-security rollout: follow `31_AUTH_EMAIL_SECURITY_PLAN.md`. Verify Resend DNS, prepare server-only `RESEND_API_KEY`, `LOTI_EMAIL_MODE` and Preview recipient allowlist, authorize/apply migration 0021 explicitly, then obtain publication approval. Do not set global email verification or bulk-mark legacy users verified. Production migration and deployment are separate approvals; local implementation does not execute either.
+
 ## Production topology
 
 ```text

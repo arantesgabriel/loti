@@ -32,6 +32,8 @@ flowchart LR
 
 ## 1a. Edit profile
 
+Approved email extension: `Login → Esqueceu a senha? → email → generic confirmation → email link (30 minutes) → new password/confirmation → sessions revoked → normal login`. New invited accounts remain without workspace membership until native email confirmation; then return to the invitation, authenticate as needed and accept. Existing unverified invitees must also confirm before a new association. Existing memberships remain usable. See `31_AUTH_EMAIL_SECURITY_PLAN.md`; the older direct signup-to-membership journey below is superseded for unverified accounts.
+
 `Avatar → Perfil → edit name → Save`
 
 - the complete display name is shared across the member's workspaces; email stays read-only;

@@ -1,5 +1,7 @@
 # Plano de implementação — convites para o grupo
 
+Atualização autorizada em 20/10/2026: `31_AUTH_EMAIL_SECURITY_PLAN.md` substitui o aceite imediato para contas não verificadas e a restrição a compartilhamento manual. O cadastro permanece pendente, sem associação, até confirmação nativa do email e aceite autenticado. A emissão também tenta enviar o convite por Resend, mantendo o link manual se o envio não for confirmado. Papéis, permissões e vínculos existentes permanecem iguais. As decisões e validações históricas abaixo descrevem a entrega original.
+
 Status: implementado e validado localmente. Fluxo autorizado pelo usuário em 5 de outubro de 2026. Publicação não executada.
 
 ## Objetivo

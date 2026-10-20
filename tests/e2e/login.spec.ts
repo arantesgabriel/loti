@@ -151,8 +151,7 @@ test("login preserves labels, Enter, validation, errors, loading, redirect, sess
   await expect(page.getByLabel("Senha", { exact: true })).toHaveAttribute("type", "text");
   await page.getByRole("button", { name: "Ocultar senha", exact: true }).click();
   await expect(page.getByLabel("Senha", { exact: true })).toHaveAttribute("type", "password");
-  await page.getByRole("button", { name: "Esqueceu a senha?", exact: true }).click();
-  await expect(page.locator(".login-recovery-help")).toHaveText("Para redefinir sua senha, peça ajuda a quem configurou seu acesso ao Loti.");
+  await expect(page.getByRole("link", { name: "Esqueceu a senha?", exact: true })).toHaveAttribute("href", "/forgot-password");
   await page.getByLabel("Senha", { exact: true }).fill("incorrect-password");
   await page.getByLabel("Senha", { exact: true }).press("Enter");
   await expect(page.locator("form").getByRole("alert")).toHaveText("Email ou senha incorretos.");

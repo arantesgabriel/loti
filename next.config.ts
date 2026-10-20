@@ -13,7 +13,10 @@ const config: NextConfig = {
     ] }, { source: "/invite/:path*", headers: [
       { key: "Referrer-Policy", value: "no-referrer" },
       { key: "Cache-Control", value: "private, no-store" },
-    ] }];
+    ] }, ...["/forgot-password", "/reset-password", "/verify-email", "/api/auth/:path*"].map(source => ({ source, headers: [
+      { key: "Referrer-Policy", value: "no-referrer" }, { key: "Cache-Control", value: "private, no-store" },
+      { key: "X-Robots-Tag", value: "noindex, nofollow" },
+    ] }))];
   },
 };
 export default config;

@@ -75,27 +75,37 @@ export function invitationService(db: AppDatabase) {
   async function inspect(token: string, sessionUser?: { id: string; email: string } | null) {
     const invite = requirePending(await db.select().from(invites).where(eq(invites.tokenHash, tokenHash(token))).get());
     const workspace = await db.select().from(workspaces).where(eq(workspaces.id, invite.workspaceId)).get();
-    const existing = await db.select({ id: user.id }).from(user).where(eq(user.email, invite.email)).get();
+    const existing = await db.select({ id: user.id, emailVerified: user.emailVerified }).from(user).where(eq(user.email, invite.email)).get();
     const member = sessionUser ? await db.select().from(workspaceMembers).where(and(eq(workspaceMembers.workspaceId, invite.workspaceId), eq(workspaceMembers.userId, sessionUser.id))).get() : undefined;
-    return { email: invite.email, groupName: workspace!.name, expiresAt: invite.expiresAt.toISOString(), existingAccount: !!existing, sessionEmail: sessionUser?.email ?? null, alreadyMember: !!member && sessionUser?.email.toLowerCase() === invite.email };
+    return { email: invite.email, groupName: workspace!.name, expiresAt: invite.expiresAt.toISOString(), existingAccount: !!existing, sessionEmail: sessionUser?.email ?? null, alreadyMember: !!member && sessionUser?.email.toLowerCase() === invite.email, verificationRequired: !!existing && !existing.emailVerified };
   }
   async function accept(token: string, sessionUser: { id: string; email: string } | null, input: unknown) {
     const hash = tokenHash(token);
     return db.transaction(async tx => {
       const now = new Date();
       // Claim first: concurrent acceptance/revocation is serialized; all changes roll back on failure.
-      const invite = await tx.update(invites).set({ acceptedAt: now }).where(and(eq(invites.tokenHash, hash), isNull(invites.acceptedAt), isNull(invites.revokedAt), gt(invites.expiresAt, now))).returning().get();
-      if (!invite) { requirePending(await tx.select().from(invites).where(eq(invites.tokenHash, hash)).get()); throw new DomainError("Não foi possível aceitar o convite.", 409); }
+      const invite = await tx.update(invites).set({ tokenHash: hash }).where(and(eq(invites.tokenHash, hash), isNull(invites.acceptedAt), isNull(invites.revokedAt), gt(invites.expiresAt, now))).returning().get();
+      if (!invite) {
+        const prior = await tx.select().from(invites).where(eq(invites.tokenHash, hash)).get();
+        if (prior?.acceptedAt && sessionUser?.id === prior.acceptedBy && sessionUser.email.toLowerCase() === prior.email) {
+          await authorization(tx, sessionUser.id).requireWorkspaceMember(prior.workspaceId);
+          return { email: prior.email, created: false, verificationRequired: false };
+        }
+        requirePending(prior); throw new DomainError("Não foi possível aceitar o convite.", 409);
+      }
       if (sessionUser && sessionUser.email.toLowerCase() !== invite.email) throw new DomainError("Entre com o email deste convite para continuar.", 403);
       const existing = await tx.select().from(user).where(eq(user.email, invite.email)).get();
       if (existing && (!sessionUser || existing.id !== sessionUser.id)) throw new DomainError("Esta conta já existe. Entre para aceitar o convite.", 401);
       const member = existing ?? (await createAuth(tx, true).api.signUpEmail({ body: { ...accountInput.parse(input), email: invite.email } })).user;
+      // Registration is durable so verification can be retried, but grants no group data.
+      // Read authoritative user state in this transaction, never session/client claims.
+      if (!member.emailVerified) return { email: invite.email, created: !existing, verificationRequired: true };
       await tx.insert(workspaceMembers).values({ workspaceId: invite.workspaceId, userId: member.id, createdAt: now }).onConflictDoNothing().run();
       await tx.insert(userPreferences).values({ userId: member.id, activeWorkspaceId: invite.workspaceId, createdAt: now, updatedAt: now }).onConflictDoUpdate({
         target: userPreferences.userId, set: { activeWorkspaceId: invite.workspaceId, updatedAt: now },
       }).run();
-      await tx.update(invites).set({ acceptedBy: member.id }).where(eq(invites.id, invite.id)).run();
-      return { email: invite.email, created: !existing };
+      await tx.update(invites).set({ acceptedAt: now, acceptedBy: member.id }).where(eq(invites.id, invite.id)).run();
+      return { email: invite.email, created: !existing, verificationRequired: false };
     });
   }
   return { group, issue, revoke, inspect, accept };

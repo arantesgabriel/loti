@@ -1,5 +1,7 @@
 # Test Plan
 
+Email security extension: `auth-email.test.ts`, `auth-email-limits.test.ts`, updated invitation/concurrency suites and `email-templates.test.ts` cover native token lifecycles, rollback, pending membership, compatibility and shared quotas. Playwright `password-recovery` and `invitations` use a localhost provider stub, never bulk real email. See `31_AUTH_EMAIL_SECURITY_PLAN.md`. Separate production counts, authorized real deliveries and publication from local tests.
+
 ## Unit tests
 
 At minimum cover:

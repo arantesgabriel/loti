@@ -56,6 +56,8 @@ Do not duplicate authorization conditionals across random UI/actions.
 
 ## Better Auth
 
+Email extension, 20 October 2026: the detailed contract in `31_AUTH_EMAIL_SECURITY_PLAN.md` supersedes memory-only limiting and immediate invitation membership for unverified accounts. Native recovery and verification use the central Resend service with atomic persistent quotas; HTTP token finalization is wrapped in an external Drizzle transaction. Reset delivery uses Next `after`/Vercel `waitUntil`; internal calls await delivery. Existing memberships are preserved without enabling global verification enforcement.
+
 - email + password only in MVP;
 - public signup UI and endpoint are disabled;
 - sessions use the same Turso database;

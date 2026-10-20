@@ -21,28 +21,36 @@ describe("private group invitations", () => {
     await expect(service.issue("alice", "alice@test.local")).rejects.toThrow("já faz parte");
     await expect(service.issue("bob", "new@test.local")).rejects.toThrow("pendente");
   });
-  it("creates account and membership atomically, then authenticates using normal Better Auth", async () => {
+  it("creates pending credentials, then links only an authenticated verified account", async () => {
     const service = invitationService(f.db), issued = await service.issue("alice", "new@test.local");
     await expect(service.accept(issued.token, null, { ...credentials, password: "short" })).rejects.toThrow();
     expect((await service.inspect(issued.token)).existingAccount).toBe(false);
     const result = await service.accept(issued.token, null, credentials);
     expect(result.created).toBe(true);
     const member = await f.db.select().from(user).where(eq(user.email, "new@test.local")).get();
-    expect(await f.db.select().from(workspaceMembers).where(eq(workspaceMembers.userId, member!.id)).get()).toBeTruthy();
+    expect(result.verificationRequired).toBe(true);
+    expect(await f.db.select().from(workspaceMembers).where(eq(workspaceMembers.userId, member!.id)).get()).toBeUndefined();
     expect(await f.db.select().from(account).where(eq(account.userId, member!.id)).get()).toBeTruthy();
     const auth = createAuth(f.db);
     const response = await auth.handler(new Request("http://localhost:3000/api/auth/sign-in/email", { method: "POST", headers: { "Content-Type": "application/json", Origin: "http://localhost:3000" }, body: JSON.stringify({ email: result.email, password: credentials.password }) }));
     expect(response.status).toBe(200);
+    // Synthetic fixture state; real verification is covered by auth-email.test.ts.
+    await f.db.update(user).set({ emailVerified: true }).where(eq(user.id, member!.id)).run();
+    await service.accept(issued.token, { id: member!.id, email: result.email }, {});
+    expect(await f.db.select().from(workspaceMembers).where(eq(workspaceMembers.userId, member!.id)).get()).toBeTruthy();
     await expect(service.accept(issued.token, null, credentials)).rejects.toThrow("já foi usado");
   });
-  it("rolls back user and credential account if membership fails", async () => {
+  it("preserves the pending account and rolls back acceptance if membership fails", async () => {
     const service = invitationService(f.db), issued = await service.issue("alice", "rollback@test.local");
-    await f.client.execute("CREATE TRIGGER fail_membership BEFORE INSERT ON workspace_members BEGIN SELECT RAISE(ABORT, 'simulated membership failure'); END");
-    await expect(service.accept(issued.token, null, credentials)).rejects.toThrow();
-    expect(await f.db.select().from(user).where(eq(user.email, "rollback@test.local")).get()).toBeUndefined();
-    expect((await service.inspect(issued.token)).existingAccount).toBe(false);
-    await f.client.execute("DROP TRIGGER fail_membership");
     await service.accept(issued.token, null, credentials);
+    const member = (await f.db.select().from(user).where(eq(user.email, "rollback@test.local")).get())!;
+    await f.db.update(user).set({ emailVerified: true }).where(eq(user.id, member.id)).run();
+    await f.client.execute("CREATE TRIGGER fail_membership BEFORE INSERT ON workspace_members BEGIN SELECT RAISE(ABORT, 'simulated membership failure'); END");
+    await expect(service.accept(issued.token, { id: member.id, email: member.email }, {})).rejects.toThrow();
+    expect(await f.db.select().from(user).where(eq(user.email, "rollback@test.local")).get()).toBeTruthy();
+    expect((await service.inspect(issued.token)).existingAccount).toBe(true);
+    await f.client.execute("DROP TRIGGER fail_membership");
+    await service.accept(issued.token, { id: member.id, email: member.email }, {});
   });
   it("requires existing account login and preserves credentials and invitation after wrong email", async () => {
     const service = invitationService(f.db), issued = await service.issue("alice", session.email);

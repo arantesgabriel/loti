@@ -1,5 +1,9 @@
 # Final Decisions
 
+## Transactional authentication email — 20 October 2026
+
+Approved implementation uses Resend and native Better Auth recovery/verification. Each new invitation membership requires authoritative verified email; old memberships keep access without artificial verification. Signup remains private. Atomic Turso counters/reservations protect login, recovery, verification and invitation delivery, with a protected recovery budget. Final token consumption and state changes run in external Drizzle transactions. See `31_AUTH_EMAIL_SECURITY_PLAN.md`; this supersedes older exclusions of email delivery/self-service recovery only within this approved scope.
+
 This file prevents old alternatives from re-entering implementation.
 
 ## Product name

@@ -1,5 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Bookmark, Eye, EyeOff, LockKeyhole } from "lucide-react";
@@ -14,7 +15,6 @@ export default function Login() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [recoveryHelp, setRecoveryHelp] = useState(false);
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("reason") !== "session-expired") return;
     const timer = window.setTimeout(() => setNotice("Sua sessão expirou. Entre novamente para continuar."), 0);
@@ -48,12 +48,11 @@ export default function Login() {
                   {showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}
                 </button>
               </div>
-              <button className="login-forgot-password" type="button" onClick={() => setRecoveryHelp(true)}>Esqueceu a senha?</button>
+              <Link className="login-forgot-password" href="/forgot-password">Esqueceu a senha?</Link>
             </div>
             {error && <p className="error" role="alert">{error}</p>}
             <Button type="submit" disabled={isSubmitting}>{isSubmitting ? "Entrando…" : "Entrar"}</Button>
           </form>
-          {recoveryHelp && <p className="login-recovery-help" role="status">Para redefinir sua senha, peça ajuda a quem configurou seu acesso ao Loti.</p>}
           <p className="login-note muted"><LockKeyhole size={14} aria-hidden="true"/><span>Acesso privado para membros do grupo.</span></p>
         </div>
       </section>

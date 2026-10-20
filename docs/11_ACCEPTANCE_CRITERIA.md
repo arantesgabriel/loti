@@ -2,6 +2,8 @@
 
 ## Authentication
 
+- Email extension: password recovery uses generic responses, 30-minute native single-use tokens, atomic password/token/session changes and normal login afterward; unverified invitees receive no membership until native confirmation and authenticated acceptance. Existing memberships remain usable. Resend delivery and all authentication/email limits use persistent atomic controls. See `31_AUTH_EMAIL_SECURITY_PLAN.md` for full acceptance and rollout boundaries.
+
 - unauthenticated protected-route visit redirects to login;
 - valid user can log in with email/password;
 - session survives normal navigation/reload;

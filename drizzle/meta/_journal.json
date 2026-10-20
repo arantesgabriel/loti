@@ -148,6 +148,13 @@
       "when": 1792455515291,
       "tag": "0020_white_maginty",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1792499899558,
+      "tag": "0021_fine_puppet_master",
+      "breakpoints": true
     }
   ]
 }

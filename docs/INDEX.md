@@ -2,6 +2,8 @@
 
 This folder is the canonical product and engineering handoff for the Loti MVP.
 
+Authentication email extension: [`31_AUTH_EMAIL_SECURITY_PLAN.md`](31_AUTH_EMAIL_SECURITY_PLAN.md) specifies Resend, native recovery/verification, pending invitations, legacy compatibility, atomic persistent limits and publication gates.
+
 | File | Purpose |
 |---|---|
 | `00_CONTEXT.md` | Current spreadsheet workflow, pains and why Loti exists |

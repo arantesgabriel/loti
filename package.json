@@ -21,6 +21,7 @@
     "db:seed": "node --import tsx scripts/seed.ts",
     "user:create": "node --import tsx scripts/create-user.ts",
     "user:reset-password": "node --import tsx scripts/reset-password.ts",
+    "auth:audit": "node --import tsx scripts/audit-auth.ts",
     "import:legacy": "node --import tsx scripts/import-legacy-spreadsheet.ts",
     "test:serve": "node --import tsx scripts/e2e-server.ts",
     "db:verify": "node --import tsx scripts/verify-database.ts"
@@ -48,6 +49,7 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-hook-form": "7.89.0",
+    "resend": "6.34.1",
     "server-only": "0.0.1",
     "sharp": "0.35.5",
     "sonner": "2.0.8",

@@ -18,6 +18,8 @@ Use one consistent Drizzle/SQLite timestamp representation for app tables, prefe
 
 ## Better Auth tables
 
+The email-security extension adds only `auth_limits` and `auth_email_deliveries` in migration `0021_fine_puppet_master.sql`. They hold hashed limiter scopes, bounded counters, hashed delivery/token identifiers, expiry and delivery/consumption state. Native reset identifiers are hashed by Better Auth. No existing identity or membership is backfilled/verified. See `31_AUTH_EMAIL_SECURITY_PLAN.md` for atomic reservation and verification semantics.
+
 Generated/managed according to the official Better Auth Drizzle/SQLite integration, typically including concepts such as:
 
 - `user`

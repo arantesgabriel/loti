@@ -4,6 +4,8 @@
 
 ### Authentication and workspace
 
+Approved extension (20 October 2026): self-service email password recovery, mandatory native email verification before each new invitation membership, Resend transactional delivery and persistent distributed authentication/mail limits. Existing memberships keep access without marking legacy addresses verified. Public signup remains disabled. This supersedes older manual-only recovery/invitation-email exclusions. See `31_AUTH_EMAIL_SECURITY_PLAN.md`.
+
 - private email/password login;
 - no public signup screen;
 - one shared workspace in the UI;

@@ -13,4 +13,6 @@ legacy/mapping.local.json
 legacy/source/*.xlsx
 
 .next-e2e/
+.next-e2e-auth-email/
+.next-auth-email-build/
 artifacts/

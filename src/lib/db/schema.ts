@@ -74,6 +74,16 @@ export const invitationLimits = sqliteTable("invitation_limits", {
   key: text("key").primaryKey(), window: integer("window").notNull(), count: integer("count").notNull(),
 });
 
+export const authLimits = sqliteTable("auth_limits", {
+  key: text("key").primaryKey(), count: integer("count").notNull(), expiresAt: integer("expires_at").notNull(),
+}, t => [index("auth_limit_expiry_idx").on(t.expiresAt), check("auth_limit_count", sql`${t.count} > 0`)]);
+export const authEmailDeliveries = sqliteTable("auth_email_deliveries", {
+  id: text("id").primaryKey(), kind: text("kind", { enum: ["reset", "verification", "invitation"] }).notNull(),
+  recipientKey: text("recipient_key").notNull(), userId: text("user_id").references(() => user.id),
+  state: text("state", { enum: ["reserved", "sent", "failed", "uncertain"] }).notNull(),
+  createdAt: timestamp("created_at"), expiresAt: timestamp("expires_at"), consumedAt: integer("consumed_at", { mode: "timestamp_ms" }),
+}, t => [index("auth_email_expiry_idx").on(t.expiresAt), check("auth_email_kind", sql`${t.kind} IN ('reset','verification','invitation')`), check("auth_email_state", sql`${t.state} IN ('reserved','sent','failed','uncertain')`)]);
+
 export const workspaceCostSettings = sqliteTable("workspace_cost_settings", {
   workspaceId: text("workspace_id").primaryKey().references(() => workspaces.id),
   pixBps: integer("pix_bps").notNull().default(100),

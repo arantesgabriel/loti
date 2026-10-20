@@ -32,7 +32,7 @@ export function GroupScreen({ initialData }: { initialData: GroupData }) {
       const result = await response.json();
       if (!response.ok) { setError(result.error); return; }
       setAction(null);
-      if (result.link) { setLink(result.link); setExpires(result.expiresAt); setOpen(true); } else toast.success("Convite revogado");
+      if (result.link) { setLink(result.link); setExpires(result.expiresAt); setOpen(true); if (result.emailStatus === "sent") toast.success("Convite enviado por email"); else toast.warning("O link foi criado, mas o envio por email não foi confirmado. Você pode compartilhá-lo manualmente."); } else toast.success("Convite revogado");
       const refreshed = await fetch("/api/group", { cache: "no-store" });
       if (refreshed.ok) setData(await refreshed.json());
       else toast.error("A ação foi concluída. Atualize a página para ver a lista atual.");

@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { invitationService, limitInvitations } from "@/lib/domain/invitations";
 import { invitationFailure, privateHeaders, requireInvitationOrigin } from "@/lib/domain/invitation-http";
+import { emailService } from "@/lib/email/service";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const bodySchema = z.discriminatedUnion("operation", [
@@ -24,6 +25,11 @@ export async function POST(request: Request) {
     if (body.operation === "revoke") { await service.revoke(member.id, body.id); return NextResponse.json({ ok: true }, { headers: privateHeaders }); }
     const result = await service.issue(member.id, body.email, body.previousId);
     const origin = authOrigin();
-    return NextResponse.json({ link: `${origin}/invite/${result.token}`, expiresAt: result.expiresAt }, { headers: privateHeaders });
+    const link = `${origin}/invite/${result.token}`;
+    const group = await service.group(member.id);
+    let emailStatus: string = "unavailable";
+    try { emailStatus = await emailService(db).send({ kind: "invitation", email: body.email, token: result.token, url: link, workspaceId: group.workspace!.id, groupName: group.workspace!.name }); }
+    catch { /* Invitation remains valid and manual sharing remains available. */ }
+    return NextResponse.json({ link, expiresAt: result.expiresAt, emailStatus }, { headers: privateHeaders });
   } catch (error) { return invitationFailure(error); }
 }

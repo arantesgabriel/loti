@@ -10,6 +10,8 @@ export function InviteScreen({ token }: { token: string }) {
   const router = useRouter();
   const [data, setData] = useState<InviteData | null>(null), [error, setError] = useState(""), [loadError, setLoadError] = useState(""), [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false), [name, setName] = useState(""), [password, setPassword] = useState(""), [confirmation, setConfirmation] = useState(""), [show, setShow] = useState(false), [accepted, setAccepted] = useState(false);
+  const [verificationPending, setVerificationPending] = useState(false), [verificationNotice, setVerificationNotice] = useState(""), [cooldown, setCooldown] = useState(0);
+  useEffect(() => { if (!cooldown) return; const timer = setTimeout(() => setCooldown(value => Math.max(0, value - 1)), 1000); return () => clearTimeout(timer); }, [cooldown]);
   const path = `/invite/${token}`, loginLink = `/login?returnTo=${encodeURIComponent(path)}`;
   const api = `/api/invitations/${encodeURIComponent(token)}`;
   useEffect(() => {
@@ -21,6 +23,17 @@ export function InviteScreen({ token }: { token: string }) {
     return () => controller.abort();
   }, [api]);
   const wrongEmail = !!data?.sessionEmail && data.sessionEmail.toLowerCase() !== data.email;
+  async function sendVerification() {
+    if (!data) return;
+    setBusy(true); setError("");
+    try {
+      const result = await authClient.sendVerificationEmail({ email: data.email, callbackURL: path });
+      setCooldown(60);
+      if (result.error) setError(result.error.status === 429 ? "Muitas solicitações. Aguarde antes de reenviar." : "Não foi possível confirmar o envio. Aguarde e tente novamente.");
+      else setVerificationNotice("Confira sua caixa de entrada e o spam. O link de confirmação é válido por 30 minutos.");
+    } catch { setCooldown(60); setError("Não foi possível confirmar o envio. Aguarde antes de tentar novamente."); }
+    finally { setBusy(false); }
+  }
   async function switchAccount() {
     setBusy(true); setError("");
     try { const result = await authClient.signOut(); if (result.error) { setError("Não foi possível sair. Tente novamente."); return; } router.replace(loginLink); router.refresh(); }
@@ -30,19 +43,28 @@ export function InviteScreen({ token }: { token: string }) {
   async function accept() {
     if (!data) return;
     const fullName = name.trim();
-    if (!data.existingAccount && !fullName) { setError("Informe seu primeiro nome e sobrenome."); return; }
+    if (!data.existingAccount && !fullName) { setError("Informe seu nome completo."); return; }
     if (!data.existingAccount && password !== confirmation) { setError("As senhas precisam ser iguais."); return; }
     setBusy(true); setError("");
     try {
       const response = await fetch(api, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: fullName, password }) });
       const result = await response.json();
       if (!response.ok) { setError(result.error); return; }
-      setAccepted(true);
+      if (!result.verificationRequired) setAccepted(true);
       if (result.created) {
         // The transaction has committed before requesting a session through the normal auth handler.
         const signedIn = await authClient.signIn.email({ email: result.email, password });
         setPassword(""); setConfirmation("");
-        if (signedIn.error) { setError("Sua conta foi criada e você já faz parte do grupo. Entre com a senha que acabou de definir."); return; }
+        if (signedIn.error) { setData(current => current ? { ...current, existingAccount: true } : current); setError("Sua conta foi criada. Entre com a senha que acabou de definir para confirmar seu email e concluir o convite."); return; }
+      }
+      if (result.verificationRequired) {
+        setVerificationPending(true);
+        setData(current => current ? { ...current, existingAccount: true, sessionEmail: result.email, verificationRequired: true } : current);
+        const sent = await authClient.sendVerificationEmail({ email: result.email, callbackURL: path });
+        setCooldown(60);
+        if (sent.error) setError("Sua conta está salva, mas o envio não foi confirmado. Aguarde para reenviar a confirmação.");
+        else setVerificationNotice("Confira sua caixa de entrada e o spam. O link de confirmação é válido por 30 minutos.");
+        return;
       }
       router.replace("/favorites"); router.refresh();
     } catch { setError("Não foi possível concluir a conexão. Se o convite já foi aceito, entre com sua conta para acessar o grupo."); }
@@ -55,14 +77,19 @@ export function InviteScreen({ token }: { token: string }) {
         <h1>{accepted ? "Você já faz parte do grupo" : `Entre no grupo ${data.groupName}`}</h1>
         <p className="muted">Organize seus favoritos e participe das compras com o grupo. Você terá acesso aos favoritos e compras compartilhados.</p>
         <div className="invite-address"><span className="muted">Convite para</span><strong>{data.email}</strong></div>
-        {accepted ? <Button asChild><Link href="/login">Entrar na minha conta</Link></Button> : wrongEmail ? <><p>Você está conectado como {data.sessionEmail}. Entre com o email convidado para continuar.</p><Button disabled={busy} onClick={switchAccount}>{busy ? "Aguarde…" : "Trocar de conta"}</Button></> : data.alreadyMember ? <><p>Você já faz parte deste grupo.</p><Button disabled={busy} onClick={accept}>{busy ? "Aguarde…" : "Ir para Favoritos"}</Button></> : data.existingAccount && !data.sessionEmail ? <><p>Você já tem uma conta no Loti. Entre com sua senha atual para aceitar o convite.</p><Button asChild><Link href={loginLink}>Entrar para aceitar</Link></Button></> : data.sessionEmail ? <Button disabled={busy} onClick={accept}>{busy ? "Entrando no grupo…" : "Aceitar convite"}</Button> : <form onSubmit={e => { e.preventDefault(); void accept(); }}>
-          <label>Nome e sobrenome<input autoComplete="name" placeholder="Ex.: Ana Souza" required maxLength={200} aria-describedby="invite-name-help" value={name} onChange={e => setName(e.target.value)} /></label>
-          <p className="muted" id="invite-name-help">Informe somente seu primeiro nome e último sobrenome, sem nomes do meio.</p>
+        {accepted ? <Button asChild><Link href="/login">Entrar na minha conta</Link></Button> : wrongEmail ? <><p>Você está conectado como {data.sessionEmail}. Entre com o email convidado para continuar.</p><Button disabled={busy} onClick={switchAccount}>{busy ? "Aguarde…" : "Trocar de conta"}</Button></> : data.alreadyMember ? <><p>Você já faz parte deste grupo.</p><Button asChild><Link href="/favorites">Ir para Favoritos</Link></Button></> : data.existingAccount && !data.sessionEmail ? <><p>Você já tem uma conta no Loti. Entre com sua senha atual para aceitar o convite.</p><Button asChild><Link href={loginLink}>Entrar para aceitar</Link></Button></> : verificationPending || (data.sessionEmail && data.verificationRequired) ? <>
+          <h2>Confirme seu email</h2><p>Seu cadastro está salvo. O acesso a este grupo será liberado somente após confirmar o endereço e aceitar o convite.</p>
+          {verificationNotice && <p role="status">{verificationNotice}</p>}
+          <Button disabled={busy || cooldown > 0} onClick={sendVerification}>{cooldown > 0 ? `Reenviar em ${cooldown}s` : "Reenviar email de verificação"}</Button>
+          <Button variant="outline" disabled={busy} onClick={() => window.location.reload()}>Já confirmei meu email</Button>
+        </> : data.sessionEmail ? <Button disabled={busy} onClick={accept}>{busy ? "Entrando no grupo…" : "Aceitar convite"}</Button> : <form onSubmit={e => { e.preventDefault(); void accept(); }}>
+          <label>Nome completo<input autoComplete="name" placeholder="Ex.: Ana Souza" required maxLength={200} value={name} onChange={e => setName(e.target.value)} /></label>
           <label>Senha<input type={show ? "text" : "password"} autoComplete="new-password" required minLength={12} maxLength={128} aria-describedby="invite-password-help" value={password} onChange={e => setPassword(e.target.value)} /></label>
           <p className="muted" id="invite-password-help">Use de 12 a 128 caracteres.</p>
           <label>Confirmar senha<input type={show ? "text" : "password"} autoComplete="new-password" required minLength={12} maxLength={128} value={confirmation} onChange={e => setConfirmation(e.target.value)} /></label>
           <Button type="button" variant="ghost" aria-pressed={show} onClick={() => setShow(v => !v)}>{show ? <EyeOff size={18}/> : <Eye size={18}/>} {show ? "Ocultar senhas" : "Mostrar senhas"}</Button>
-          <Button type="submit" disabled={busy}>{busy ? "Criando sua conta…" : "Criar conta e entrar no grupo"}</Button>
+          <p className="muted">Após criar sua conta, você precisará confirmar o email antes de entrar no grupo.</p>
+          <Button type="submit" disabled={busy}>{busy ? "Criando sua conta…" : "Criar conta e confirmar email"}</Button>
         </form>}
         {!accepted && <p className="muted invite-validity">Válido até {new Date(data.expiresAt).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}.</p>}
       </>}

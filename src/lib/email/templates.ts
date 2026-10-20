@@ -1,0 +1,14 @@
+export type EmailKind = "reset" | "verification" | "invitation";
+function escape(value: string) {
+  return value.replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
+}
+export function transactionalTemplate(kind: EmailKind, url: string, groupName?: string) {
+  const content = {
+    reset: { subject: "Loti | Redefinir sua senha", title: "Vamos recuperar seu acesso", body: "Recebemos uma solicitação para redefinir sua senha no Loti.", action: "Redefinir senha", expiry: "Este link é válido por 30 minutos e pode ser usado uma única vez.", footer: "Se você não fez esta solicitação, ignore este email. Sua senha continua a mesma." },
+    verification: { subject: "Loti | Confirme seu email", title: "Confirme seu endereço", body: "Bem-vindo ao Loti. Confirme que este email é seu para concluir a entrada no grupo. Você precisará entrar com sua senha para aceitar o convite.", action: "Confirmar email", expiry: "Este link é válido por 30 minutos e pode ser usado uma única vez.", footer: "Se você não solicitou este cadastro ou convite, não confirme o endereço e ignore este email." },
+    invitation: { subject: "Loti | Você recebeu um convite", title: "Você foi convidado", body: `Você recebeu um convite para participar do grupo ${groupName ?? "Loti"}. Organize favoritos e participe das compras do grupo.`, action: "Aceitar convite", expiry: "O convite é válido por sete dias. Se for substituído ou revogado, peça um novo link.", footer: "Se você não reconhece este convite, ignore este email." },
+  }[kind];
+  const text = `${content.title}\n\n${content.body}\n\n${content.action}: ${url}\n\n${content.expiry}\n\n${content.footer}`;
+  const html = `<!doctype html><html lang="pt-BR"><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta charset="utf-8"></head><body style="margin:0;background:#faf8f6;color:#221d21;font-family:Arial,sans-serif"><table role="presentation" width="100%"><tr><td style="padding:32px 16px"><table role="presentation" width="100%" style="max-width:520px;margin:auto;background:white;border:1px solid #e8e3df;border-radius:16px"><tr><td style="padding:32px"><p style="color:#1c0113;font-size:24px;font-weight:700;margin:0 0 28px">Loti</p><h1 style="font-size:24px;line-height:1.3">${escape(content.title)}</h1><p style="line-height:1.6">${escape(content.body)}</p><p style="margin:28px 0"><a href="${escape(url)}" style="display:inline-block;background:#f77014;color:#1c0113;padding:14px 20px;border-radius:10px;text-decoration:none;font-weight:700">${content.action}</a></p><p style="line-height:1.6">${content.expiry}</p><p style="font-size:13px;color:#433d3d;line-height:1.6">${content.footer}</p><p style="font-size:12px;line-height:1.6;word-break:break-all">Se o botão não funcionar, copie este endereço:<br>${escape(url)}</p></td></tr></table></td></tr></table></body></html>`;
+  return { subject: content.subject, html, text };
+}
