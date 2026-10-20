@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import type { AppDatabase } from "../db/connection";
-import { financialOperations, hubbuyAccounts, hubbuyBalanceConsumptions, hubbuyBalanceCreditShares, hubbuyBalanceEntries, memberBalanceFinancingEntries, purchaseAdditionalOrderItems, purchaseCostCharges, purchaseCostOrders, purchaseCostPackageEvents, purchaseCostParticipants, purchaseCostRefundEvents, purchaseCostRefundParticipants, purchaseCostRefunds, purchaseCostReopenings, purchaseCostTrackings, purchaseItemCosts, purchaseItems, purchasePackageItems, purchasePackages, purchasePaymentAllocations, purchasePaymentComponents, purchaseRefundPaymentAllocations, workspaceCostSettings } from "../db/schema";
+import { financialOperations, hubbuyAccounts, hubbuyBalanceConsumptions, hubbuyBalanceCreditShares, hubbuyBalanceEntries, memberBalanceFinancingEntries, purchaseAdditionalOrderItems, purchaseCostCharges, purchaseCostOrders, purchaseOrderCorrections, purchaseCostPackageEvents, purchaseCostParticipants, purchaseCostRefundEvents, purchaseCostRefundParticipants, purchaseCostRefunds, purchaseCostReopenings, purchaseCostTrackings, purchaseItemCosts, purchaseItems, purchasePackageItems, purchasePackages, purchasePaymentAllocations, purchasePaymentComponents, purchaseRefundPaymentAllocations, workspaceCostSettings } from "../db/schema";
 import { authorization } from "./authorization";
 import { DomainError } from "./errors";
 import { listCostTrackings, readCostTracking } from "./package-cost-reading";
@@ -13,6 +13,7 @@ import { purchaseCostOrderServices } from "./purchase-cost-order-services";
 import { allocateExactMinor } from "./hubbuy-balance-calculations";
 import { activateEmptyHubbuyAccountAtZeroInTransaction, calculateHubBuyBalanceState, createHubbuyZeroBalanceAccountInTransaction } from "./hubbuy-balance-services";
 import { allocateRefundCredit } from "./package-refund-calculations";
+import { purchaseOrderCorrectionServices } from "./purchase-order-corrections";
 
 const maxCost = 1_000_000_000_000;
 const revisionSchema = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
@@ -179,6 +180,7 @@ function isDatabaseBusy(error: unknown, seen = new Set<unknown>()): boolean {
 
 export function packageCostServices(db: AppDatabase, userId: string) {
   const orders = purchaseCostOrderServices(db, userId);
+  const correctAdditionalOrder = purchaseOrderCorrectionServices(db, userId).correct;
   const transact = <T>(operation: (tx: CostTransaction) => Promise<T>) => serializeDomainTransaction(async () => {
     for (let attempt = 0; ; attempt++) {
       try { return await db.transaction(operation); }
@@ -383,6 +385,7 @@ export function packageCostServices(db: AppDatabase, userId: string) {
   async function list() { return listCostTrackings(db, userId); }
 
   async function getAdditionalRefundContext(tx: CostTransaction, trackingId: string, costItem: typeof purchaseItemCosts.$inferSelect) {
+    if (await tx.select().from(purchaseOrderCorrections).where(eq(purchaseOrderCorrections.previousOrderId, costItem.orderId)).get()) throw new DomainError("Este pedido foi substituído por uma correção. Atualize a tela.", 409);
     if (!costItem.additionalOrderItemId || costItem.purchaseItemId !== null) throw new DomainError("Este produto não pertence a um pedido adicional.", 409);
     const [order, item, participants, joinedAllocations] = await Promise.all([
       tx.select().from(purchaseCostOrders).where(and(eq(purchaseCostOrders.id, costItem.orderId), eq(purchaseCostOrders.trackingId, trackingId))).get(),
@@ -614,7 +617,7 @@ export function packageCostServices(db: AppDatabase, userId: string) {
         tx.select().from(purchasePackages).where(eq(purchasePackages.trackingId, trackingId)).all(),
         tx.select().from(purchasePackageItems).all(),
         tx.select().from(purchaseCostParticipants).where(eq(purchaseCostParticipants.costItemId, item.id)).orderBy(asc(purchaseCostParticipants.allocationOrder)).all(),
-        tx.select().from(purchaseCostCharges).where(and(additional ? eq(purchaseCostCharges.orderId, item.orderId) : eq(purchaseCostCharges.trackingId, trackingId), eq(purchaseCostCharges.chargeType, "products"))).get(),
+        tx.select().from(purchaseCostCharges).where(and(eq(purchaseCostCharges.orderId, item.orderId), eq(purchaseCostCharges.chargeType, "products"))).get(),
         readCostTracking(tx, userId, trackingId),
       ]);
       if (!additional && (productCharge?.paymentStatus !== "paid" || detail.calculation.productsCharge.baseCents === null || detail.calculation.productsCharge.feeCents === null)) throw new DomainError("Confirme o pagamento dos produtos e resolva as bases antes de registrar reembolsos.", 409, "REFUND_PRODUCTS_UNRESOLVED");
@@ -951,6 +954,7 @@ export function packageCostServices(db: AppDatabase, userId: string) {
       if (tracking.status !== "open" || tracking.revision !== value.expectedRevision) throw new DomainError("Os custos foram alterados ou encerrados. Atualize a tela.", 409);
       const order = await tx.select().from(purchaseCostOrders).where(and(eq(purchaseCostOrders.id, value.orderId), eq(purchaseCostOrders.trackingId, trackingId))).get();
       if (!order || order.kind !== "additional" || order.state !== "recorded" || !order.accountId) throw new DomainError("A posição não pertence a um pedido adicional registrado.", 409);
+      if (await tx.select().from(purchaseOrderCorrections).where(eq(purchaseOrderCorrections.previousOrderId, order.id)).get()) throw new DomainError("O pedido foi corrigido. Atualize a tela.", 409);
       const source = await tx.select({ consumption: hubbuyBalanceConsumptions, allocation: purchasePaymentAllocations, component: purchasePaymentComponents })
         .from(hubbuyBalanceConsumptions)
         .innerJoin(purchasePaymentAllocations, eq(hubbuyBalanceConsumptions.paymentAllocationId, purchasePaymentAllocations.id))
@@ -1026,7 +1030,7 @@ export function packageCostServices(db: AppDatabase, userId: string) {
       const itemHasActiveRefund = activeRefunds.some(refund => refund.costItemId === costItem.id);
       if (activeRefunds.length && changed) throw new DomainError("As bases dos produtos estão protegidas enquanto houver reembolso não anulado. Anule os reembolsos antes de corrigir esses valores.", 409, "REFUND_PRODUCTS_LOCKED");
       if (itemHasActiveRefund && compositionChanged) throw new DomainError("A divisão deste produto está protegida enquanto houver reembolso não anulado. Anule seus reembolsos antes de alterar a composição.", 409, "REFUND_PRODUCTS_LOCKED");
-      const productsCharge = await tx.select().from(purchaseCostCharges).where(and(eq(purchaseCostCharges.trackingId, trackingId), eq(purchaseCostCharges.chargeType, "products"))).get();
+      const productsCharge = await tx.select().from(purchaseCostCharges).where(and(eq(purchaseCostCharges.orderId, costItem.orderId), eq(purchaseCostCharges.chargeType, "products"))).get();
       if (changed && productsCharge?.paymentStatus === "paid" && !value.confirmPaymentReset) throw new DomainError("A cobrança dos produtos está marcada como paga. Confirme a edição para voltar o pagamento a pendente.", 409);
       await tx.update(purchaseItemCosts).set({ effectivePriceState: value.effectivePriceState, effectivePriceUnitCents: value.effectivePriceUnitCents, chinaFreightState: value.chinaFreightState, chinaFreightUnitCents: value.chinaFreightUnitCents }).where(eq(purchaseItemCosts.id, costItem.id)).run();
       if (changed && productsCharge?.paymentStatus === "paid") await tx.update(purchaseCostCharges).set({ paymentStatus: "pending", paidAt: null, paidBy: null, updatedAt: new Date() }).where(eq(purchaseCostCharges.id, productsCharge.id)).run();
@@ -1113,6 +1117,7 @@ export function packageCostServices(db: AppDatabase, userId: string) {
         const costItem = costItemsById.get(row.costItemId);
         if (!pkg || !costItem) throw new DomainError("A alocação referencia um pacote ou produto de outra compra.", 403);
         if (costItem.additionalOrderItemId && row.quantity > 0) {
+          if (await tx.select().from(purchaseOrderCorrections).where(eq(purchaseOrderCorrections.previousOrderId, costItem.orderId)).get()) throw new DomainError("Este pedido foi corrigido. Atualize a tela antes de alocar unidades.", 409);
           const order = ordersById.get(costItem.orderId);
           if (!order || order.trackingId !== trackingId || order.kind !== "additional" || order.state !== "recorded") throw new DomainError("Somente pedidos adicionais registrados podem entrar em um pacote.", 409, "ORDER_NOT_ALLOCATABLE");
           if (!order.accountId) throw new DomainError("O pedido adicional não tem uma conta HubBuy registrada.", 409, "PACKAGE_ACCOUNT_REQUIRED");
@@ -1279,5 +1284,5 @@ export function packageCostServices(db: AppDatabase, userId: string) {
     }, { requiredStatus: "closed", trackingPatch: { status: "open", closedBy: null, closedAt: null } });
   }
 
-  return { startTracking, getTracking, list, getSettings, saveSettings, saveItemCosts, createAdditionalOrder: orders.createDraft, recordAdditionalOrderPayment: orders.recordExternalPayment, recordAdditionalOrderMixedPayment: orders.recordMixedPayment, voidAdditionalOrderDraft: orders.voidDraft, settleAdditionalOrderAdvance, createPackage, deletePackage, saveAllocations, savePackage, unsealPackageContent, saveCharge, markChargePaid, requestRefund, updateRefundRequest, receiveRefund, correctRefundReceipt, voidRefund, closeTracking, reopenTracking };
+  return { startTracking, getTracking, list, getSettings, saveSettings, saveItemCosts, correctAdditionalOrder, createAdditionalOrder: orders.createDraft, recordAdditionalOrderPayment: orders.recordExternalPayment, recordAdditionalOrderMixedPayment: orders.recordMixedPayment, voidAdditionalOrderDraft: orders.voidDraft, settleAdditionalOrderAdvance, createPackage, deletePackage, saveAllocations, savePackage, unsealPackageContent, saveCharge, markChargePaid, requestRefund, updateRefundRequest, receiveRefund, correctRefundReceipt, voidRefund, closeTracking, reopenTracking };
 }

@@ -20,6 +20,7 @@ try {
   else if (action === "ship") result = await service.savePackage(trackingId, process.env.LOTI_REFUND_PACKAGE_ID!, input);
   else if (action === "close") result = await service.closeTracking(trackingId, input);
   else if (action === "mixed-payment") result = await service.recordAdditionalOrderMixedPayment(trackingId, orderId!, input);
+  else if (action === "correct-order") result = await service.correctAdditionalOrder(trackingId, orderId!, input);
   else throw new Error(`Unknown refund race action: ${action}`);
   void result;
   process.stdout.write(JSON.stringify({ ok: true }));

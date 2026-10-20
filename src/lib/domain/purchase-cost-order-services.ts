@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import type { AppDatabase } from "../db/connection";
+import type { CostTransaction } from "./purchase-cost-initialization";
 import {
   financialOperations, favorites, hubbuyAccounts, hubbuyBalanceConsumptions, hubbuyBalanceEntries, memberBalanceFinancingEntries, purchaseAdditionalOrderItems, purchaseCostCharges,
   purchaseCostOrders, purchaseCostParticipants, purchaseCostTrackings, purchaseItemCosts,
@@ -199,11 +200,10 @@ export function purchaseCostOrderServices(db: AppDatabase, actorId: string) {
     }));
   }
 
-  async function recordMixedPayment(trackingId: string, orderId: string, input: unknown) {
+  async function recordMixedPaymentInTransaction(tx: CostTransaction, trackingId: string, orderId: string, input: unknown) {
     const value = mixedPaymentSchema.parse(input);
     const balanceFunding = [...value.balanceFunding].sort((a, b) => a.costItemId.localeCompare(b.costItemId) || a.costComponent.localeCompare(b.costComponent) || a.beneficiaryId.localeCompare(b.beneficiaryId) || a.lenderId.localeCompare(b.lenderId));
     const normalized = { ...value, balanceFunding };
-    return serializeDomainTransaction(() => db.transaction(async tx => {
       const tracking = await tx.select().from(purchaseCostTrackings).where(eq(purchaseCostTrackings.id, trackingId)).get();
       if (!tracking) throw new DomainError("Acompanhamento de custos não encontrado.", 404);
       await authorization(tx, actorId).requireWorkspaceMember(tracking.workspaceId);
@@ -400,7 +400,10 @@ export function purchaseCostOrderServices(db: AppDatabase, actorId: string) {
       await tx.update(purchaseCostOrders).set({ state: "recorded", revision: order.revision + 1, operationId, recordedAt: now, updatedBy: actorId, updatedAt: now }).where(and(eq(purchaseCostOrders.id, orderId), eq(purchaseCostOrders.revision, order.revision), eq(purchaseCostOrders.state, "draft"))).run();
       await updateTracking(tx, trackingId, value.expectedRevision, actorId);
       return { operationId, replayed: false, cnyMinor: orderCny, balanceCnyMinor: Number(balanceTotal), historicalBrlCents: Number(balanceHistoricalBrl), externalCnyMinor: externalCny, principalBrlCents: external?.principalBrlCents ?? 0, feeBrlCents: externalFee };
-    }));
+  }
+
+  async function recordMixedPayment(trackingId: string, orderId: string, input: unknown) {
+    return serializeDomainTransaction(() => db.transaction(tx => recordMixedPaymentInTransaction(tx, trackingId, orderId, input)));
   }
 
   async function voidDraft(trackingId: string, orderId: string, input: unknown) {
@@ -431,5 +434,5 @@ export function purchaseCostOrderServices(db: AppDatabase, actorId: string) {
     }));
   }
 
-  return { createDraft, recordExternalPayment, recordMixedPayment, voidDraft };
+  return { createDraft, recordExternalPayment, recordMixedPayment, recordMixedPaymentInTransaction, voidDraft };
 }

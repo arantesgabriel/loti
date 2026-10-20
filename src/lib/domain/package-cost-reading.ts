@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import type { AppDatabase } from "../db/connection";
-import { hubbuyAccounts, hubbuyBalanceConsumptions, hubbuyBalanceEntries, hubbuyReconciliationEvents, hubbuyReconciliationRuns, memberBalanceFinancingEntries, purchaseAdditionalOrderItems, purchaseCostCharges, purchaseCostOrders, purchaseCostPackageEvents, purchaseCostParticipants, purchaseCostRefundEvents, purchaseCostRefundParticipants, purchaseCostRefunds, purchaseCostReopenings, purchaseCostTrackings, purchaseItemCosts, purchaseItems, purchasePackageItems, purchasePackages, purchasePaymentAllocations, purchasePaymentComponents, purchases, user, workspaceMembers, workspaceCostSettings } from "../db/schema";
+import { financialOperations, hubbuyAccounts, hubbuyBalanceConsumptions, hubbuyBalanceEntries, hubbuyReconciliationEvents, hubbuyReconciliationRuns, memberBalanceFinancingEntries, purchaseAdditionalOrderItems, purchaseCostCharges, purchaseCostOrders, purchaseOrderCorrections, purchaseCostPackageEvents, purchaseCostParticipants, purchaseCostRefundEvents, purchaseCostRefundParticipants, purchaseCostRefunds, purchaseCostReopenings, purchaseCostTrackings, purchaseItemCosts, purchaseItems, purchasePackageItems, purchasePackages, purchasePaymentAllocations, purchasePaymentComponents, purchases, user, workspaceMembers, workspaceCostSettings } from "../db/schema";
 import { authorization } from "./authorization";
 import { DomainError } from "./errors";
 import { calculateCostTracking } from "./package-cost-calculations";
@@ -29,6 +29,8 @@ export async function readCostTracking(db: CostDatabase, userId: string, trackin
     db.select().from(purchaseCostRefunds).where(eq(purchaseCostRefunds.trackingId, trackingId)).orderBy(asc(purchaseCostRefunds.requestedAt), asc(purchaseCostRefunds.id)).all(),
     db.select().from(purchaseCostOrders).where(eq(purchaseCostOrders.trackingId, trackingId)).orderBy(asc(purchaseCostOrders.createdAt), asc(purchaseCostOrders.id)).all(),
   ]);
+  const corrections = await db.select().from(purchaseOrderCorrections).innerJoin(financialOperations, eq(purchaseOrderCorrections.operationId, financialOperations.id)).where(eq(purchaseOrderCorrections.trackingId, trackingId)).all();
+  const supersededOrderIds = new Set(corrections.map(row => row.purchase_order_corrections.previousOrderId));
   const legacyCostItems = itemCosts.filter(item => item.purchaseItemId !== null && item.additionalOrderItemId === null);
   const costIds = itemCosts.map(item => item.id), purchaseItemIds = legacyCostItems.map(item => item.purchaseItemId!), packageIds = packages.map(pkg => pkg.id);
   const refundIds = refunds.map(refund => refund.id);
@@ -94,9 +96,10 @@ export async function readCostTracking(db: CostDatabase, userId: string, trackin
     participants: (refundParticipantsById.get(refund.id) ?? []).map(person => ({ ...person, name: peopleById.get(person.personId)?.name ?? "Membro" })),
     events: (refundEventsById.get(refund.id) ?? []).map(event => ({ ...event, actorName: peopleById.get(event.actorId)?.name ?? "Membro", details: safeEventDetails(event.detailsJson) })),
   });
-  const chargeByScope = new Map(charges.map(charge => [`${charge.packageId ?? "purchase"}:${charge.chargeType}`, charge]));
-  const productCharge = chargeByScope.get("purchase:products");
-  const recordedAdditionalOrderIds = new Set(orders.filter(order => order.kind === "additional" && order.state === "recorded").map(order => order.id));
+  const chargeByScope = new Map(charges.filter(charge => charge.packageId !== null).map(charge => [`${charge.packageId}:${charge.chargeType}`, charge]));
+  const originalOrder = orders.find(order => order.kind === "original");
+  const productCharge = charges.find(charge => charge.chargeType === "products" && charge.orderId === originalOrder?.id);
+  const recordedAdditionalOrderIds = new Set(orders.filter(order => order.kind === "additional" && order.state === "recorded" && !supersededOrderIds.has(order.id)).map(order => order.id));
   const calculatedCostItems = itemCosts.filter(cost => cost.purchaseItemId !== null || cost.additionalOrderItemId !== null && recordedAdditionalOrderIds.has(cost.orderId));
   const calculatedCostItemIds = new Set(calculatedCostItems.map(cost => cost.id));
   const allocationsByCostItem = new Map<string, typeof allocationRows>();
@@ -213,7 +216,7 @@ export async function readCostTracking(db: CostDatabase, userId: string, trackin
   const accountsById = new Map(accountRows.map(account => [account.id, account]));
   const allocationsByComponent = new Map<string, typeof allocationRows>();
   for (const row of allocationRows) allocationsByComponent.set(row.purchase_payment_allocations.componentId, [...(allocationsByComponent.get(row.purchase_payment_allocations.componentId) ?? []), row]);
-  const productOrders = orders.map(order => {
+  const productOrders = orders.filter(order => !supersededOrderIds.has(order.id)).map(order => {
     const orderCosts = itemCosts.filter(cost => cost.orderId === order.id);
     const paymentComponents = componentRows.filter(component => component.orderId === order.id).map(component => ({
       ...component,
@@ -269,6 +272,19 @@ export async function readCostTracking(db: CostDatabase, userId: string, trackin
     purchase,
     items,
     productOrders,
+    orderCorrections: corrections.map(row => {
+      const previousId = row.purchase_order_corrections.previousOrderId;
+      const previousComponents = componentRows.filter(component => component.orderId === previousId);
+      return {
+        ...row.purchase_order_corrections,
+        reason: row.financial_operations.reason, recordedAt: row.financial_operations.recordedAt,
+        actorId: row.financial_operations.actorId, actorName: peopleById.get(row.financial_operations.actorId)?.name ?? "Membro",
+        previousOrder: orders.find(order => order.id === previousId),
+        previousItems: additionalItemRows.filter(item => item.orderId === previousId),
+        previousComponents,
+        previousTotalBrlCents: previousComponents.reduce((sum, component) => sum + component.principalBrlCents + component.feeBrlCents, 0),
+      };
+    }),
     hubbuyAccounts: accountRowsWithEligibility,
     packages: packageData,
     charges,

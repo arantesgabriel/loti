@@ -124,6 +124,19 @@ export const purchaseCostOrders = sqliteTable("purchase_cost_orders", {
   check("cost_order_recorded", sql`(${t.state} = 'recorded' AND (${t.recordedAt} IS NOT NULL OR (${t.kind} = 'original' AND ${t.accountId} IS NULL AND ${t.operationId} IS NULL))) OR (${t.state} != 'recorded' AND ${t.recordedAt} IS NULL)`),
 ]);
 
+export const purchaseOrderCorrections = sqliteTable("purchase_order_corrections", {
+  id: text("id").primaryKey(),
+  trackingId: text("tracking_id").notNull().references(() => purchaseCostTrackings.id),
+  previousOrderId: text("previous_order_id").notNull().references(() => purchaseCostOrders.id),
+  replacementOrderId: text("replacement_order_id").notNull().references(() => purchaseCostOrders.id),
+  operationId: text("operation_id").notNull().references((): AnySQLiteColumn => financialOperations.id),
+}, t => [
+  uniqueIndex("order_correction_previous_idx").on(t.previousOrderId),
+  uniqueIndex("order_correction_replacement_idx").on(t.replacementOrderId),
+  index("order_correction_tracking_idx").on(t.trackingId),
+  check("order_correction_distinct", sql`${t.previousOrderId} != ${t.replacementOrderId}`),
+]);
+
 export const purchaseAdditionalOrderItems = sqliteTable("purchase_additional_order_items", {
   id: text("id").primaryKey(), orderId: text("order_id").notNull().references(() => purchaseCostOrders.id),
   sourceFavoriteId: text("source_favorite_id").references(() => favorites.id, { onDelete: "set null" }),

@@ -657,3 +657,13 @@ O primeiro gate completo revelou uma contenção SQLite na corrida entre recebim
 ### Limites e próximo passo operacional
 
 Nenhum saldo HubBuy real, refund antigo, RAM/Elixir, taxa, cotação, acerto entre pessoas ou pacote físico foi registrado ou conciliado. Esta execução não acessou nem alterou o banco remoto, não publicou versão, não configurou R2/Cloudflare/secrets e não executou transferências. A aplicação em produção depende de autorização operacional específica, backup recuperável, bloqueio coordenado de escritores, migração explícita, conciliação fornecida pelos responsáveis e smoke test posterior.
+
+### Correção de produtos adicionais pagos — 20 de outubro de 2026
+
+O usuário autorizou reutilizar a ação **Editar** dos produtos normais e incluir
+custos pagos com correção financeira motivada. O contrato e a implementação
+estão em [29 — edição de produtos adicionais](29_ADDITIONAL_PRODUCT_CORRECTIONS.md).
+O registro pago anterior continua imutável; uma compensação e um pedido
+substituto são confirmados atomicamente, com prévia, idempotência e proteção
+de dependências. A relação aditiva de correção exige a migração `0020` antes
+de ativar a versão. Esta autorização não publica nem migra produção.

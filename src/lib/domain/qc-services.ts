@@ -1,7 +1,7 @@
 import { and, asc, count, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { createHash, randomUUID } from "node:crypto";
 import type { AppDatabase } from "../db/connection";
-import { hubbuyExternalItems, purchaseAdditionalOrderItems, purchaseCostOrders, purchaseCostTrackings, purchaseItems, qcAdditionalPresentations, qcEvents, qcImagePreviews, qcImageSources, qcImages, qcImports, qcPresentations, qcRateLimits, qcTransferLocks } from "../db/schema";
+import { hubbuyExternalItems, purchaseAdditionalOrderItems, purchaseCostOrders, purchaseOrderCorrections, purchaseCostTrackings, purchaseItems, qcAdditionalPresentations, qcEvents, qcImagePreviews, qcImageSources, qcImages, qcImports, qcPresentations, qcRateLimits, qcTransferLocks } from "../db/schema";
 import { authorization } from "./authorization";
 import { DomainError } from "./errors";
 import { normalizeQcMatch, suggestQcMatch, type QcMatch } from "./qc-matching";
@@ -87,7 +87,7 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
     return source.select({ id: purchaseAdditionalOrderItems.id }).from(purchaseAdditionalOrderItems)
       .innerJoin(purchaseCostOrders, eq(purchaseAdditionalOrderItems.orderId, purchaseCostOrders.id))
       .innerJoin(purchaseCostTrackings, eq(purchaseCostOrders.trackingId, purchaseCostTrackings.id))
-      .where(and(eq(purchaseAdditionalOrderItems.id, target.id), eq(purchaseCostOrders.kind, "additional"), eq(purchaseCostOrders.state, "recorded"), eq(purchaseCostTrackings.purchaseId, purchaseId))).get();
+      .where(and(eq(purchaseAdditionalOrderItems.id, target.id), eq(purchaseCostOrders.kind, "additional"), eq(purchaseCostOrders.state, "recorded"), sql`NOT EXISTS (SELECT 1 FROM ${purchaseOrderCorrections} WHERE ${purchaseOrderCorrections.previousOrderId} = ${purchaseCostOrders.id})`, eq(purchaseCostTrackings.purchaseId, purchaseId))).get();
   }
 
   async function rate(purchaseId: string, operation: QcRateOperation) {
@@ -219,7 +219,7 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
     const additional = await source.select({ id: purchaseAdditionalOrderItems.id, name: purchaseAdditionalOrderItems.name, url: purchaseAdditionalOrderItems.url, variant: purchaseAdditionalOrderItems.variant, quantity: purchaseAdditionalOrderItems.quantity, createdAt: purchaseAdditionalOrderItems.createdAt })
       .from(purchaseAdditionalOrderItems).innerJoin(purchaseCostOrders, eq(purchaseAdditionalOrderItems.orderId, purchaseCostOrders.id))
       .innerJoin(purchaseCostTrackings, eq(purchaseCostOrders.trackingId, purchaseCostTrackings.id))
-      .where(and(eq(purchaseCostTrackings.purchaseId, purchaseId), eq(purchaseCostOrders.kind, "additional"), eq(purchaseCostOrders.state, "recorded")))
+      .where(and(eq(purchaseCostTrackings.purchaseId, purchaseId), eq(purchaseCostOrders.kind, "additional"), eq(purchaseCostOrders.state, "recorded"), sql`NOT EXISTS (SELECT 1 FROM ${purchaseOrderCorrections} WHERE ${purchaseOrderCorrections.previousOrderId} = ${purchaseCostOrders.id})`))
       .orderBy(asc(purchaseAdditionalOrderItems.createdAt)).all();
     return [
       ...rows.map(row => ({ id: `purchase:${row.id}`, origin: "purchase" as const, name: row.name, url: row.url, variant: row.variant, quantity: row.quantity })),

@@ -10,6 +10,40 @@ beforeEach(async () => { f = await fixture(); });
 afterEach(() => f.client.close());
 
 describe("additional product orders", () => {
+  it("preserves the original paid Pix charge through a balance-only additional order and reload", async () => {
+    const purchase = await f.alice.savePurchase({ name: "Compra original paga" });
+    await f.alice.saveManualItem({ name: "Camisa", url: "https://shop.test/shirt", unitPriceCents: 3_058, personId: "alice", quantity: 1 });
+    await f.alice.finalizePurchase(purchase!.id, true);
+    const service = packageCostServices(f.db, "alice");
+    const tracking = await service.startTracking(purchase!.id);
+    let detail = await service.getTracking(tracking.id);
+    detail = await service.saveItemCosts(tracking.id, { expectedRevision: detail.tracking.revision, itemId: detail.items[0].id, effectivePriceState: "known", effectivePriceUnitCents: 3_058, chinaFreightState: "known", chinaFreightUnitCents: 800 });
+    detail = await service.saveCharge(tracking.id, detail.productsCharge!.id, { expectedRevision: detail.tracking.revision, chargeType: "products", paymentMethod: "pix" });
+    detail = await service.markChargePaid(tracking.id, detail.productsCharge!.id, { expectedRevision: detail.tracking.revision });
+    const originalCharge = detail.productsCharge;
+    const originalCalculation = detail.calculation.productsCharge;
+    expect(originalCalculation).toMatchObject({ baseCents: 3_858, feeCents: 39 });
+    const accounts = hubbuyBalanceServices(f.db, "alice");
+    const account = await accounts.createAccount({ workspaceId: "workspace", idempotencyKey: "paid-original-account", label: "Saldo sintético", confirmZeroBalance: true });
+    await f.db.update(hubbuyAccounts).set({ status: "reconciling", reconciledBy: null, reconciledAt: null }).where(eq(hubbuyAccounts.id, account.accountId)).run();
+    await accounts.reconcileAccount(account.accountId, { expectedRevision: 0, idempotencyKey: "paid-original-opening", observedBalanceCnyMinor: 2_500, reason: "Saldo sintético", shares: [{ personId: "alice", amountCnyMinor: 2_500, historicalBrlCents: 1_927 }] });
+    const draft = await service.createAdditionalOrder(tracking.id, {
+      expectedRevision: detail.tracking.revision, idempotencyKey: "paid-original-draft", accountId: account.accountId,
+      items: [{ name: "Elixir", url: "https://shop.test/elixir", platform: "Taobao", visualKey: "generic", quantity: 1, itemOrder: 0, nativeProductState: "known", nativeProductCnyMinor: 2_500, nativeChinaState: "no_charge", nativeChinaCnyMinor: null, participants: [{ personId: "alice", weightMode: "equal", weight: 1 }] }],
+    });
+    detail = await service.getTracking(tracking.id);
+    expect(detail.productsCharge).toEqual(originalCharge);
+    expect(detail.calculation.productsCharge).toEqual(originalCalculation);
+    await service.recordAdditionalOrderMixedPayment(tracking.id, draft.orderId, { expectedRevision: detail.tracking.revision, idempotencyKey: "paid-original-balance", useOwnBalance: true });
+    detail = await packageCostServices(f.db, "alice").getTracking(tracking.id);
+    expect(detail.productsCharge).toEqual(originalCharge);
+    expect(detail.calculation.productsCharge).toEqual(originalCalculation);
+    expect(detail.items[0].calculation?.components.find(component => component.name === "Taxa dos produtos")).toMatchObject({ amountCents: 39 });
+    expect(detail.productOrders.find(order => order.id === draft.orderId)).toMatchObject({ feeBrlCents: 0, historicalBrlCents: 1_927, newMoneyBrlCents: 0 });
+    expect(detail.calculation.summary.partialCents).toBe(5_824);
+    expect(await f.db.select().from(purchaseCostCharges).where(eq(purchaseCostCharges.id, originalCharge!.id)).get()).toEqual(originalCharge);
+  });
+
   it("records an isolated order snapshot and an immutable single external payment", async () => {
     const purchase = await f.alice.savePurchase({ name: "Compra base" });
     await f.bob.saveManualItem({ name: "Camiseta", url: "https://shop.test/shirt", unitPriceCents: 1_000, sharingMode: "equal", participants: [{ personId: "bob" }], quantity: 1 });
