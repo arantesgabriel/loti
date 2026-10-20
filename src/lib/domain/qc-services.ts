@@ -524,15 +524,13 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
             result.corrected++;
           }
         }
-        if (match.status === "IGNORED") {
-          if (destinationId) throw new DomainError("Esta ocorrência não possui candidatos seguros para associação.", 422, "QC_MATCH_INVALID");
+        if (match.status === "IGNORED" && !destinationId) {
           // A legacy ignored row can already have an unlinked occurrence and
           // source records. Leave those tombstone/history records intact, but
           // never add new irrelevant rows or let them become transfer work.
           result.ignored++;
           continue;
         }
-        if (match.status === "PENDING" && destinationId && !match.candidates.some(candidate => parseTargetKey(candidate.itemId).key === destinationId)) throw new DomainError("Escolha um dos produtos candidatos desta ocorrência.", 422, "QC_MATCH_INVALID");
         const pendingMatch = match.status === "PENDING" && match.candidates.length > 0;
         const explicitUnlink = !!currentExternal && targetKeyForExternal(currentExternal) !== null && destinationId === null && !!choice?.correctExisting;
         if (!destinationId && !pendingMatch && !explicitUnlink) {
@@ -621,7 +619,6 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
         const targets = await getTargets(purchaseId, tx);
         const match = suggestQcMatch(occurrenceFromExternal(external), targets);
         if (match.status !== "PENDING" || match.candidates.length === 0) throw new DomainError("Esta ocorrência já não possui candidatos de associação pendentes.", 409, "QC_MATCH_NOT_PENDING");
-        if (!match.candidates.some(candidate => parseTargetKey(candidate.itemId).key === target.key)) throw new DomainError("Escolha um dos produtos candidatos desta ocorrência.", 422, "QC_MATCH_INVALID");
         const stamp = nowDate(now);
         const updated = await tx.update(hubbuyExternalItems).set({ purchaseItemId: target.origin === "purchase" ? target.id : null, additionalOrderItemId: target.origin === "additional" ? target.id : null, confirmedBy: userId, confirmedAt: stamp, revision: expectedRevision + 1, updatedAt: stamp }).where(and(eq(hubbuyExternalItems.id, externalItemId), eq(hubbuyExternalItems.purchaseId, purchaseId), eq(hubbuyExternalItems.revision, expectedRevision), isNull(hubbuyExternalItems.purchaseItemId), isNull(hubbuyExternalItems.additionalOrderItemId))).returning({ id: hubbuyExternalItems.id, revision: hubbuyExternalItems.revision }).get();
         if (!updated) throw new DomainError("A ocorrência mudou em outra solicitação.", 409, "QC_REVISION_CONFLICT");

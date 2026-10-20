@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleAlert, CircleHelp, FileText, ImagePlus, Info, MoreVertical, RefreshCw, Star, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -40,7 +40,7 @@ function occurrenceStatus(row: QcPreview): { tone: QcStatusTone; label: string; 
   if (row.conflict) return { tone: "error", label: "Conflito entre identificadores", detail: row.conflict };
   if (row.match.status === "MATCHED") return { tone: "success", label: "Correspondência inequívoca", detail: null };
   if (row.match.status === "PENDING") return { tone: "warning", label: "Correspondência incerta · confirme a seleção", detail: row.match.candidates[0]?.reasons.join(" · ") ?? null };
-  return { tone: "neutral", label: "Sem correspondência segura", detail: "Esta ocorrência será ignorada, a menos que o sistema ofereça uma seleção." };
+  return { tone: "neutral", label: "Sem correspondência segura", detail: "O link do anúncio não identificou um produto. Selecione manualmente o produto desta compra ou mantenha a ocorrência ignorada." };
 }
 
 const summaryCache = new Map<string, { promise: Promise<QcSummary>; expiresAt: number }>();
@@ -97,7 +97,7 @@ async function qcRequest<T>(url: string, body?: unknown, method = "POST") {
   return result.data as T;
 }
 
-export function QcImportPanel({ purchaseId, targets }: { purchaseId: string; targets: QcTarget[] }) {
+export function QcImportPanel({ purchaseId, targets, compact = false }: { purchaseId: string; targets: QcTarget[]; compact?: boolean }) {
   const { data: workspace } = useWorkspace();
   const { summary } = useQcSummary(purchaseId);
   const [open, setOpen] = useState(false), [matchingOpen, setMatchingOpen] = useState(false), [raw, setRaw] = useState(""), [prepared, setPrepared] = useState<QcPrepared | null>(null);
@@ -204,7 +204,11 @@ export function QcImportPanel({ purchaseId, targets }: { purchaseId: string; tar
   const pendingMatches = summary.pendingMatching ?? 0;
   const pendingOperations = (summary.pendingTransfers ?? 0) + (summary.pendingDeletes ?? 0) + (summary.pendingPreviews ?? 0);
   return <>
-    <div className="qc-manager-actions"><Button className="qc-import-primary" variant="outline" size="sm" onClick={openPanel}><ImagePlus size={15}/>Importar QC</Button><DropdownMenu.Root><DropdownMenu.Trigger asChild><Button variant="ghost" size="sm" aria-label={`Ações QC${pendingMatches + pendingOperations ? ` · ${pendingMatches + pendingOperations} pendências` : ""}`}><MoreVertical size={16}/><span>Ações QC</span>{pendingMatches + pendingOperations > 0 && <span className="qc-pending-count" aria-hidden="true">{pendingMatches + pendingOperations}</span>}</Button></DropdownMenu.Trigger><DropdownMenu.Portal><DropdownMenu.Content className="dropdown" align="end" sideOffset={6}><DropdownMenu.Item onSelect={() => setMatchingOpen(true)}><CircleHelp size={15}/>Verificar vínculos pendentes{pendingMatches ? ` (${pendingMatches})` : ""}</DropdownMenu.Item><DropdownMenu.Item onSelect={() => setConfirmReconcile(true)}><RefreshCw size={15}/>Repetir pendências QC{pendingOperations ? ` (${pendingOperations})` : ""}</DropdownMenu.Item></DropdownMenu.Content></DropdownMenu.Portal></DropdownMenu.Root></div>
+    <div className={`qc-manager-actions${compact ? " qc-manager-actions-compact" : ""}`}><Button className="qc-import-primary" variant="outline" size={compact ? "icon" : "sm"} aria-label="Importar QC" title={compact ? "Importar QC" : undefined} onClick={openPanel}>{compact ? <>
+      {/* Local icon from the approved Figma header. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/icons/qc-import.svg" alt="" aria-hidden="true"/>
+    </> : <><ImagePlus size={15} aria-hidden="true"/>Importar QC</>}</Button><DropdownMenu.Root><DropdownMenu.Trigger asChild><Button variant="ghost" size="sm" aria-label={`Ações QC${pendingMatches + pendingOperations ? ` · ${pendingMatches + pendingOperations} pendências` : ""}`}><MoreVertical size={16}/><span>Ações QC</span>{pendingMatches + pendingOperations > 0 && <span className="qc-pending-count" aria-hidden="true">{pendingMatches + pendingOperations}</span>}</Button></DropdownMenu.Trigger><DropdownMenu.Portal><DropdownMenu.Content className="dropdown" align="end" sideOffset={6}><DropdownMenu.Item onSelect={() => setMatchingOpen(true)}><CircleHelp size={15}/>Verificar vínculos pendentes{pendingMatches ? ` (${pendingMatches})` : ""}</DropdownMenu.Item><DropdownMenu.Item onSelect={() => setConfirmReconcile(true)}><RefreshCw size={15}/>Repetir pendências QC{pendingOperations ? ` (${pendingOperations})` : ""}</DropdownMenu.Item></DropdownMenu.Content></DropdownMenu.Portal></DropdownMenu.Root></div>
     <Surface open={open} onOpenChange={value => { if (!busy) setOpen(value); }} title="Importar QC do HubBuy" description="Cole uma resposta HubBuy. Somente freePhotos são processadas; os vínculos serão confirmados antes de qualquer transferência." sheet className={`qc-import-sheet${confirmed ? " qc-import-transfer-sheet" : ""}`}>
       {!prepared && <div className="qc-import-stage">
         <div className="qc-import-main qc-import-input-main">
@@ -229,7 +233,8 @@ export function QcImportPanel({ purchaseId, targets }: { purchaseId: string; tar
             const expanded = expandedRows[row.externalKey] ?? index === 0;
             const status = occurrenceStatus(row);
             const StatusIcon = status.tone === "success" ? Check : status.tone === "warning" ? CircleHelp : status.tone === "error" ? CircleAlert : Info;
-            const hasSelector = row.match.status !== "IGNORED" || !!row.conflict;
+            const selectedTarget = selections[row.externalKey];
+            const manualSelection = !!selectedTarget && selectedTarget !== row.match.targetItemId && !row.match.candidates.some(candidate => candidate.itemId === selectedTarget);
             const attributes = occurrenceAttributes(row);
             return <details className={`qc-occurrence-card${expanded ? " is-expanded" : ""}`} key={row.externalKey} open={expanded} onToggle={event => {
               const nextExpanded = event.currentTarget.open;
@@ -246,10 +251,11 @@ export function QcImportPanel({ purchaseId, targets }: { purchaseId: string; tar
                 </div>
                 <div className={`qc-match-state ${status.tone}`}><StatusIcon size={18} aria-hidden="true"/><span>{status.label}</span></div>
                 {status.detail && <p className={`qc-match-detail${status.tone === "error" ? " is-error" : ""}`}>{status.detail}</p>}
-                {hasSelector ? <label className="qc-product-select">Produto correspondente<select aria-label={`Associar ${productName}`} value={selections[row.externalKey] ?? ""} onChange={event => setSelections(current => ({ ...current, [row.externalKey]: event.target.value }))}>
+                <label className="qc-product-select">Produto correspondente<select aria-label={`Associar ${productName}`} value={selections[row.externalKey] ?? ""} onChange={event => setSelections(current => ({ ...current, [row.externalKey]: event.target.value }))}>
                   <option value="">{row.match.status === "PENDING" ? "Manter pendente" : row.conflict ? "Descartar ocorrência conflitante" : "Ignorar ocorrência"}</option>
-                  {(row.match.status === "PENDING" ? row.match.candidates.map(candidate => targets.find(target => target.id === candidate.itemId)).filter((target): target is QcTarget => !!target) : row.conflict ? [] : targets).map(target => <option key={target.id} value={target.id}>{target.origin === "additional" ? "Pedido adicional · " : "Produto · "}{target.name}{target.variant ? ` · ${target.variant}` : ""}</option>)}
-                </select></label> : <div className="qc-product-select qc-product-select-empty"><span>Produto correspondente</span><p>Nenhuma opção segura foi sugerida; a ocorrência será ignorada.</p></div>}
+                  {(row.conflict ? [] : targets).map(target => <option key={target.id} value={target.id}>{target.origin === "additional" ? "Pedido adicional · " : "Produto · "}{target.name}{target.variant ? ` · ${target.variant}` : ""}</option>)}
+                </select></label>
+                {manualSelection && <p className="qc-match-detail" role="status">Associação manual selecionada. Confira o produto e a variação antes de confirmar os vínculos.</p>}
               </div>}
             </details>;
           })}
@@ -259,19 +265,19 @@ export function QcImportPanel({ purchaseId, targets }: { purchaseId: string; tar
       </div>}
       {prepared && confirmed && <div className="qc-import-stage">
         <div className="qc-import-main qc-import-confirmed-main">
-          <QcImportProgress photos={transfer?.photos ?? null} activeSourceId={activeSourceId} importedIds={importedIds} busy={busy} complete={transferComplete} pendingMatching={pendingMatchingCount} error={error} total={prepared.photoCount} renderPreview={photo => <QcPreviewImage image={{ id: photo.imageId!, previewUrl: photo.previewUrl, width: null, height: null, occurrence: photo.occurrence ?? "" }} userId={workspace.currentUser.id} purchaseId={purchaseId} alt=""/>}/>
+          <QcImportProgress photos={transfer?.photos ?? null} activeSourceId={activeSourceId} importedIds={importedIds} busy={busy} complete={transferComplete} error={error} total={prepared.rows.reduce((count, row) => count + (selections[row.externalKey] ? row.photoCount : 0), 0)} renderPreview={photo => <QcPreviewImage image={{ id: photo.imageId!, previewUrl: photo.previewUrl, width: null, height: null, occurrence: photo.occurrence ?? "" }} userId={workspace.currentUser.id} purchaseId={purchaseId} alt=""/>}/>
         </div>
         {error && <p className="error" role="alert">{error}</p>}
-        <footer className="qc-import-footer"><Button variant="outline" disabled={busy} onClick={() => { setPrepared(null); setConfirmed(false); setTransferComplete(false); }}>Nova importação</Button><Button disabled={busy || transferComplete} onClick={() => void runBatch()}>{busy ? "Processando…" : transferComplete ? "Transferências concluídas" : "Continuar / tentar novamente"}</Button></footer>
+        <footer className="qc-import-footer"><Button variant="outline" disabled={busy} onClick={() => { setPrepared(null); setConfirmed(false); setTransferComplete(false); }}>Nova importação</Button><Button disabled={busy} onClick={() => transferComplete ? setOpen(false) : void runBatch()}>{busy ? "Processando…" : transferComplete ? "Concluir" : "Continuar / tentar novamente"}</Button></footer>
       </div>}
     </Surface>
-    <Surface open={matchingOpen} onOpenChange={value => { if (!busy) setMatchingOpen(value); }} title="Vínculos QC pendentes" description="Revise cada ocorrência ambígua e escolha um dos produtos candidatos. Só depois de salvar o vínculo as fotos dessa ocorrência começam a ser transferidas." sheet>
+    <Surface open={matchingOpen} onOpenChange={value => { if (!busy) setMatchingOpen(value); }} title="Vínculos QC pendentes" description="Revise cada ocorrência ambígua e escolha um produto desta compra. As sugestões ajudam na escolha, mas você pode associar manualmente outro produto. Só depois de salvar o vínculo as fotos dessa ocorrência começam a ser transferidas." sheet>
       {!summary.pendingRows?.length && <p className="muted">Nenhuma ocorrência com candidatos aguarda vínculo.</p>}
       {!!summary.pendingRows?.length && <div className="qc-preview-list">{summary.pendingRows.map(row => <div className="qc-preview-row" key={row.externalItemId}>
         <span><strong>{row.title || row.skuInfo || row.orderGoodsId || row.orderGoodsNo || row.externalItemId}</strong><small>{row.skuInfo || "Sem variação"} · {row.photoCount} foto(s) aguardando vínculo{row.quantity === null ? "" : ` · quantidade HubBuy ${row.quantity}`}</small></span>
         <div className="qc-pending-match-controls"><select aria-label={`Produto Loti para ${row.title || row.skuInfo || row.externalItemId}`} value={pendingSelections[row.externalItemId] ?? ""} onChange={event => setPendingSelections(current => ({ ...current, [row.externalItemId]: event.target.value }))}>
-          <option value="">Selecione um candidato</option>
-          {row.candidates.map(candidate => { const target = targets.find(value => value.id === candidate.itemId); return <option key={candidate.itemId} value={candidate.itemId}>{target?.origin === "additional" ? "Pedido adicional · " : "Produto · "}{candidate.name} · {candidate.reasons.join(" · ")}</option>; })}
+          <option value="">Selecione um produto</option>
+          {targets.map(target => { const candidate = row.candidates.find(value => value.itemId === target.id); return <option key={target.id} value={target.id}>{target.origin === "additional" ? "Pedido adicional · " : "Produto · "}{target.name}{target.variant ? ` · ${target.variant}` : ""}{candidate ? ` · Sugestão: ${candidate.reasons.join(" · ")}` : " · Associação manual"}</option>; })}
         </select><Button disabled={busy || !pendingSelections[row.externalItemId]} onClick={() => void resolvePending(row)}>{busy ? "Salvando…" : "Associar e processar fotos"}</Button></div>
       </div>)}</div>}
       {batchInfo && <p className="qc-status-note" role="status">{batchInfo}</p>}
@@ -283,6 +289,8 @@ export function QcImportPanel({ purchaseId, targets }: { purchaseId: string; tar
 }
 
 type GalleryPage = { itemId: string; pageOffset: number; totalCount: number; presentationRevision: number; primaryImageId: string | null; canSetCover: boolean; images: QcImage[]; nextOffset: number | null };
+type CostGallery = { images: QcImage[]; cover: QcImage | null };
+const costGalleryPages = new WeakMap<QcSummary, Map<string, Promise<CostGallery>>>();
 
 function previewBlob(userId: string, purchaseId: string, imageId: string, previewUrl: string | null) {
   if (!previewUrl) return undefined;
@@ -299,7 +307,7 @@ function previewBlob(userId: string, purchaseId: string, imageId: string, previe
   return request;
 }
 
-function QcPreviewImage({ image, userId, purchaseId, alt }: { image: QcImage; userId: string; purchaseId: string; alt: string }) {
+function QcPreviewImage({ image, userId, purchaseId, alt, onUnavailable }: { image: QcImage; userId: string; purchaseId: string; alt: string; onUnavailable?: () => void }) {
   const key = `${userId}:${purchaseId}:${image.id}:${image.previewUrl ?? "missing"}`;
   const [view, setView] = useState<{ key: string; src: string | null; failed: boolean }>({ key: "", src: null, failed: false });
   const current = view.key === key ? view : null;
@@ -311,23 +319,50 @@ function QcPreviewImage({ image, userId, purchaseId, alt }: { image: QcImage; us
     void request.then(blob => {
       if (!active) return;
       objectUrl = URL.createObjectURL(blob); setView({ key, src: objectUrl, failed: false });
-    }).catch(() => { if (active) setView({ key, src: null, failed: true }); });
+    }).catch(() => { if (active) { setView({ key, src: null, failed: true }); onUnavailable?.(); } });
     return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
-  }, [image.id, image.previewUrl, key, purchaseId, userId]);
+  }, [image.id, image.previewUrl, key, purchaseId, userId, onUnavailable]);
   if (!image.previewUrl || current?.failed) return <span className="qc-preview-placeholder" aria-label="Preview QC indisponível">Preview indisponível</span>;
   if (!current?.src) return <span className="qc-preview-placeholder" aria-label="Carregando preview QC">Carregando preview…</span>;
   // The authenticated API returns a private, bounded WebP. Keep it out of Next's image optimizer.
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={current.src} loading="lazy" referrerPolicy="no-referrer" alt={alt} />;
+  return <img src={current.src} loading="lazy" referrerPolicy="no-referrer" alt={alt} onError={onUnavailable} />;
 }
 
-export function QcGalleryButton({ purchaseId, itemId, itemName, canManageHere = false, triggerLabel = "Ver QC", triggerAriaLabel }: { purchaseId: string; itemId: string; itemName: string; canManageHere?: boolean; triggerLabel?: string; triggerAriaLabel?: string }) {
+export function QcGalleryButton({ purchaseId, itemId, itemName, canManageHere = false, triggerLabel = "Ver QC", triggerAriaLabel, costThumbnails, costIdentity }: { purchaseId: string; itemId: string; itemName: string; canManageHere?: boolean; triggerLabel?: string; triggerAriaLabel?: string; costThumbnails?: "desktop" | "mobile"; costIdentity?: { marker: ReactNode; label: ReactNode } }) {
   const { data } = useWorkspace();
   const userId = data.currentUser.id;
   const [open, setOpen] = useState(false), [images, setImages] = useState<QcImage[]>([]), [loading, setLoading] = useState(false), [pageLoading, setPageLoading] = useState(false), [error, setError] = useState(""), [selectedImageId, setSelectedImageId] = useState<string | null>(null), [pageOffset, setPageOffset] = useState(0), [totalCount, setTotalCount] = useState(0), [primaryImageId, setPrimaryImageId] = useState<string | null>(null), [presentationRevision, setPresentationRevision] = useState(0), [canSetCover, setCanSetCover] = useState(false), [original, setOriginal] = useState<{ imageId: string | null; url: string; stage: "idle" | "loading" | "source" | "fallback-loading" | "fallback" | "failed" }>({ imageId: null, url: "", stage: "idle" }), [confirmDelete, setConfirmDelete] = useState<string | null>(null), [deleting, setDeleting] = useState(false), [savingCover, setSavingCover] = useState(false);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const { summary } = useQcSummary(purchaseId);
   const countValue = summary ? summary.counts.find(row => row.itemId === itemId)?.count ?? 0 : null;
+  const [costPreview, setCostPreview] = useState<{ scope: string; summary: QcSummary } & CostGallery | null>(null);
+  const [failedCover, setFailedCover] = useState<QcImage | null>(null);
+  const previewScope = `${userId}:${purchaseId}:${itemId}`;
+  const costImages = costPreview?.scope === previewScope && countValue ? costPreview.images : [];
+  const costCover = costPreview?.scope === previewScope && countValue && costPreview.cover?.previewUrl && costPreview.cover !== failedCover ? costPreview.cover : null;
+  const unavailableCover = useCallback(() => { setFailedCover(costCover); }, [costCover]);
+  useEffect(() => {
+    if (!costThumbnails || !summary || !countValue) return;
+    let active = true;
+    let pages = costGalleryPages.get(summary);
+    if (!pages) { pages = new Map(); costGalleryPages.set(summary, pages); }
+    let request = pages.get(previewScope);
+    if (!request) {
+      const url = `/api/purchases/${encodeURIComponent(purchaseId)}/qc?itemId=${encodeURIComponent(itemId)}`;
+      request = qcRequest<GalleryPage>(url, undefined, "GET").then(async page => {
+        let cover = page.images.find(image => image.id === page.primaryImageId) ?? null;
+        if (page.primaryImageId && !cover) {
+          const coverPage = await qcRequest<GalleryPage>(`${url}&imageId=${encodeURIComponent(page.primaryImageId)}`, undefined, "GET");
+          cover = coverPage.images.find(image => image.id === page.primaryImageId) ?? null;
+        }
+        return { cover, images: page.images.filter(image => image.previewUrl && image.id !== page.primaryImageId).slice(0, 3) };
+      });
+      pages.set(previewScope, request);
+    }
+    void request.then(page => { if (active) setCostPreview({ scope: previewScope, summary, ...page }); }).catch(() => { pages.delete(previewScope); if (active) setCostPreview({ scope: previewScope, summary, cover: null, images: [] }); });
+    return () => { active = false; };
+  }, [costThumbnails, countValue, itemId, previewScope, purchaseId, summary]);
   const manage = !!summary?.canManage;
   const selectedIndex = images.findIndex(image => image.id === selectedImageId);
   const selectedImage = selectedIndex >= 0 ? images[selectedIndex] : null;
@@ -419,7 +454,17 @@ export function QcGalleryButton({ purchaseId, itemId, itemName, canManageHere = 
   const currentPosition = selectedIndex < 0 ? 0 : pageOffset + selectedIndex + 1;
   const originalView = open && selectedImageId && original.imageId === selectedImageId ? original : { imageId: selectedImageId, url: "", stage: open && selectedImageId ? "loading" as const : "idle" as const };
   return <>
-    <Button type="button" variant="ghost" size="sm" onClick={() => openGallery()} aria-label={triggerAriaLabel ?? `Ver QC de ${itemName}`}>{triggerLabel}{countValue === null ? "" : ` (${countValue})`}</Button>
+    {costThumbnails ? <div className="cost-compact-identity">
+      {costCover ? <button type="button" className={`qc-product-photo qc-product-cover${costThumbnails === "mobile" ? " qc-product-photo-count" : ""}`} data-qc-image-id={costCover.id} aria-label={`Abrir capa QC de ${itemName}${costThumbnails === "mobile" ? ` · ${countValue} fotos` : ""}`} onClick={() => openGallery(costCover.id)}><QcPreviewImage image={costCover} userId={userId} purchaseId={purchaseId} alt={`Capa QC de ${itemName}`} onUnavailable={unavailableCover}/>{costThumbnails === "mobile" && <span className="qc-product-photo-badge" aria-hidden="true">{countValue}</span>}</button> : costIdentity?.marker}
+      {costIdentity?.label}
+      {!!countValue && (costThumbnails !== "mobile" || !costCover) && <div className={`qc-product-photos qc-product-photos-${costThumbnails}`}>
+      {costThumbnails === "mobile" ? <button type="button" className="qc-product-photo qc-product-photo-count" onClick={() => openGallery()} aria-label={`Ver ${countValue} fotos QC de ${itemName}`} title={`Ver ${countValue} fotos QC`}>
+        {costImages[0] ? <QcPreviewImage image={costImages[0]} userId={userId} purchaseId={purchaseId} alt=""/> : <ImagePlus size={20} aria-hidden="true"/>}<span className="qc-product-photo-badge" aria-hidden="true">{countValue}</span>
+      </button> : <>
+        {costImages.map((image, index) => <button type="button" className="qc-product-photo" key={image.id} data-qc-image-id={image.id} aria-label={`Abrir foto QC ${index + 1} de ${itemName}`} onClick={() => openGallery(image.id)}><QcPreviewImage image={image} userId={userId} purchaseId={purchaseId} alt=""/></button>)}
+        <button type="button" className="qc-product-photos-more" aria-label={`Ver ${countValue} fotos QC de ${itemName}`} onClick={() => openGallery()}>Ver mais</button>
+      </>}
+    </div>}</div> : <Button type="button" variant="ghost" size="sm" onClick={() => openGallery()} aria-label={triggerAriaLabel ?? `Ver QC de ${itemName}`}>{triggerLabel}{countValue === null ? "" : ` (${countValue})`}</Button>}
     <Surface open={open} onOpenChange={value => { setOpen(value); if (!value) { setSelectedImageId(null); setError(""); } }} title={`QC · ${itemName}`} className="qc-viewer-surface">
       {loading && <p className="muted" role="status">Carregando fotos QC…</p>}
       {error && <p className="error" role="alert">{error}</p>}

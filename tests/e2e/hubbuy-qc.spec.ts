@@ -3,6 +3,7 @@ import sharp from "sharp";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { login } from "./helpers";
+import type { QcTransferSnapshot } from "@/components/qc/qc-import-progress";
 
 async function createFinalizedPurchase(page: import("@playwright/test").Page, name: string, secondItem = false) {
   const origin = test.info().project.use.baseURL ?? "http://localhost:3100";
@@ -26,7 +27,7 @@ async function createFinalizedPurchase(page: import("@playwright/test").Page, na
 }
 
 const response = (route: import("@playwright/test").Route, data: unknown) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data }) });
-const transferSnapshot = (completed: number) => ({
+const transferSnapshot = (completed: number): QcTransferSnapshot => ({
   nextSourceId: completed < 4 ? `source-${completed + 1}` : null,
   photos: Array.from({ length: 4 }, (_, index) => ({ id: `photo-${index + 1}`, sourceId: `source-${index + 1}`, name: `IMG_00${index + 1}.jpg`, occurrence: "QC Marker Product", state: index < completed ? "ready" : "pending", errorCode: null, byteSize: null, imageId: null, previewUrl: null })),
 });
@@ -40,6 +41,154 @@ async function mockQcMedia(page: import("@playwright/test").Page) {
   await page.route("**/api/qc/images/*/source", route => response(route, { sourceUrl: "https://scm.hubbuy.app/qc/viewer-original.png" }));
   await page.route("https://scm.hubbuy.app/**", route => route.fulfill({ status: 200, contentType: "image/png", body: original }));
 }
+
+test("manual QC association completes only the four selected photos and can close", async ({ page }) => {
+  await login(page);
+  const purchase = await createFinalizedPurchase(page, "QC manual selected photos");
+  let transferred = false;
+  await page.route(`**/api/purchases/${purchase.purchaseId}/qc**`, route => {
+    if (route.request().method() === "GET") return response(route, { canManage: true, counts: [], pendingRows: [], pendingMatching: 0, items: [] });
+    return response(route, { importId: "manual-selected", revision: 0, partial: false, orderCount: 1, photoCount: 92, rows: [
+      { externalKey: "manual", title: "Synthetic jersey from another listing", photoCount: 4, match: { status: "IGNORED", targetItemId: null, candidates: [] }, existingItemId: null, conflict: null },
+      { externalKey: "ignored", title: "Other products", photoCount: 88, match: { status: "IGNORED", targetItemId: null, candidates: [] }, existingItemId: null, conflict: null },
+    ] });
+  });
+  await page.route("**/api/qc/imports/manual-selected", route => {
+    if (route.request().method() === "GET") {
+      const snapshot = transferSnapshot(transferred ? 4 : 0);
+      snapshot.photos.push(...Array.from({ length: 88 }, (_, index) => ({ id: `ignored-${index}`, sourceId: null, name: "Ignored photo", occurrence: "Other products", state: "ignored", errorCode: null, byteSize: null, imageId: null, previewUrl: null })));
+      return response(route, snapshot);
+    }
+    const body = route.request().postDataJSON();
+    if (body.operation === "confirm") {
+      expect(body.choices).toEqual([{ externalKey: "manual", targetKey: `purchase:${purchase.firstItemId}` }, { externalKey: "ignored", targetKey: null }]);
+      return response(route, { revision: 1, linked: 1, ignored: 1, sources: 4, eligibleSources: 4, pendingMatching: 0 });
+    }
+    transferred = true;
+    return response(route, { revision: 2, imported: 4, existing: 0, failed: 0, pending: 0, processed: 4, remaining: 0, complete: true, results: [1, 2, 3, 4].map(index => ({ sourceId: `source-${index}`, status: "imported" })) });
+  });
+  await page.goto(`/packages/${purchase.trackingId}`);
+  await page.getByRole("button", { name: "Importar QC", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("JSON HubBuy").fill("{}");
+  await dialog.getByRole("button", { name: "Analisar JSON" }).click();
+  const occurrence = dialog.locator(".qc-occurrence-card").first();
+  await expect(occurrence.getByRole("combobox")).toHaveValue("");
+  await occurrence.getByRole("combobox").selectOption(`purchase:${purchase.firstItemId}`);
+  await expect(occurrence.getByRole("status")).toContainText("Associação manual selecionada");
+  await dialog.getByRole("button", { name: "Confirmar vínculos" }).click();
+  await expect(dialog.getByRole("status")).toContainText("Importação concluída");
+  await expect(dialog.getByRole("progressbar")).toHaveAttribute("aria-valuemax", "4");
+  await expect(dialog.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "4");
+  await expect(dialog.getByText("100%", { exact: true })).toBeVisible();
+  await expect(dialog.locator(".qc-transfer-row")).toHaveCount(4);
+  await expect(dialog.getByText("Ignored photo")).toHaveCount(0);
+  const qa = join(process.cwd(), "artifacts", "qa", "qc-import-progress");
+  mkdirSync(qa, { recursive: true });
+  for (const width of [320, 390, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await dialog.screenshot({ path: join(qa, `manual-selected-${width}.png`) });
+    await expect(dialog.getByRole("button", { name: "Concluir", exact: true })).toBeInViewport();
+  }
+  await dialog.getByRole("button", { name: "Concluir", exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole("button", { name: "Importar QC", exact: true })).toBeFocused();
+});
+
+test("product QC cover and distinct thumbnails open the exact preview on desktop and mobile", async ({ page }) => {
+  await login(page);
+  const purchase = await createFinalizedPurchase(page, "QC inline cover QA");
+  const headers = { Origin: test.info().project.use.baseURL ?? "http://localhost:3100" };
+  const costUrl = `/api/packages/${purchase.trackingId}`;
+  let detail = (await (await page.request.get(costUrl)).json()).data;
+  const accountResponse = await page.request.post("/api/hubbuy/accounts", { headers, data: { operation: "createAccount", workspaceId: detail.purchase.workspaceId, idempotencyKey: "qc-inline-account", label: "Conta sintética QC", confirmZeroBalance: true } });
+  expect(accountResponse.ok(), await accountResponse.text()).toBeTruthy();
+  const account = (await accountResponse.json()).data;
+  const draftResponse = await page.request.post(costUrl, { headers, data: { operation: "order.additional.create", input: {
+    expectedRevision: detail.tracking.revision, idempotencyKey: "qc-inline-draft", accountId: account.accountId,
+    items: [{ name: "Corda sintética QC", url: "https://example.test/qc-string", platform: "other", visualKey: "generic", quantity: 1, itemOrder: 1,
+      nativeProductState: "known", nativeProductCnyMinor: 1000, nativeChinaState: "no_charge", nativeChinaCnyMinor: null,
+      participants: [{ personId: detail.items[0].participants[0].personId, weightMode: "equal", weight: 1 }] }],
+  } } });
+  expect(draftResponse.ok(), await draftResponse.text()).toBeTruthy();
+  detail = (await draftResponse.json()).data;
+  const order = detail.productOrders.find((value: { kind: string }) => value.kind === "additional");
+  const paymentResponse = await page.request.post(costUrl, { headers, data: { operation: "order.additional.record_payment", orderId: order.id, input: {
+    expectedRevision: detail.tracking.revision, idempotencyKey: "qc-inline-payment", paymentMethod: "pix", principalBrlCents: 1500, conversionCnyMinor: 1000, conversionBrlCents: 1500,
+  } } });
+  expect(paymentResponse.ok(), await paymentResponse.text()).toBeTruthy();
+  const additionalKey = `additional:${order.items[0].item.id}`;
+  const targetKey = `purchase:${purchase.firstItemId}`;
+  let coverId = "inline-photo-1", coverRevision = 0;
+  const images = Array.from({ length: 14 }, (_, index) => ({ id: `inline-photo-${index + 1}`, previewUrl: `/api/qc/images/inline-photo-${index + 1}/preview`, width: 480, height: 320, occurrence: "Synthetic / L" }));
+  const originalRequests: string[] = [];
+  await mockQcMedia(page);
+  await page.route("**/api/qc/images/*/source", route => {
+    originalRequests.push(route.request().url());
+    return response(route, { sourceUrl: "https://scm.hubbuy.app/qc/viewer-original.png" });
+  });
+  await page.route(`**/api/purchases/${purchase.purchaseId}/items/*/qc-presentation`, route => {
+    const body = route.request().postDataJSON();
+    expect(body.expectedRevision).toBe(coverRevision);
+    coverId = body.imageId; coverRevision++;
+    return response(route, { primaryImageId: coverId, revision: coverRevision });
+  });
+  await page.route(`**/api/purchases/${purchase.purchaseId}/qc**`, route => {
+    const params = new URL(route.request().url()).searchParams;
+    if (!params.has("itemId")) return response(route, { canManage: true, counts: [targetKey, additionalKey].map(itemId => ({ itemId, count: images.length })), pendingRows: [], items: [] });
+    const direct = params.get("imageId"), position = direct ? images.findIndex(image => image.id === direct) : -1;
+    const offset = position >= 0 ? Math.floor(position / 12) * 12 : Number(params.get("offset") ?? 0);
+    return response(route, { itemId: targetKey, pageOffset: offset, totalCount: images.length, presentationRevision: coverRevision, primaryImageId: coverId, canSetCover: true, images: images.slice(offset, offset + 12), nextOffset: offset + 12 < images.length ? offset + 12 : null });
+  });
+  await page.goto(`/packages/${purchase.trackingId}`);
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const row = page.locator(".cost-compact-row").filter({ hasText: "QC Marker Product" });
+  await expect(row.locator(".qc-product-cover img")).toBeVisible();
+  await expect(row.locator(".qc-product-cover")).toHaveAttribute("data-qc-image-id", coverId);
+  await expect(row.locator(".category-marker")).toHaveCount(0);
+  await expect(row.locator(".qc-product-photos .qc-product-photo")).toHaveCount(3);
+  await expect(row.locator(`.qc-product-photos [data-qc-image-id="${coverId}"]`)).toHaveCount(0);
+  expect(originalRequests).toHaveLength(0);
+  await row.locator('[data-qc-image-id="inline-photo-3"]').click();
+  await expect(page.getByRole("dialog")).toContainText("Foto 3 de 14");
+  await page.getByRole("button", { name: "Usar como capa QC" }).click();
+  await expect(page.getByRole("button", { name: "Capa atual" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(row.locator(".qc-product-cover")).toHaveAttribute("data-qc-image-id", "inline-photo-3");
+  await expect(row.locator('.qc-product-photos [data-qc-image-id="inline-photo-3"]')).toHaveCount(0);
+  const additionalRow = page.locator(".cost-compact-row").filter({ hasText: "Corda sintética QC" });
+  await expect(additionalRow.locator(".qc-product-cover img")).toBeVisible();
+  await expect(additionalRow.locator(".category-marker")).toHaveCount(0);
+  const qa = join(process.cwd(), "artifacts", "qa", "qc-product-photos");
+  mkdirSync(qa, { recursive: true });
+  await row.screenshot({ path: join(qa, "desktop.png") });
+  // A cover from a later gallery page must still be rendered and opened exactly.
+  coverId = "inline-photo-14";
+  await page.reload();
+  await expect(row.locator(".qc-product-cover")).toHaveAttribute("data-qc-image-id", coverId);
+  await row.locator(".qc-product-cover").click();
+  await expect(page.getByRole("dialog")).toContainText("Foto 14 de 14");
+  await page.keyboard.press("Escape");
+  for (const width of [320, 390, 768]) {
+    await page.setViewportSize({ width, height: 900 });
+    const card = page.locator(".cost-product-mobile-card").filter({ hasText: "QC Marker Product" });
+    await expect(card.locator(".qc-product-cover")).toBeVisible();
+    await expect(card.locator(".qc-product-photo-badge")).toHaveText("14");
+    await expect(card.locator(".qc-product-photos-mobile")).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await card.evaluate(element => element.scrollIntoView({ block: "center" }));
+    await card.screenshot({ path: join(qa, `mobile-${width}.png`) });
+    await card.locator(".qc-product-cover").click();
+    await expect(page.getByRole("dialog")).toContainText("Foto 14 de 14");
+    await page.keyboard.press("Escape");
+    await expect(card.locator(".qc-product-cover")).toBeFocused();
+  }
+  await page.route("**/api/qc/images/inline-photo-14/preview", route => route.fulfill({ status: 503 }));
+  await page.reload();
+  const fallbackCard = page.locator(".cost-product-mobile-card").filter({ hasText: "QC Marker Product" });
+  await expect(fallbackCard.locator(".qc-product-cover")).toHaveCount(0);
+  await expect(fallbackCard.getByRole("button", { name: "Ver 14 fotos QC de QC Marker Product" })).toBeVisible();
+});
 
 test("QC drawer shows the real queue, existing photos, failures, recovery and pending links", async ({ page }) => {
   test.setTimeout(90000);
@@ -73,7 +222,7 @@ test("QC drawer shows the real queue, existing photos, failures, recovery and pe
     return response(route, { imported: state === "ready" ? 1 : 0, existing: 0, failed: state === "failed" ? 1 : 0, pending: state === "pending" ? 1 : 0, processed: 1, remaining: batches === 4 ? 0 : 1, complete: batches === 4, revision: body.expectedRevision + 1, results: [{ sourceId: `source-${sourceIndex + 1}`, status: state === "ready" ? "imported" : state }] });
   });
   await page.goto(`/packages/${purchase.trackingId}`);
-  await page.getByRole("button", { name: /Produtos e pagamento/ }).click();
+  await expect(page.getByRole("button", { name: /Produtos e custos/ })).toHaveAttribute("aria-expanded", "true");
   await page.getByRole("button", { name: "Importar QC", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("JSON HubBuy").fill("{}");
@@ -85,8 +234,8 @@ test("QC drawer shows the real queue, existing photos, failures, recovery and pe
   await expect(dialog.locator(".qc-transfer-thumbnail img")).toHaveCount(1);
   await expect(dialog.locator(".qc-transfer-row").nth(0)).toContainText("2,4 MB");
   await expect(dialog.locator(".qc-transfer-row").nth(1)).toContainText("Processando...");
-  await expect(dialog.locator(".qc-transfer-row").nth(2)).toContainText("Sem vínculo");
-  await expect(dialog.locator(".qc-transfer-row").nth(3)).toContainText("Aguardando...");
+  await expect(dialog.locator(".qc-transfer-row")).toHaveCount(3);
+  await expect(dialog.locator(".qc-transfer-row").nth(2)).toContainText("Aguardando...");
   await expect(dialog.getByRole("button", { name: "Nova importação" })).toBeDisabled();
   const qaFolder = join(process.cwd(), "artifacts", "qa", "qc-import-progress");
   mkdirSync(qaFolder, { recursive: true });
@@ -113,17 +262,18 @@ test("QC drawer shows the real queue, existing photos, failures, recovery and pe
   await page.setViewportSize({ width: 320, height: 844 });
   await dialog.getByRole("button", { name: "Continuar / tentar novamente" }).click();
   await expect(dialog.locator(".qc-transfer-row").nth(1)).toContainText("Falha");
-  await expect(dialog.locator(".qc-transfer-row").nth(3)).toContainText("Pendente");
-  await expect(dialog.locator(".qc-transfer-row").nth(3)).toContainText("QC_PUT_UNCERTAIN");
+  await expect(dialog.locator(".qc-transfer-row").nth(2)).toContainText("Pendente");
+  await expect(dialog.locator(".qc-transfer-row").nth(2)).toContainText("QC_PUT_UNCERTAIN");
   await expect(dialog.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "2");
   await page.setViewportSize({ width: 390, height: 600 });
   await dialog.screenshot({ path: join(qaFolder, "recovery-390.png") });
   await dialog.getByRole("button", { name: "Continuar / tentar novamente" }).click();
-  await expect(dialog.getByRole("button", { name: "Transferências concluídas" })).toBeDisabled();
-  await expect(dialog.getByRole("status")).toContainText("Importação parcial");
+  await expect(dialog.getByRole("button", { name: "Concluir", exact: true })).toBeEnabled();
+  await expect(dialog.getByRole("status")).toContainText("Importação concluída");
   await expect(dialog.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "3");
   await expect(dialog.locator(".qc-transfer-row").nth(1)).toContainText("Importada");
-  await expect(dialog.locator(".qc-transfer-summary")).toContainText("1 ocorrência aguarda vínculo manual");
+  await expect(dialog.locator(".qc-transfer-summary")).toHaveCount(0);
+  await expect(dialog.locator(".qc-transfer-row")).toHaveCount(3);
   await dialog.screenshot({ path: join(qaFolder, "partial-390.png") });
   expect(batches).toBe(4);
 });
@@ -175,6 +325,11 @@ test("HubBuy QC import is session-bound, manually confirmable and responsive", a
   await expect(unmatchedCard.locator(".qc-occurrence-details")).toHaveCount(0);
   await unmatchedCard.locator(".qc-occurrence-trigger").click();
   await expect(unmatchedCard.locator(".qc-match-state.neutral")).toContainText("Sem correspondência segura");
+  const manualSelect = unmatchedCard.getByRole("combobox");
+  await expect(manualSelect).toHaveValue("");
+  await expect(manualSelect.getByRole("option", { name: /QC Marker Product/ })).toHaveCount(1);
+  await manualSelect.selectOption(await matchedCard.getByRole("combobox").inputValue());
+  await expect(unmatchedCard.getByRole("status")).toContainText("Associação manual selecionada");
   await unmatchedCard.locator(".qc-occurrence-trigger").click();
   const productSelect = matchedCard.locator("select");
   await expect(productSelect).toBeVisible();
@@ -192,14 +347,16 @@ test("HubBuy QC import is session-bound, manually confirmable and responsive", a
     expect(footerFits).toBeTruthy();
   }
   await page.setViewportSize({ width: 390, height: 844 });
+  const confirmation = page.waitForResponse(response => response.url().includes("/api/qc/imports/") && response.request().method() === "POST");
   await dialog.getByRole("button", { name: "Confirmar vínculos" }).click();
-  await expect(dialog.getByRole("status")).toContainText("Nenhuma imagem de QC encontrada");
+  expect((await (await confirmation).json()).data).toMatchObject({ linked: 2, ignored: 0 });
+  await expect(dialog.getByRole("status")).toContainText("Nenhuma foto vinculada para importar");
   await expect(dialog.getByRole("progressbar")).toHaveCount(0);
   await expect(dialog.getByRole("button", { name: "Processar próximo lote" })).toHaveCount(0);
   expect((await page.request.get(`/api/purchases/${purchaseId}/qc`)).ok()).toBeTruthy();
   await dialog.getByRole("button", { name: "Fechar" }).click();
   await page.setViewportSize({ width: 1440, height: 900 });
-  if (!(await page.locator(".cost-table-wrap").isVisible())) await page.getByRole("button", { name: /Produtos e pagamento/ }).click();
+  if (!(await page.locator(".cost-table-wrap").isVisible())) await page.getByRole("button", { name: /Produtos e custos/ }).click();
   const noQcRow = page.locator(".cost-table tbody tr").filter({ hasText: "QC Marker Product" });
   const categoryMarker = noQcRow.locator(".category-marker");
   await expect(categoryMarker).toHaveCSS("width", "40px");
@@ -232,7 +389,11 @@ test("HubBuy QC automatically completes four distinct photos and refreshes galle
   });
   await mockQcMedia(page);
   await page.route("**/api/qc/imports/mock-import-four", async route => {
-    if (route.request().method() === "GET") return response(route, transferSnapshot(importedPhotos));
+    if (route.request().method() === "GET") {
+      const snapshot = transferSnapshot(importedPhotos);
+      snapshot.photos.push(...Array.from({ length: 88 }, (_, index) => ({ id: `ignored-${index}`, sourceId: null, name: `Ignored photo ${index}`, occurrence: "Ignored product", state: "ignored", errorCode: null, byteSize: null, imageId: null, previewUrl: null })));
+      return response(route, snapshot);
+    }
     const body = route.request().postDataJSON() as { operation: string; expectedRevision: number };
     if (body.operation === "confirm") return response(route, { importId: "mock-import-four", revision: 1, linked: 1, pendingMatching: 0, ignored: 0, sources: 4, eligibleSources: 4 });
     if (body.operation === "batch") {
@@ -247,7 +408,7 @@ test("HubBuy QC automatically completes four distinct photos and refreshes galle
     throw new Error(`Unexpected import operation ${body.operation}`);
   });
   await page.goto(`/packages/${purchase.trackingId}`);
-  await page.getByRole("button", { name: /Produtos e pagamento/ }).click();
+  await expect(page.getByRole("button", { name: /Produtos e custos/ })).toHaveAttribute("aria-expanded", "true");
   await page.getByRole("button", { name: "Importar QC", exact: true }).click();
   const dialog = page.getByRole("dialog");
   const pasted = { code: 0, data: { count: 1, list: [{ orderNo: "QC-E2E-FOUR", goodsList: [{ orderGoodsId: "QC-GOODS-FOUR", offerUrl: "https://weidian.com/item.html?itemID=987654321", skuInfo: "Blue / 40", goodsName: "QC Marker Product", quantity: 1, freePhotos: ["https://scm.hubbuy.app/a", "https://scm.hubbuy.app/b", "https://scm.hubbuy.app/c", "https://scm.hubbuy.app/d"] }] }] } };
@@ -256,6 +417,9 @@ test("HubBuy QC automatically completes four distinct photos and refreshes galle
   await expect(dialog.getByRole("button", { name: "Confirmar vínculos" })).toBeEnabled();
   await dialog.getByRole("button", { name: "Confirmar vínculos" }).click();
   await expect(dialog.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "0");
+  await expect(dialog.getByRole("progressbar")).toHaveAttribute("aria-valuemax", "4");
+  await expect(dialog.locator(".qc-transfer-row")).toHaveCount(4);
+  await expect(dialog.getByText("Ignored product")).toHaveCount(0);
   await expect(dialog.locator(".qc-transfer-state").filter({ hasText: "Processando..." })).toHaveCount(1);
   await expect(dialog.locator(".qc-transfer-state").filter({ hasText: "Aguardando..." })).toHaveCount(3);
   await page.setViewportSize({ width: 390, height: 844 });
@@ -273,7 +437,7 @@ test("HubBuy QC automatically completes four distinct photos and refreshes galle
   await expect(dialog.locator(".qc-transfer-state").filter({ hasText: "Importada" })).toHaveCount(4);
   await dialog.screenshot({ path: join(progressQa, "success-390.png"), animations: "disabled" });
   expect(batches).toBe(4);
-  await dialog.getByRole("button", { name: "Fechar" }).click();
+  await dialog.getByRole("button", { name: "Concluir", exact: true }).click();
   const galleryButton = page.locator(".qc-cost-photo-strip").getByRole("button", { name: "Ver mais fotos QC de QC Marker Product" });
   await expect(galleryButton).toHaveText("Ver mais");
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -325,7 +489,7 @@ test("HubBuy QC automatically completes four distinct photos and refreshes galle
   await expect(page.getByRole("button", { name: "Capa atual" })).toBeVisible();
   await page.locator(".qc-viewer-surface").getByRole("button", { name: "Fechar" }).click();
   await page.reload();
-  if (!(await page.locator(".cost-table-wrap").isVisible())) await page.getByRole("button", { name: /Produtos e pagamento/ }).click();
+  if (!(await page.locator(".cost-table-wrap").isVisible())) await page.getByRole("button", { name: /Produtos e custos/ }).click();
   await expect(costRow.locator(".qc-cost-cover")).toHaveAttribute("data-qc-image-id", "qc-photo-2");
   await expect(costRow.locator(".qc-cost-cover img")).toHaveAttribute("alt", "Foto QC compartilhada de QC Marker Product");
   await expect(costRow.locator(".qc-cost-cover img")).toBeVisible();
@@ -397,7 +561,7 @@ test("cost thumbnails open their exact photo across gallery pages", async ({ pag
     return response(route, { itemId: purchase.firstItemId, pageOffset: offset, totalCount: 14, presentationRevision: 0, primaryImageId: cover.imageId, canSetCover: false, images: photos.slice(offset, offset + 12), nextOffset: offset === 0 ? 12 : null });
   });
   await page.goto(`/packages/${purchase.trackingId}`);
-  await page.getByRole("button", { name: /Produtos e pagamento/ }).click();
+  await expect(page.getByRole("button", { name: /Produtos e custos/ })).toHaveAttribute("aria-expanded", "true");
   const trigger = page.locator('.qc-cost-photo[data-qc-image-id="direct-photo-14"]:visible');
   await expect(trigger).toBeVisible();
   expect(requestedOriginals).toHaveLength(0);
@@ -435,7 +599,7 @@ test("ambiguous QC occurrence requires a candidate and then transfers every phot
   });
   await mockQcMedia(page);
   await page.goto(`/packages/${purchase.trackingId}`);
-  await page.getByRole("button", { name: /Produtos e pagamento/ }).click();
+  await expect(page.getByRole("button", { name: /Produtos e custos/ })).toHaveAttribute("aria-expanded", "true");
   await page.getByRole("button", { name: /Ações QC/ }).click();
   await page.getByRole("menuitem", { name: /Verificar vínculos pendentes/ }).click();
   const dialog = page.getByRole("dialog");
@@ -477,7 +641,7 @@ test("QC transfer interruption stays partial, surfaces the error and refreshes c
     throw new Error(`Unexpected import operation ${body.operation}`);
   });
   await page.goto(`/packages/${purchase.trackingId}`);
-  await page.getByRole("button", { name: /Produtos e pagamento/ }).click();
+  await expect(page.getByRole("button", { name: /Produtos e custos/ })).toHaveAttribute("aria-expanded", "true");
   await page.getByRole("button", { name: "Importar QC", exact: true }).click();
   const dialog = page.getByRole("dialog");
   const pasted = { code: 0, data: { count: 1, list: [{ orderNo: "QC-E2E-INTERRUPTED", goodsList: [{ orderGoodsId: "QC-GOODS-INTERRUPTED", offerUrl: "https://weidian.com/item.html?itemID=987654321", skuInfo: "Blue / 40", goodsName: "QC Marker Product", quantity: 1, freePhotos: ["https://scm.hubbuy.app/a", "https://scm.hubbuy.app/b", "https://scm.hubbuy.app/c", "https://scm.hubbuy.app/d"] }] }] } };
@@ -547,7 +711,7 @@ test("a fresh confirmation reimports all included photos after QC deletion", asy
   });
   await mockQcMedia(page);
   await page.goto(`/packages/${purchase.trackingId}`);
-  await page.getByRole("button", { name: /Produtos e pagamento/ }).click();
+  await expect(page.getByRole("button", { name: /Produtos e custos/ })).toHaveAttribute("aria-expanded", "true");
   const json = { code: 0, data: { count: 1, list: [{ orderNo: "QC-E2E-REIMPORT", goodsList: [{ orderGoodsId: "QC-GOODS-REIMPORT", offerUrl: "https://weidian.com/item.html?itemID=987654321", skuInfo: "Blue / 40", goodsName: "QC Marker Product", quantity: 1, freePhotos: ["https://scm.hubbuy.app/a", "https://scm.hubbuy.app/b", "https://scm.hubbuy.app/c", "https://scm.hubbuy.app/d"] }] }] } };
   const confirmImport = async () => {
     await page.getByRole("button", { name: "Importar QC", exact: true }).click();

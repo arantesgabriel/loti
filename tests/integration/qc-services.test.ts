@@ -432,6 +432,41 @@ describe("HubBuy QC persistence and permissions", () => {
     expect(await alice.getQcSummary("qc-purchase")).toMatchObject({ pendingMatching: 0, pendingTransfers: 0 });
   });
 
+  it("manually links an ignored occurrence, transfers its photos and reuses the confirmed link", async () => {
+    const fake = mockStorage(), alice = services(f, fake.storage);
+    const payload = { code: 0, data: { list: [{ orderNo: "ORDER-MANUAL", goodsList: [{ orderGoodsId: "GOODS-MANUAL", goodsName: "Synthetic football jersey", skuInfo: "Green / 3XL", quantity: 1, freePhotos: [sourceUrl] }] }] } };
+    const before = await f.db.select().from(purchaseItems).all();
+    const preview = await alice.prepare("qc-purchase", payload);
+    expect(preview.rows[0]?.match).toMatchObject({ status: "IGNORED", candidates: [] });
+    const choices = [{ externalKey: preview.rows[0]!.externalKey, targetKey: "purchase:qc-purchase-item" }];
+    await expect(services(f, fake.storage, "bob").confirmImport(preview.importId, preview.revision, choices)).rejects.toMatchObject({ status: 403 });
+    const other = await seedFinalizedPurchase(f, "qc-other");
+    await expect(alice.confirmImport(preview.importId, preview.revision, [{ ...choices[0]!, targetKey: `purchase:${other.itemId}` }])).rejects.toMatchObject({ status: 403, code: "QC_ITEM_CROSS_PURCHASE" });
+    const confirmed = await alice.confirmImport(preview.importId, preview.revision, choices);
+    expect(confirmed).toMatchObject({ linked: 1, ignored: 0, sources: 1, eligibleSources: 1 });
+    expect(fake.calls.put).not.toHaveBeenCalled();
+    expect(await alice.runImportBatch(preview.importId, confirmed.revision)).toMatchObject({ imported: 1, complete: true });
+    expect((await alice.getGallery("qc-purchase", "qc-purchase-item")).images).toHaveLength(1);
+    expect(await f.db.select().from(purchaseItems).where(eq(purchaseItems.purchaseId, "qc-purchase")).all()).toEqual(before);
+    expect(await f.db.select().from(qcEvents).all()).toEqual(expect.arrayContaining([expect.objectContaining({ eventType: "QC_MATCH", resultCode: "LINKED" })]));
+    expect((await alice.prepare("qc-purchase", payload)).rows[0]?.match).toMatchObject({ status: "MATCHED", targetItemId: "purchase:qc-purchase-item" });
+  });
+
+  it("accepts an explicit target outside the suggested candidates", async () => {
+    const now = new Date();
+    await f.db.insert(purchaseItems).values({ id: "qc-manual-target", purchaseId: "qc-purchase", personId: "alice", createdBy: "alice", name: "Synthetic jersey", url: "https://weidian.com/item.html?itemID=999", platform: "weidian", visualKey: "tshirt", quantity: 1, cartStatus: "added", sharingMode: "equal", createdAt: now, updatedAt: now }).run();
+    const alice = services(f, mockStorage().storage);
+    const preview = await alice.prepare("qc-purchase", photoImport(1, "Different SKU"));
+    expect(preview.rows[0]?.match).toMatchObject({ status: "PENDING", candidates: [{ itemId: "purchase:qc-purchase-item" }] });
+    const confirmed = await alice.confirmImport(preview.importId, preview.revision, [{ externalKey: preview.rows[0]!.externalKey, targetKey: "purchase:qc-manual-target" }]);
+    expect(confirmed).toMatchObject({ linked: 1, pendingMatching: 0, eligibleSources: 1 });
+    expect((await f.db.select().from(hubbuyExternalItems).all())[0]?.purchaseItemId).toBe("qc-manual-target");
+    const pending = await alice.prepare("qc-purchase", photoImport(1, "Different SKU", "GOODS-PENDING-MANUAL"));
+    expect(await alice.confirmImport(pending.importId, pending.revision, [])).toMatchObject({ pendingMatching: 1 });
+    const occurrence = (await alice.getQcSummary("qc-purchase")).pendingRows![0]!;
+    expect(await alice.resolvePendingOccurrence("qc-purchase", occurrence.externalItemId, occurrence.revision, "purchase:qc-manual-target")).toMatchObject({ purchaseItemId: "qc-manual-target", pendingSources: 1 });
+  });
+
   it("does not surface legacy null-linked sources without a plausible purchase-item candidate", async () => {
     const now = new Date(), externalItemId = "legacy-irrelevant-occurrence";
     await f.db.insert(hubbuyExternalItems).values({ id: externalItemId, workspaceId: "workspace", purchaseId: "qc-purchase", purchaseItemId: null, orderGoodsId: "LEGACY-IRRELEVANT", orderGoodsNo: null, orderNo: "LEGACY-ORDER", offerId: null, channel: null, offerUrl: "https://weidian.com/item.html?itemID=999", skuInfo: "Navy / L", title: "Produto ausente", quantity: 1, revision: 0, confirmedBy: null, confirmedAt: null, createdAt: now, updatedAt: now }).run();

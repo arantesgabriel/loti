@@ -16,21 +16,21 @@ function photoSize(bytes: number) {
   return `${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(bytes / divisor)} ${unit}`;
 }
 
-export function QcImportProgress({ photos, activeSourceId, importedIds, busy, complete, pendingMatching, error, total, renderPreview }: {
+export function QcImportProgress({ photos: importPhotos, activeSourceId, importedIds, busy, complete, error, total, renderPreview }: {
   photos: QcTransferPhoto[] | null; activeSourceId: string | null; importedIds: Set<string>; busy: boolean; complete: boolean;
-  pendingMatching: number; error: string; total: number; renderPreview: (photo: QcTransferPhoto) => ReactNode;
+  error: string; total: number; renderPreview: (photo: QcTransferPhoto) => ReactNode;
 }) {
+  const photos = importPhotos?.filter(photo => !["ignored", "deleted", "matching"].includes(photo.state)) ?? null;
   const ready = photos?.filter(photo => photo.state === "ready").length ?? 0;
   const failed = photos?.filter(photo => photo.state === "failed").length ?? 0;
   const pending = photos?.filter(photo => photo.state === "pending" && photo.errorCode).length ?? 0;
-  const ignored = photos?.filter(photo => photo.state === "ignored" || photo.state === "deleted").length ?? 0;
   const count = photos?.length ?? total;
   const processed = ready + failed;
   const percent = count ? Math.round(processed / count * 100) : 0;
-  const success = complete && !pendingMatching && !failed && !pending && ready > 0 && ready === count;
+  const success = complete && !failed && !pending && ready > 0 && ready === count;
   const empty = count === 0;
-  const title = empty ? "Nenhuma imagem de QC encontrada" : busy ? "Processando suas fotos" : success ? "Importação concluída" : error ? "Importação interrompida" : "Importação parcial";
-  const detail = empty ? "Esta resposta não contém fotos gratuitas de QC. Confira o pedido e cole outra resposta." : busy ? <>Estamos importando e associando as imagens do QC.<br/>Isso pode levar alguns segundos.</> : success ? `${ready} ${ready === 1 ? "foto foi importada e associada" : "fotos foram importadas e associadas"} com sucesso.` : "As fotos concluídas estão salvas. Confira abaixo o que ainda precisa de atenção.";
+  const title = empty ? "Nenhuma foto vinculada para importar" : busy ? "Processando suas fotos" : success ? "Importação concluída" : error ? "Importação interrompida" : "Importação parcial";
+  const detail = empty ? "Selecione um produto com fotos de QC na etapa de vínculos para iniciar a importação." : busy ? <>Estamos importando e associando as imagens do QC.<br/>Isso pode levar alguns segundos.</> : success ? `${ready} ${ready === 1 ? "foto foi importada e associada" : "fotos foram importadas e associadas"} com sucesso.` : "As fotos concluídas estão salvas. Confira abaixo o que ainda precisa de atenção.";
 
   return <div className="qc-transfer-content">
     <div className="qc-transfer-hero" role="status" aria-live="polite" aria-atomic="true">
@@ -66,11 +66,9 @@ export function QcImportProgress({ photos, activeSourceId, importedIds, busy, co
         })}
       </ul>
     </>}
-    {(pendingMatching > 0 || ignored > 0 || pending > 0 || failed > 0) && <p className="qc-transfer-summary">{[
+    {(pending > 0 || failed > 0) && <p className="qc-transfer-summary">{[
       failed ? `${failed} ${failed === 1 ? "foto com falha" : "fotos com falha"}` : "",
       pending ? `${pending} ${pending === 1 ? "transferência pendente" : "transferências pendentes"}` : "",
-      pendingMatching ? `${pendingMatching} ${pendingMatching === 1 ? "ocorrência aguarda vínculo manual" : "ocorrências aguardam vínculo manual"}` : "",
-      ignored ? `${ignored} ${ignored === 1 ? "foto ignorada ou excluída" : "fotos ignoradas ou excluídas"}` : "",
     ].filter(Boolean).join(" · ")}</p>}
     <div className="qc-transfer-callout"><ShieldCheck size={18} aria-hidden="true"/><p>As fotos são transferidas em sequência. Os vínculos são confirmados antes de iniciar a transferência.</p></div>
   </div>;
