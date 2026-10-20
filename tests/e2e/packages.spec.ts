@@ -147,7 +147,10 @@ test("finalized purchase gets a separate cost tracking with payment, package, an
   await page.getByRole("button", { name: "Ações para Pacote 1", exact: true }).click();
   await page.getByRole("menuitem", { name: "Editar conteúdo", exact: true }).click();
   const contentEditor = page.getByRole("dialog");
-  await contentEditor.getByLabel("Tênis de teste neste pacote").fill("0");
+  await expect(contentEditor.getByLabel("Tênis de teste neste pacote")).toHaveText("1");
+  await expect(contentEditor.getByRole("button", { name: "Diminuir quantidade de Tênis de teste", exact: true })).toBeDisabled();
+  await contentEditor.getByRole("button", { name: "Tirar Tênis de teste do pacote", exact: true }).click();
+  await expect(contentEditor.getByLabel("Tênis de teste neste pacote")).toHaveCount(0);
   await contentEditor.getByRole("button", { name: "Cancelar", exact: true }).click();
   await expect(page.locator(".cost-package-items")).toContainText("1 unidade");
   await page.setViewportSize({ width: 1440, height: 1000 });

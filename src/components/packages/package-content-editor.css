@@ -1,0 +1,26 @@
+.cost-package-direct-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.cost-package-mobile-actions { display: none; }
+
+.sheet.cost-package-content-editor { display: flex; flex-direction: column; overflow: hidden; }
+.cost-package-content-editor > .surface-head { flex: 0 0 auto; }
+.sheet.cost-package-content-editor > .surface-body { display: flex; flex: 1 1 auto; min-height: 0; overflow: hidden; padding: 0 24px; }
+.sheet.cost-package-content-editor form { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; gap: 0; }
+.cost-package-content-editor .cost-allocation-edit-list { display: block; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding-top: 16px; }
+.cost-package-content-editor .cost-allocation-edit-row { grid-template-columns: minmax(0, 1fr) auto; }
+.cost-allocation-controls { display: grid; gap: 7px; font-size: 12px; }
+.cost-allocation-control-row { display: flex; align-items: center; gap: 8px; }
+.cost-allocation-stepper { display: flex; align-items: center; border: 1px solid var(--border); border-radius: 10px; }
+.cost-allocation-controls .button { width: 44px; height: 44px; min-height: 44px; padding: 0; }
+.cost-allocation-stepper output { min-width: 24px; text-align: center; font-variant-numeric: tabular-nums; }
+.cost-allocation-footer { flex: 0 0 auto; padding: 12px 0 max(16px, env(safe-area-inset-bottom)); border-top: 1px solid var(--border); background: var(--surface); }
+.cost-allocation-footer > .cost-allocate-remaining { width: 100%; margin: 0 0 12px; }
+.sheet.cost-package-content-editor .form-actions { position: static; display: flex; gap: 10px; margin: 0; padding: 0; border: 0; }
+.cost-allocation-footer .form-actions > .button:last-child { flex: 1; }
+
+@media (max-width: 767px) {
+  .cost-package-direct-actions { display: none; }
+  .cost-package-mobile-actions { display: block; }
+  .sheet.cost-package-content-editor > .surface-body { padding: 0 16px; }
+  .cost-package-content-editor .cost-allocation-edit-row { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .cost-allocation-control-row { justify-content: space-between; }
+}

@@ -7,11 +7,18 @@ test("creates zero-balance HubBuy accounts and credits the first confirmed refun
   test.setTimeout(180_000);
   page.setDefaultTimeout(15_000);
   const screenshotDir = resolve(process.cwd(), "artifacts/qa/hubbuy-account-creation");
+  const drawerScreenshotDir = resolve(process.cwd(), "artifacts/qa/additional-product-drawers");
   async function capture(name: string) {
     if (process.env.LOTI_CAPTURE_HUBBUY_QA !== "1") return;
     mkdirSync(screenshotDir, { recursive: true });
     await page.locator("[data-sonner-toast]").first().waitFor({ state: "hidden", timeout: 5000 }).catch(() => undefined);
     await page.screenshot({ path: join(screenshotDir, `${name}.png`), fullPage: true });
+  }
+  async function captureDrawer(name: string) {
+    if (process.env.LOTI_CAPTURE_HUBBUY_QA !== "1") return;
+    mkdirSync(drawerScreenshotDir, { recursive: true });
+    await page.locator("[data-sonner-toast]").first().waitFor({ state: "hidden", timeout: 5000 }).catch(() => undefined);
+    await page.screenshot({ path: join(drawerScreenshotDir, `${name}.png`) });
   }
 
   await login(page, "profile-qa", "Profile-QA-Old-2026!");
@@ -85,8 +92,10 @@ test("creates zero-balance HubBuy accounts and credits the first confirmed refun
   await page.getByRole("navigation", { name: "Contas HubBuy cadastradas" }).getByRole("button").filter({ hasText: refundAccountName }).click();
   await expect(creditedAccount).toContainText("Ativa e conciliada");
   await expect(creditedAccount).toContainText("¥ 5,00");
-  await expect(creditedAccount.locator(".hubbuy-account-fact").last()).toContainText(memberName);
-  await expect(creditedAccount.locator(".hubbuy-account-fact").last()).toContainText("¥ 5,00 · R$ 3,50");
+  await expect(creditedAccount.getByRole("region", { name: "Direitos individuais", exact: true })).toContainText(memberName);
+  await expect(creditedAccount.getByRole("region", { name: "Direitos individuais", exact: true })).toContainText("¥ 5,00 · R$ 3,50");
+  await expect(creditedAccount.getByRole("region", { name: "Direitos individuais", exact: true })).toContainText("Item base QA");
+  await expect(creditedAccount.getByRole("heading", { name: "Última revisão" })).toHaveCount(0);
   await expect(page.getByRole("table")).toContainText("Crédito");
   await expect(page.getByRole("table")).toContainText("R$ 3,50");
   for (const width of [1440, 768, 390, 320]) {
@@ -107,7 +116,7 @@ test("creates zero-balance HubBuy accounts and credits the first confirmed refun
   await expect(page.getByRole("button", { name: /Produtos e custos/ })).toHaveAttribute("aria-expanded", "true");
   await page.getByRole("button", { name: /Adicionar produto/ }).click();
   const additional = page.locator(".cost-additional-order-surface");
-  const accountSelector = additional.getByLabel("Conta HubBuy");
+  const accountSelector = additional.getByLabel("Conta HubBuy").last();
   const refundOption = accountSelector.locator("option").filter({ hasText: refundAccountName });
   await accountSelector.selectOption(await refundOption.getAttribute("value")!);
   await additional.getByRole("textbox", { name: "Produto", exact: true }).fill(`Moletom adicional QA ${suffix}`);
@@ -117,14 +126,50 @@ test("creates zero-balance HubBuy accounts and credits the first confirmed refun
   const participants = additional.locator(".cost-order-participants label");
   for (const participant of await participants.all()) {
     const checkbox = participant.locator("input[type=checkbox]");
-    if ((await participant.innerText()).includes(memberName)) await checkbox.check();
+    const participantName = await participant.innerText();
+    if (participantName.includes(memberName) || participantName.includes("Profile Reader QA")) await checkbox.check();
     else await checkbox.uncheck();
   }
+  await expect(additional.getByRole("heading", { name: "1. Conta HubBuy" })).toBeVisible();
+  await expect(additional.getByRole("heading", { name: "2. Dados do item" })).toBeVisible();
+  await expect(additional.getByRole("heading", { name: "3. Valores e divisão" })).toBeVisible();
+  await expect(additional.getByRole("button", { name: "Continuar para o pagamento" })).toBeInViewport();
+  await captureDrawer("add-product-desktop");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(additional).toBeVisible();
+  expect(await additional.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+  await expect(additional.getByRole("button", { name: "Continuar para o pagamento" })).toBeInViewport();
+  await captureDrawer("add-product-mobile");
+  await additional.locator(".surface-body").evaluate(element => { element.scrollTop = element.scrollHeight; });
+  await expect(additional.locator(".cost-order-participant-options")).toBeInViewport({ ratio: 0.8 });
+  await captureDrawer("add-product-mobile-participants");
+  await page.setViewportSize({ width: 1440, height: 1000 });
   await additional.getByRole("button", { name: "Continuar para o pagamento" }).click();
-  await expect(additional).toContainText("2. Confirme o pagamento");
+  await expect(additional.getByRole("heading", { name: "Pagamento", exact: true })).toBeVisible();
+  await expect(additional).toContainText("Saldo próprio previsto");
+  await expect(additional).toContainText("Adiantamento");
+  await expect(additional).toContainText("Complemento");
+  await expect(additional.getByRole("button", { name: "Editar", exact: true })).toBeVisible();
+  await captureDrawer("confirm-purchase-desktop");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(additional).toBeVisible();
+  expect(await additional.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+  await expect(additional.getByRole("button", { name: "Confirmar compra", exact: true })).toBeInViewport();
+  await captureDrawer("confirm-purchase-mobile");
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const useOwnBalance = additional.getByRole("checkbox", { name: "Usar saldo próprio dos participantes" });
+  await expect(useOwnBalance).toBeChecked();
+  await useOwnBalance.uncheck();
+  await additional.getByRole("button", { name: "Adicionar adiantamento", exact: true }).click();
+  const advance = additional.locator(".cost-order-advance");
+  await advance.getByLabel("Quem recebe").selectOption({ label: "Profile Reader QA" });
+  await advance.getByLabel("Quem financia").selectOption({ label: memberName });
+  await advance.getByLabel("Valor CNY").fill("5,00");
+  await expect(additional.locator(".cost-payment-summary-row").filter({ hasText: "Adiantamento" })).toContainText("¥ 5,00");
+  await expect(additional.locator(".cost-payment-summary-row").filter({ hasText: "Saldo próprio previsto" })).toContainText("¥ 0,00");
   await additional.getByLabel("Principal externo em BRL").fill("8,00");
   await additional.getByRole("button", { name: "Confirmar compra", exact: true }).click();
-  await expect(additional).toContainText("3. Associe as unidades ao pacote");
+  await expect(additional).toContainText("1 unidade será associada ao pacote escolhido.");
   await expect(additional).toContainText("Base de saldo R$ 3,50 · Dinheiro novo R$ 8,08 (taxas R$ 0,08)");
   await additional.getByRole("button", { name: "Associar ao pacote" }).click();
   await expect(additional).toBeHidden();

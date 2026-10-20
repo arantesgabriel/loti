@@ -46,7 +46,7 @@ describe("HubBuy account ledger foundation", () => {
     expect(reconciled).toMatchObject({ replayed: false, account: { status: "active", balanceCnyMinor: 35_000, revision: 1 } });
     expect(replay).toMatchObject({ replayed: true, accountId: account.accountId, operationId: reconciled.operationId });
     expect(balance).toMatchObject({ ledgerBalanceCnyMinor: 35_000, reconciled: true, rights: [
-      { personId: "alice", availableCnyMinor: 21_000, availableHistoricalBrlCents: 14_700 },
+      { personId: "alice", availableCnyMinor: 21_000, availableHistoricalBrlCents: 14_700, origins: [{ kind: "opening_balance", label: "Saldo inicial conciliado", availableCnyMinor: 21_000, availableHistoricalBrlCents: 14_700, trackingId: null }] },
       { personId: "bob", availableCnyMinor: 14_000, availableHistoricalBrlCents: 9_800 },
     ] });
     expect(statement.entries).toHaveLength(1);
@@ -82,7 +82,7 @@ describe("HubBuy account ledger foundation", () => {
     });
     const reconstructed = await service.getAccountBalance(account.accountId);
     expect(reconstructed).toMatchObject({ ledgerBalanceCnyMinor: 7_000, reconciled: false, rights: [
-      { personId: "alice", availableCnyMinor: 3_000, availableHistoricalBrlCents: 2_100 },
+      { personId: "alice", availableCnyMinor: 3_000, availableHistoricalBrlCents: 2_100, origins: [{ kind: "reconciliation", label: "Crédito de conciliação", availableCnyMinor: 3_000, availableHistoricalBrlCents: 2_100, trackingId: null }] },
       { personId: "bob", availableCnyMinor: 4_000, availableHistoricalBrlCents: 2_800 },
     ], reconciliation: { mode: "chronological", events: [
       { eventType: "legacy_receipt", sourceReference: "refund-old-42", amountCnyMinor: 10_000 },

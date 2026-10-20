@@ -78,6 +78,7 @@ describe("HubBuy refund credits", () => {
     expect(current.refunds[0]).toMatchObject({ status: "received", refundDestination: "hubbuy", receivedProductCnyMinor: 10_000, receivedChinaCnyMinor: 1_000 });
     expect(await f.db.select().from(hubbuyAccounts).where(eq(hubbuyAccounts.id, accountId)).get()).toMatchObject({ label: "Conta do primeiro reembolso", status: "active", balanceCnyMinor: 11_000, revision: 1 });
     expect(await f.db.select().from(hubbuyBalanceEntries).where(eq(hubbuyBalanceEntries.accountId, accountId)).all()).toMatchObject([{ direction: "credit", amountCnyMinor: 11_000, historicalBrlCents: 9_000, sourceType: "refund_received" }]);
+    expect((await balanceServices(f.db, "alice").getAccountBalance(accountId)).rights).toMatchObject([{ personId: "bob", origins: [{ kind: "refund_product", label: "SSD", costItemId: current.refunds[0].costItemId, trackingId: tracking.id, availableCnyMinor: 11_000, availableHistoricalBrlCents: 9_000 }] }]);
     expect(await f.db.select().from(purchaseRefundPaymentAllocations).where(eq(purchaseRefundPaymentAllocations.operationId, current.refunds[0].receiptOperationId!)).all()).toHaveLength(2);
 
     const replay = await service.receiveRefund(tracking.id, refundId, { ...receipt, expectedRevision: current.tracking.revision - 1 });
@@ -174,11 +175,13 @@ describe("HubBuy refund credits", () => {
     });
     expect(await f.db.select().from(hubbuyBalanceEntries).where(eq(hubbuyBalanceEntries.accountId, accountId)).all()).toHaveLength(3);
     expect(await f.db.select().from(hubbuyAccounts).where(eq(hubbuyAccounts.id, accountId)).get()).toMatchObject({ balanceCnyMinor: 13_000 });
+    expect((await balanceServices(f.db, "alice").getAccountBalance(accountId)).rights).toMatchObject([{ origins: [{ kind: "refund_product", label: "SSD", availableCnyMinor: 13_000, availableHistoricalBrlCents: 9_000 }] }]);
     current = await service.voidRefund(tracking.id, refundId, { expectedRevision: current.tracking.revision, reason: "Registro sintético inválido", confirmed: true });
     expect(current.refunds[0].status).toBe("voided");
     expect(await f.db.select().from(hubbuyBalanceEntries).where(eq(hubbuyBalanceEntries.accountId, accountId)).all()).toHaveLength(4);
     expect(await f.db.select().from(hubbuyBalanceConsumptions).all()).toHaveLength(2);
     expect(await f.db.select().from(hubbuyAccounts).where(eq(hubbuyAccounts.id, accountId)).get()).toMatchObject({ balanceCnyMinor: 0 });
+    expect((await balanceServices(f.db, "alice").getAccountBalance(accountId)).rights.every(right => right.origins.length === 0)).toBe(true);
   });
 
   it("keeps external receipts outside the HubBuy ledger", async () => {
@@ -241,6 +244,10 @@ describe("HubBuy refund credits", () => {
     expect(current.productOrders.find(order => order.kind === "additional")!.items[0].financingPositions[0]).toMatchObject({ openCnyMinor: 0, openHistoricalBrlCents: 0, settledCnyMinor: 800, offsetCnyMinor: 200 });
     const credit = (await f.db.select().from(hubbuyBalanceEntries).where(eq(hubbuyBalanceEntries.accountId, accountId)).all()).find(row => row.sourceType === "refund_received");
     expect(credit).toMatchObject({ amountCnyMinor: 400, historicalBrlCents: 280 });
+    expect((await balanceServices(f.db, "alice").getAccountBalance(accountId)).rights).toMatchObject([
+      { personId: "alice", origins: [{ kind: "refund_product", label: "Item adicional", costItemId, trackingId, availableCnyMinor: 200, availableHistoricalBrlCents: 140 }] },
+      { personId: "bob", origins: [{ kind: "refund_product", label: "Item adicional", costItemId, trackingId, availableCnyMinor: 200, availableHistoricalBrlCents: 140 }] },
+    ]);
     expect(current.productOrders.find(order => order.kind === "additional")!.items[0].calculation).toMatchObject({ receivedRefundCents: 280, partialCents: 420, shippingQuantity: 0 });
   });
 
