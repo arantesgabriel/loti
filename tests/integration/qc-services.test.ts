@@ -2,8 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createHash, randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { hubbuyExternalItems, purchaseItems, purchases, qcEvents, qcImagePreviews, qcImageSources, qcImages, qcImports, qcPresentations, qcTransferLocks } from "@/lib/db/schema";
-import { openDatabase } from "@/lib/db/connection";
+import { openDatabase, type AppDatabase } from "@/lib/db/connection";
 import { qcServices } from "@/lib/domain/qc-services";
+import { QcDomainError } from "@/lib/domain/qc-errors";
 import { QC_LIMITS } from "@/lib/domain/qc-limits";
 import { hubbuyBalanceServices } from "@/lib/domain/hubbuy-balance-services";
 import { packageCostServices } from "@/lib/domain/package-cost-services";
@@ -15,6 +16,12 @@ const rawPhoto = Buffer.from("synthetic-image-bytes");
 const external = { code: 0, data: { count: 1, list: [{ orderNo: "ORDER-1", goodsList: [{ orderGoodsId: "GOODS-1", orderGoodsNo: "ALT-1", offerUrl: "https://weidian.com/item.html?itemID=123", skuInfo: "Black / 42", goodsName: "Tênis", quantity: 1, freePhotos: [sourceUrl] }] }] } };
 function photoImport(count: number, skuInfo = "Black / 42", orderGoodsId = "GOODS-MULTI") {
   return { code: 0, data: { count: 1, list: [{ orderNo: "ORDER-MULTI", goodsList: [{ orderGoodsId, offerUrl: "https://weidian.com/item.html?itemID=123", skuInfo, goodsName: "Tênis", quantity: 1, freePhotos: Array.from({ length: count }, (_, index) => `https://scm.hubbuy.app/qc/photo-${index}.png`) }] }] } };
+}
+
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>(done => { resolve = done; });
+  return { promise, resolve };
 }
 
 function mockStorage(options: { holdPut?: { started: () => void; release: Promise<void> }; holdPreviewPut?: { started: () => void; release: Promise<void> }; deleteFails?: boolean } = {}) {
@@ -87,6 +94,7 @@ describe("HubBuy QC persistence and permissions", () => {
     const confirmed = await alice.confirmImport(prepared.importId, prepared.revision, []);
     expect(confirmed).toMatchObject({ linked: 1, sources: 1 });
     expect(await alice.runImportBatch(prepared.importId, confirmed.revision)).toMatchObject({ imported: 1, complete: true });
+    expect(fake.calls.get).not.toHaveBeenCalled();
 
     const targetKey = `additional:${additional.id}`;
     const image = (await bob.getGallery("qc-purchase", targetKey)).images[0]!;
@@ -96,6 +104,26 @@ describe("HubBuy QC persistence and permissions", () => {
     expect(await bob.getGallery("qc-purchase", targetKey)).toMatchObject({ primaryImageId: image.id, presentationRevision: 1, images: [{ id: image.id }] });
     expect(await bob.fallback(image.id)).toMatchObject({ url: expect.stringContaining("private-r2.test"), expiresIn: 120 });
     expect(await alice.getQcSummary("qc-purchase")).toMatchObject({ counts: [{ itemId: targetKey, count: 1 }] });
+  });
+
+  it("uses validated upload bytes for a new preview and falls back to R2 for preview repair", async () => {
+    const fake = mockStorage();
+    const previewBytes = Buffer.from("synthetic-preview");
+    const previewHash = createHash("sha256").update(previewBytes).digest("hex");
+    const alice = qcServices(f.db, "alice", {
+      managerId: "alice", storage: fake.storage, download: async () => rawPhoto,
+      validate: async bytes => ({ bytes, sha256: createHash("sha256").update(bytes).digest("hex"), mimeType: "image/png", extension: "png", width: 2, height: 2 }),
+      makePreview: async () => ({ bytes: previewBytes, sha256: previewHash, width: 2, height: 2 }),
+    });
+    const prepared = await alice.prepare("qc-purchase", external);
+    const confirmed = await alice.confirmImport(prepared.importId, prepared.revision, []);
+    await expect(alice.runImportBatch(prepared.importId, confirmed.revision)).resolves.toMatchObject({ imported: 1, complete: true });
+    expect(fake.calls.get).not.toHaveBeenCalled();
+
+    const image = (await f.db.select().from(qcImages).all())[0]!;
+    await f.db.delete(qcImagePreviews).where(eq(qcImagePreviews.imageId, image.id)).run();
+    await expect(alice.runBatch("qc-purchase")).resolves.toMatchObject({ previews: 1 });
+    expect(fake.calls.get).toHaveBeenCalledTimes(1);
   });
 
   it("finishes an empty reconciliation without requiring unconfigured R2", async () => {
@@ -113,6 +141,73 @@ describe("HubBuy QC persistence and permissions", () => {
     }
   });
 
+  it("returns a batch snapshot at its persisted revision", async () => {
+    const fake = mockStorage(), alice = services(f, fake.storage);
+    const prepared = await alice.prepare("qc-purchase", external);
+    const confirmed = await alice.confirmImport(prepared.importId, prepared.revision, []);
+    const result = await alice.runImportBatch(prepared.importId, confirmed.revision);
+    expect(result.snapshot).toMatchObject({ importId: prepared.importId, revision: result.revision, photos: [{ state: "ready" }] });
+    expect(result.snapshot!.revision).toBe((await alice.getImport(prepared.importId)).revision);
+  });
+
+  it("aborts an active PUT on request cancellation and releases its lease only after uncertain state is persisted", async () => {
+    const controller = new AbortController(), putStarted = deferred();
+    const storage: QcStorage = {
+      async put(_object, signal) {
+        putStarted.resolve();
+        await new Promise<void>((_resolve, reject) => {
+          if (signal?.aborted) { reject(new DOMException("Aborted", "AbortError")); return; }
+          signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+        });
+      },
+      async head() { return { exists: false }; }, async get() { throw new Error("unused"); }, async delete() {}, async signRead() { return "unused"; },
+    };
+    const alice = qcServices(f.db, "alice", {
+      managerId: "alice", storage, signal: controller.signal, download: async () => rawPhoto,
+      validate: async bytes => ({ bytes, sha256: createHash("sha256").update(bytes).digest("hex"), mimeType: "image/png", extension: "png", width: 2, height: 2 }),
+    });
+    const prepared = await alice.prepare("qc-purchase", external);
+    const confirmed = await alice.confirmImport(prepared.importId, prepared.revision, []);
+    const batchPromise = alice.runImportBatch(prepared.importId, confirmed.revision);
+    await putStarted.promise;
+    expect((await f.db.select().from(qcTransferLocks).where(eq(qcTransferLocks.scope, "workspace")).get())?.leaseUntil).toBeGreaterThan(Date.now());
+    controller.abort();
+    await expect(batchPromise).resolves.toMatchObject({ pending: 1, complete: false, stopReason: "recovery", results: [{ status: "pending" }] });
+    const image = (await f.db.select().from(qcImages).all())[0]!;
+    const source = (await f.db.select().from(qcImageSources).all())[0]!;
+    expect(image).toMatchObject({ status: "pending", errorCode: "QC_PUT_IN_FLIGHT" });
+    expect(image.claimToken).toBeTruthy();
+    expect(source).toMatchObject({ state: "pending", errorCode: "QC_PENDING_RECOVERY" });
+    expect((await f.db.select().from(qcTransferLocks).where(eq(qcTransferLocks.scope, "workspace")).get())?.leaseUntil).toBe(0);
+  });
+
+  it("enforces structured QC rate limits with Retry-After", async () => {
+    const alice = qcServices(f.db, "alice", { managerId: "alice", now: () => Date.parse("2026-10-20T12:00:00.000Z") });
+    for (let call = 0; call < 12; call++) await alice.rate("qc-purchase", "batch");
+    await expect(alice.rate("qc-purchase", "batch")).rejects.toMatchObject({ status: 429, code: "QC_RATE_LIMIT", retryAfterSeconds: expect.any(Number) });
+  });
+
+  it("retries one transient source GET with a fresh quota reservation", async () => {
+    const fake = mockStorage(), metrics = (await import("@/lib/qc/metrics")).createQcMetricCollector();
+    let downloads = 0;
+    const previewBytes = Buffer.from("retry-preview"), previewHash = createHash("sha256").update(previewBytes).digest("hex");
+    const alice = qcServices(f.db, "alice", {
+      managerId: "alice", storage: fake.storage, metrics, sleep: async () => {}, random: () => 0,
+      download: async () => { downloads++; if (downloads === 1) throw new QcDomainError("temporary", 502, "QC_SOURCE_UNAVAILABLE", { upstreamStatus: 503 }); return rawPhoto; },
+      validate: async bytes => ({ bytes, sha256: createHash("sha256").update(bytes).digest("hex"), mimeType: "image/png", extension: "png", width: 2, height: 2 }),
+      makePreview: async () => ({ bytes: previewBytes, sha256: previewHash, width: 2, height: 2 }),
+    });
+    const prepared = await alice.prepare("qc-purchase", external);
+    const confirmed = await alice.confirmImport(prepared.importId, prepared.revision, []);
+    const result = await alice.runImportBatch(prepared.importId, confirmed.revision);
+    expect(result).toMatchObject({ imported: 1, complete: true });
+    expect(downloads).toBe(2);
+    expect(metrics.snapshot().counters.downloadRetries).toBe(1);
+    const manifest = await f.db.select().from(qcImports).where(eq(qcImports.id, prepared.importId)).get();
+    expect(manifest?.bytesReserved).toBe(0);
+    expect(manifest?.bytesConsumed).toBeGreaterThanOrEqual(QC_LIMITS.imageBytes);
+  });
+
   it("reads real per-photo progress and queue order without leaking storage or changing snapshots", async () => {
     const fake = mockStorage(), alice = distinctPhotoServices(f, fake.storage);
     const before = await f.db.select().from(purchaseItems).all();
@@ -124,9 +219,10 @@ describe("HubBuy QC persistence and permissions", () => {
     const first = await alice.runImportBatch(prepared.importId, confirmed.revision);
     expect(first.results[0]?.sourceId).toBe(initial.nextSourceId);
     const progress = await alice.getImport(prepared.importId);
-    expect(progress.photos.filter(photo => photo.state === "ready")).toHaveLength(1);
-    expect(progress.photos.filter(photo => photo.state === "pending")).toHaveLength(3);
-    expect(progress.nextSourceId).not.toBe(initial.nextSourceId);
+    expect(first).toMatchObject({ processed: 4, imported: 4, remaining: 0, complete: true });
+    expect(progress.photos.filter(photo => photo.state === "ready")).toHaveLength(4);
+    expect(progress.photos.filter(photo => photo.state === "pending")).toHaveLength(0);
+    expect(progress.nextSourceId).toBeNull();
     expect(progress.photos[0]).toMatchObject({ name: "photo-0.png", state: "ready", byteSize: expect.any(Number) });
     expect(JSON.stringify(progress)).not.toMatch(/r2Key|signature|contentSha256|sourceUrl/);
     await expect(services(f, fake.storage, "bob").getImport(prepared.importId)).rejects.toMatchObject({ status: 403 });
@@ -141,7 +237,47 @@ describe("HubBuy QC persistence and permissions", () => {
     // A fresh manifest must recognize ready sources kept under an older import.
     const repeated = await alice.prepare("qc-purchase", photoImport(4));
     await alice.confirmImport(repeated.importId, repeated.revision, []);
-    expect((await alice.getImport(repeated.importId)).photos.filter(photo => photo.state === "ready")).toHaveLength(1);
+    expect((await alice.getImport(repeated.importId)).photos.filter(photo => photo.state === "ready")).toHaveLength(4);
+  });
+
+  it("runs up to three destination lanes while serializing decoders and retaining result order", async () => {
+    const fake = mockStorage(), releaseDownloads = deferred(), threeDownloadsStarted = deferred();
+    const now = new Date("2026-10-14T12:00:00.000Z");
+    const purchaseId = "qc-purchase";
+    const extraItems = Array.from({ length: 5 }, (_, index) => ({
+      id: `qc-parallel-item-${index}`, purchaseId, sourceFavoriteId: null, personId: "alice", createdBy: "alice",
+      name: `Parallel item ${index}`, url: `https://weidian.com/item.html?itemID=parallel-${index}`, platform: "weidian", visualKey: "generic",
+      variant: `Parallel ${index}`, notes: null, quantity: 1, unitPriceCents: 100, cartStatus: "added" as const, sharingMode: "equal" as const, createdAt: now, updatedAt: now,
+    }));
+    await f.db.insert(purchaseItems).values(extraItems).run();
+    const sourceUrls = Array.from({ length: 5 }, (_, index) => `https://scm.hubbuy.app/qc/parallel-${index}.png`);
+    const input = { code: 0, data: { list: [{ orderNo: "PARALLEL", goodsList: Array.from({ length: 5 }, (_, index) => ({
+      orderGoodsId: `PARALLEL-${index}`, offerUrl: `https://weidian.com/item.html?itemID=parallel-${index}`, skuInfo: `Parallel ${index}`, goodsName: `Parallel item ${index}`,
+      quantity: 1, freePhotos: [sourceUrls[index]!],
+    })) }] } };
+    let activeDownloads = 0, peakDownloads = 0, activeDecoders = 0, peakDecoders = 0;
+    const decode = async (bytes: Buffer) => { activeDecoders++; peakDecoders = Math.max(peakDecoders, activeDecoders); await Promise.resolve(); activeDecoders--; return { bytes, sha256: createHash("sha256").update(bytes).digest("hex"), mimeType: "image/png" as const, extension: "png" as const, width: 2, height: 2 }; };
+    const alice = qcServices(f.db, "alice", {
+      managerId: "alice", storage: fake.storage, pipelineConcurrency: 3, download: async url => {
+        activeDownloads++; peakDownloads = Math.max(peakDownloads, activeDownloads);
+        if (activeDownloads === 3) threeDownloadsStarted.resolve();
+        await releaseDownloads.promise;
+        activeDownloads--;
+        return Buffer.from(new URL(url).pathname);
+      }, validate: decode,
+      makePreview: async () => { activeDecoders++; peakDecoders = Math.max(peakDecoders, activeDecoders); activeDecoders--; return { bytes: Buffer.from("parallel-preview"), sha256: createHash("sha256").update("parallel-preview").digest("hex"), width: 2, height: 2 }; },
+    });
+    const prepared = await alice.prepare(purchaseId, input);
+    const confirmed = await alice.confirmImport(prepared.importId, prepared.revision, []);
+    const selectedOrder = await f.db.select({ id: qcImageSources.id }).from(qcImageSources).innerJoin(hubbuyExternalItems, eq(qcImageSources.externalItemId, hubbuyExternalItems.id)).where(eq(hubbuyExternalItems.purchaseId, purchaseId)).orderBy(qcImageSources.updatedAt, qcImageSources.createdAt, qcImageSources.ordinal, qcImageSources.id).all();
+    const batchPromise = alice.runImportBatch(prepared.importId, confirmed.revision);
+    await threeDownloadsStarted.promise;
+    expect(peakDownloads).toBe(3);
+    releaseDownloads.resolve();
+    const batch = await batchPromise;
+    expect(batch).toMatchObject({ processed: 5, imported: 5, complete: true, remaining: 0, revision: confirmed.revision + 1 });
+    expect(batch.results.map(result => result.sourceId)).toEqual(selectedOrder.map(source => source.id));
+    expect(peakDecoders).toBe(1);
   });
 
   it("imports, authorizes fallback, deletes, and restores photos only after a fresh explicit confirmation", async () => {
@@ -195,14 +331,10 @@ describe("HubBuy QC persistence and permissions", () => {
     const confirmed = await alice.confirmImport(preview.importId, preview.revision, []);
     expect(confirmed).toMatchObject({ linked: 1, ignored: 0, sources: 4, eligibleSources: 4 });
 
-    let revision = confirmed.revision, finalBatch;
-    for (let index = 0; index < 4; index++) {
-      finalBatch = await alice.runImportBatch(preview.importId, revision);
-      expect(finalBatch).toMatchObject({ processed: 1, imported: 1, failed: 0, pending: 0 });
-      expect(finalBatch.remaining).toBe(3 - index);
-      expect(finalBatch.complete).toBe(index === 3);
-      revision = finalBatch.revision!;
-    }
+    let revision = confirmed.revision;
+    const finalBatch = await alice.runImportBatch(preview.importId, revision);
+    expect(finalBatch).toMatchObject({ processed: 4, imported: 4, failed: 0, pending: 0, remaining: 0, complete: true });
+    revision = finalBatch.revision!;
     const originalImages = await f.db.select().from(qcImages).orderBy(qcImages.ordinal).all();
     const originalPreviews = await f.db.select().from(qcImagePreviews).all();
     expect(originalImages).toHaveLength(4);
@@ -223,13 +355,9 @@ describe("HubBuy QC persistence and permissions", () => {
     expect(restoredImagesBeforeTransfer.every(image => image.status === "pending" && !originalKeys.has(image.r2Key))).toBe(true);
     expect(restoredPreviewsBeforeTransfer.every(preview => preview.status === "pending" && !originalKeys.has(preview.r2Key))).toBe(true);
     revision = restoredConfirmation.revision;
-    for (let index = 0; index < 4; index++) {
-      finalBatch = await alice.runImportBatch(restoredPreview.importId, revision);
-      expect(finalBatch).toMatchObject({ processed: 1, imported: 1, failed: 0, pending: 0 });
-      expect(finalBatch.remaining).toBe(3 - index);
-      expect(finalBatch.complete).toBe(index === 3);
-      revision = finalBatch.revision!;
-    }
+    const restoredBatch = await alice.runImportBatch(restoredPreview.importId, revision);
+    expect(restoredBatch).toMatchObject({ processed: 4, imported: 4, failed: 0, pending: 0, remaining: 0, complete: true });
+    revision = restoredBatch.revision!;
     expect((await alice.getGallery("qc-purchase", "qc-purchase-item")).images).toHaveLength(4);
     expect((await f.db.select().from(qcImagePreviews).all()).every(preview => preview.status === "ready" && preview.deleteState === "none")).toBe(true);
     expect((await alice.getQcPresentations("qc-purchase", ["qc-purchase-item"])).items[0]).toMatchObject({ primaryImageId: expect.any(String), qcCount: 4, coverPreview: { imageId: expect.any(String) } });
@@ -249,8 +377,8 @@ describe("HubBuy QC persistence and permissions", () => {
     const fake = mockStorage(), alice = distinctPhotoServices(f, fake.storage), complete = photoImport(4);
     const initial = await alice.prepare("qc-purchase", complete);
     const confirmed = await alice.confirmImport(initial.importId, initial.revision, []);
-    let revision = confirmed.revision;
-    for (let index = 0; index < 4; index++) revision = (await alice.runImportBatch(initial.importId, revision)).revision!;
+    const revision = confirmed.revision;
+    await alice.runImportBatch(initial.importId, revision);
     const images = await f.db.select().from(qcImages).orderBy(qcImages.ordinal).all();
     for (const image of images) await alice.deleteImage(image.id);
 
@@ -259,8 +387,7 @@ describe("HubBuy QC persistence and permissions", () => {
     expect(selectedConfirmation).toMatchObject({ sources: 2, eligibleSources: 2, restored: 2 });
     expect(await f.db.select().from(qcImages).where(eq(qcImages.status, "pending")).all()).toHaveLength(2);
     expect(await f.db.select().from(qcImages).where(eq(qcImages.status, "deleted")).all()).toHaveLength(2);
-    revision = selectedConfirmation.revision;
-    for (let index = 0; index < 2; index++) revision = (await alice.runImportBatch(selected.importId, revision)).revision!;
+    await alice.runImportBatch(selected.importId, selectedConfirmation.revision);
     expect((await alice.getGallery("qc-purchase", "qc-purchase-item")).images).toHaveLength(2);
     expect((await f.db.select().from(qcImages).where(eq(qcImages.status, "deleted")).all()).map(image => image.ordinal)).toEqual([2, 3]);
   });
@@ -499,13 +626,8 @@ describe("HubBuy QC persistence and permissions", () => {
     const resolved = await alice.resolvePendingOccurrence("qc-purchase", occurrence.id, occurrence.revision, "qc-purchase-second-item");
     expect(resolved).toMatchObject({ purchaseItemId: "qc-purchase-second-item", revision: 1, pendingSources: 4 });
     await expect(alice.resolvePendingOccurrence("qc-purchase", occurrence.id, occurrence.revision, "qc-purchase-item")).rejects.toMatchObject({ status: 409, code: "QC_REVISION_CONFLICT" });
-    let lastBatch;
-    for (let index = 0; index < 4; index++) {
-      lastBatch = await alice.runBatch("qc-purchase", undefined, undefined, occurrence.id);
-      expect(lastBatch).toMatchObject({ processed: 1, imported: 1, failed: 0, pending: 0 });
-      expect(lastBatch.remaining).toBe(3 - index);
-      expect(lastBatch.complete).toBe(index === 3);
-    }
+    const lastBatch = await alice.runBatch("qc-purchase", undefined, undefined, occurrence.id);
+    expect(lastBatch).toMatchObject({ processed: 4, imported: 4, failed: 0, pending: 0, remaining: 0, complete: true });
     expect((await alice.getGallery("qc-purchase", "qc-purchase-second-item")).images).toHaveLength(4);
     expect(await alice.getQcSummary("qc-purchase")).toMatchObject({ pendingMatching: 0, pendingTransfers: 0 });
     expect(await f.db.select().from(qcEvents).all()).toEqual(expect.arrayContaining([expect.objectContaining({ resultCode: "RESOLVED" })]));
@@ -540,12 +662,12 @@ describe("HubBuy QC persistence and permissions", () => {
     const preview = await service.prepare("qc-purchase", photoImport(2));
     const confirmed = await service.confirmImport(preview.importId, preview.revision, []);
     const failed = await service.runImportBatch(preview.importId, confirmed.revision);
-    expect(failed).toMatchObject({ failed: 1, processed: 1, remaining: 2, hasMore: true, complete: false, partial: true, revision: 2 });
+    expect(failed).toMatchObject({ imported: 1, failed: 1, processed: 2, remaining: 1, hasMore: true, complete: false, partial: true, revision: 2 });
     expect(failed.results[0]).toMatchObject({ status: "failed" });
-    expect((await service.getQcSummary("qc-purchase")).pendingTransfers).toBe(2);
+    expect((await service.getQcSummary("qc-purchase")).pendingTransfers).toBe(1);
     failFirst = false;
     const resumed = await service.runImportBatch(preview.importId, failed.revision!);
-    expect(resumed).toMatchObject({ imported: 1, failed: 0, processed: 1, remaining: 1, hasMore: true, complete: false, partial: true, revision: 3 });
+    expect(resumed).toMatchObject({ imported: 1, failed: 0, processed: 1, remaining: 0, hasMore: false, complete: true, partial: false, revision: 3 });
   });
 
   it("recovers a confirmed R2 object before using HubBuy or charging another byte", async () => {
@@ -638,6 +760,52 @@ describe("HubBuy QC persistence and permissions", () => {
     expect((await f.db.select().from(qcImages).all())[0]?.errorCode).toBe("QC_PUT_IN_FLIGHT");
   });
 
+  it("does not start a preview PUT when the queued marker write consumes the remaining request budget", async () => {
+    let clock = 1_000;
+    const fake = mockStorage();
+    const previewBytes = Buffer.from("synthetic-preview");
+    const previewSha256 = createHash("sha256").update(previewBytes).digest("hex");
+    const delayedMarkerDb = new Proxy(f.db, {
+      get(target, property) {
+        const original = Reflect.get(target, property, target) as unknown;
+        if (property !== "update" || typeof original !== "function") return typeof original === "function" ? original.bind(target) : original;
+        return (...args: unknown[]) => {
+          const query = Reflect.apply(original, target, args) as object;
+          const wrap = (builder: object, watchesMarker: boolean): object => new Proxy(builder, {
+            get(builderTarget, builderProperty) {
+              const method = Reflect.get(builderTarget, builderProperty, builderTarget) as unknown;
+              if (typeof method !== "function") return method;
+              return (...methodArgs: unknown[]) => {
+                const result = Reflect.apply(method, builderTarget, methodArgs) as unknown;
+                const markerWrite = builderProperty === "set" && (methodArgs[0] as { errorCode?: string } | undefined)?.errorCode === "QC_PREVIEW_PUT_IN_FLIGHT";
+                if (builderProperty === "get" || builderProperty === "run") {
+                  return Promise.resolve(result).then(value => { if (watchesMarker) clock += 25_000; return value; });
+                }
+                return result && typeof result === "object" ? wrap(result as object, watchesMarker || markerWrite) : result;
+              };
+            },
+          });
+          return wrap(query, false);
+        };
+      },
+    }) as AppDatabase;
+    const service = qcServices(delayedMarkerDb, "alice", {
+      managerId: "alice", storage: fake.storage, download: async () => rawPhoto,
+      validate: async bytes => ({ bytes, sha256: createHash("sha256").update(bytes).digest("hex"), mimeType: "image/png", extension: "png", width: 2, height: 2 }),
+      makePreview: async () => {
+        clock += QC_LIMITS.requestMs - QC_LIMITS.imageValidationMs - QC_LIMITS.transferMs - QC_LIMITS.requestSafetyMs - 1;
+        return { bytes: previewBytes, sha256: previewSha256, width: 1, height: 1 };
+      },
+      now: () => clock,
+    });
+    const prepared = await service.prepare("qc-purchase", external);
+    await service.confirmImport(prepared.importId, prepared.revision, []);
+    await service.runImportBatch(prepared.importId, 1);
+    expect(clock).toBeGreaterThan(1_000 + QC_LIMITS.requestMs - QC_LIMITS.transferMs - QC_LIMITS.requestSafetyMs);
+    expect(fake.calls.put.mock.calls.map(([object]) => object.key)).toEqual(expect.not.arrayContaining([expect.stringContaining("qc/previews/")]));
+    expect(fake.calls.put).toHaveBeenCalledTimes(1);
+  });
+
   it("moves selected failed sources to a smaller manifest without erasing old quota spend", async () => {
     const fake = mockStorage(), alice = services(f, fake.storage);
     const first = await alice.prepare("qc-purchase", external);
@@ -673,7 +841,7 @@ describe("HubBuy QC persistence and permissions", () => {
     let revision = 1, sawImport = false;
     for (let attempt = 0; attempt < 3; attempt++) {
       const result = await alice.runImportBatch(preview.importId, revision++);
-      expect(result.processed).toBeLessThanOrEqual(2);
+      expect(result.processed).toBeLessThanOrEqual(QC_LIMITS.batch);
       expect(result.deleted).toBe(0);
       sawImport ||= result.imported > 0;
     }

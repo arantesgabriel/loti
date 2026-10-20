@@ -7,10 +7,10 @@ import { DomainError } from "../domain/errors";
 
 export type QcObject = { key: string; bytes: Buffer; mimeType: string; sha256: string };
 export interface QcStorage {
-  put(object: QcObject): Promise<void>;
-  head(key: string): Promise<{ exists: boolean; sha256?: string }>;
-  get(key: string, maxBytes: number): Promise<Buffer>;
-  delete(key: string): Promise<void>;
+  put(object: QcObject, signal?: AbortSignal): Promise<void>;
+  head(key: string, signal?: AbortSignal): Promise<{ exists: boolean; sha256?: string }>;
+  get(key: string, maxBytes: number, signal?: AbortSignal): Promise<Buffer>;
+  delete(key: string, signal?: AbortSignal): Promise<void>;
   signRead(key: string): Promise<string>;
 }
 type StorageClients = { bucket: string; write: S3ClientType; read: S3ClientType };
@@ -34,23 +34,23 @@ function storageClients(): StorageClients {
 export function assertQcStorageConfigured() { storageClients(); }
 
 export const r2QcStorage: QcStorage = {
-  async put({ key, bytes, mimeType, sha256 }) {
+  async put({ key, bytes, mimeType, sha256 }, signal) {
     const config = storageClients();
-    await config.write.send(new PutObjectCommand({ Bucket: config.bucket, Key: key, Body: bytes, ContentLength: bytes.byteLength, ContentType: mimeType, CacheControl: "private, max-age=0, no-store", Metadata: { sha256 } }), { abortSignal: AbortSignal.timeout(QC_LIMITS.transferMs) });
+    await config.write.send(new PutObjectCommand({ Bucket: config.bucket, Key: key, Body: bytes, ContentLength: bytes.byteLength, ContentType: mimeType, CacheControl: "private, max-age=0, no-store", Metadata: { sha256 } }), { abortSignal: signal ? AbortSignal.any([signal, AbortSignal.timeout(QC_LIMITS.transferMs)]) : AbortSignal.timeout(QC_LIMITS.transferMs) });
   },
-  async head(key) {
+  async head(key, signal) {
     const config = storageClients();
-    try { const result = await config.write.send(new HeadObjectCommand({ Bucket: config.bucket, Key: key }), { abortSignal: AbortSignal.timeout(QC_LIMITS.transferMs) }); return { exists: true, sha256: result.Metadata?.sha256 }; }
+    try { const result = await config.write.send(new HeadObjectCommand({ Bucket: config.bucket, Key: key }), { abortSignal: signal ? AbortSignal.any([signal, AbortSignal.timeout(QC_LIMITS.transferMs)]) : AbortSignal.timeout(QC_LIMITS.transferMs) }); return { exists: true, sha256: result.Metadata?.sha256 }; }
     catch (error) {
       const candidate = error as { name?: string; $metadata?: { httpStatusCode?: number } };
       if (candidate.name === "NotFound" || candidate.name === "NoSuchKey" || candidate.$metadata?.httpStatusCode === 404) return { exists: false };
       throw new DomainError("Não foi possível verificar um backup QC pendente.", 502, "QC_STORAGE_UNAVAILABLE");
     }
   },
-  async get(key, maxBytes) {
+  async get(key, maxBytes, signal) {
     const config = storageClients();
     try {
-      const result = await config.read.send(new GetObjectCommand({ Bucket: config.bucket, Key: key }), { abortSignal: AbortSignal.timeout(QC_LIMITS.transferMs) });
+      const result = await config.read.send(new GetObjectCommand({ Bucket: config.bucket, Key: key }), { abortSignal: signal ? AbortSignal.any([signal, AbortSignal.timeout(QC_LIMITS.transferMs)]) : AbortSignal.timeout(QC_LIMITS.transferMs) });
       if (!result.Body || result.ContentLength === undefined || result.ContentLength < 1 || result.ContentLength > maxBytes) throw new DomainError("O preview privado excedeu o limite esperado.", 502, "QC_PREVIEW_INVALID");
       const bytes = Buffer.from(await result.Body.transformToByteArray());
       if (!bytes.byteLength || bytes.byteLength > maxBytes || bytes.byteLength !== result.ContentLength) throw new DomainError("O preview privado está incompleto.", 502, "QC_PREVIEW_INVALID");
@@ -60,9 +60,9 @@ export const r2QcStorage: QcStorage = {
       throw new DomainError("O preview privado está indisponível.", 502, "QC_STORAGE_UNAVAILABLE");
     }
   },
-  async delete(key) {
+  async delete(key, signal) {
     const config = storageClients();
-    try { await config.write.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }), { abortSignal: AbortSignal.timeout(QC_LIMITS.transferMs) }); }
+    try { await config.write.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }), { abortSignal: signal ? AbortSignal.any([signal, AbortSignal.timeout(QC_LIMITS.transferMs)]) : AbortSignal.timeout(QC_LIMITS.transferMs) }); }
     catch { throw new DomainError("A remoção física do backup QC está pendente.", 502, "QC_DELETE_PENDING"); }
   },
   async signRead(key) {

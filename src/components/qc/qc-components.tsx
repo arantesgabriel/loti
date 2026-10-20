@@ -17,6 +17,22 @@ type QcPreview = { externalKey: string; orderNo: string | null; orderGoodsId: st
 type QcPrepared = { importId: string; revision: number; partial: boolean; orderCount: number; photoCount: number; rows: QcPreview[] };
 type QcTarget = { id: string; origin: "purchase" | "additional"; name: string; variant: string | null; quantity: number };
 type QcStatusTone = "success" | "warning" | "neutral" | "error";
+type QcRun = { id: number; scope: string; controller: AbortController };
+type QcBatchResult = { processed: number; imported: number; existing: number; failed: number; pending: number; remaining: number; complete: boolean; hasMore: boolean; revision?: number; stopReason?: "deadline" | "quota" | "recovery" | "failure"; retryAfterSeconds?: number; results: { sourceId?: string; status: string; code?: string }[]; snapshot?: QcTransferSnapshot };
+
+class QcRequestError extends Error {
+  constructor(message: string, readonly status: number, readonly code?: string, readonly retryAfterSeconds?: number, readonly upstreamStatus?: number) { super(message); this.name = "QcRequestError"; }
+}
+
+function waitForQcRetry(milliseconds: number, signal: AbortSignal) {
+  if (signal.aborted) return Promise.reject(new DOMException("Aborted", "AbortError"));
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => { signal.removeEventListener("abort", abort); resolve(); }, milliseconds);
+    const abort = () => { clearTimeout(timer); reject(new DOMException("Aborted", "AbortError")); };
+    signal.addEventListener("abort", abort, { once: true });
+  });
+}
+function qcRetryJitter() { return Math.floor(Math.random() * 251); }
 
 function occurrenceAttributes(row: QcPreview) {
   const namedLabels: Record<string, string> = { color: "Cor", cor: "Cor", size: "Tamanho", tamanho: "Tamanho", weight: "Peso", peso: "Peso" };
@@ -90,10 +106,16 @@ function useQcSummary(purchaseId: string) {
   }, [key, purchaseId, userId, version]);
   return { summary: result?.key === key ? result.summary : null };
 }
-async function qcRequest<T>(url: string, body?: unknown, method = "POST") {
-  const response = await fetch(url, { method, credentials: "same-origin", cache: "no-store", ...(body === undefined ? {} : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }) });
-  const result = await response.json();
-  if (!response.ok) throw new Error(result.error ?? "Não foi possível concluir a operação QC.");
+async function qcRequest<T>(url: string, body?: unknown, method = "POST", signal?: AbortSignal) {
+  const response = await fetch(url, { method, credentials: "same-origin", cache: "no-store", ...(signal ? { signal } : {}), ...(body === undefined ? {} : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }) });
+  let result: { data?: T; error?: string; code?: string; retryAfterSeconds?: number; upstreamStatus?: number } = {};
+  let invalidBody = false;
+  try { result = await response.json(); } catch { invalidBody = true; }
+  if (!response.ok) {
+    const retryAfter = Number(result.retryAfterSeconds ?? response.headers.get("Retry-After"));
+    throw new QcRequestError(result.error ?? "Não foi possível concluir a operação QC.", response.status, result.code, Number.isSafeInteger(retryAfter) && retryAfter > 0 ? retryAfter : undefined, Number.isInteger(result.upstreamStatus) ? result.upstreamStatus : undefined);
+  }
+  if (invalidBody || !result || typeof result !== "object" || !("data" in result)) throw new QcRequestError("A resposta QC não pôde ser confirmada.", 502, "QC_RESPONSE_INVALID");
   return result.data as T;
 }
 
@@ -104,11 +126,33 @@ export function QcImportPanel({ purchaseId, targets, compact = false }: { purcha
   const [selections, setSelections] = useState<Record<string, string>>({}), [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({}), [busy, setBusy] = useState(false), [error, setError] = useState(""), [confirmed, setConfirmed] = useState(false), [transferComplete, setTransferComplete] = useState(false), [revision, setRevision] = useState(0), [pendingMatchingCount, setPendingMatchingCount] = useState(0), [batchInfo, setBatchInfo] = useState("");
   const [pendingSelections, setPendingSelections] = useState<Record<string, string>>({}), [confirmCorrections, setConfirmCorrections] = useState(false), [confirmReconcile, setConfirmReconcile] = useState(false);
   const [transfer, setTransfer] = useState<QcTransferSnapshot | null>(null), [activeSourceId, setActiveSourceId] = useState<string | null>(null), [importedIds, setImportedIds] = useState<Set<string>>(new Set());
+  const activeRun = useRef<QcRun | null>(null), runSequence = useRef(0);
+  const currentUserId = workspace.currentUser.id;
+  const scope = `${currentUserId}:${purchaseId}`;
+  const [stateScope, setStateScope] = useState(scope);
+  if (stateScope !== scope) { setStateScope(scope); setBusy(false); setActiveSourceId(null); setError(""); }
+  useEffect(() => {
+    activeRun.current?.controller.abort();
+    activeRun.current = null;
+    return () => { activeRun.current?.controller.abort(); activeRun.current = null; };
+  }, [currentUserId, purchaseId]);
   if (!summary?.canManage) return null;
 
-  async function refreshTransfer(importId: string) {
-    const snapshot = await qcRequest<QcTransferSnapshot>(`/api/qc/imports/${encodeURIComponent(importId)}`, undefined, "GET");
-    setTransfer(snapshot);
+  function beginRun(): QcRun | null {
+    if (activeRun.current?.scope === scope) return null;
+    activeRun.current?.controller.abort();
+    const run = { id: ++runSequence.current, scope, controller: new AbortController() };
+    activeRun.current = run; setBusy(true); setError("");
+    return run;
+  }
+  function isRunCurrent(run: QcRun) { return activeRun.current?.id === run.id && !run.controller.signal.aborted; }
+  function finishRun(run: QcRun) {
+    if (!isRunCurrent(run)) return;
+    activeRun.current = null; setBusy(false); setActiveSourceId(null); invalidateSummary(purchaseId);
+  }
+  async function refreshTransfer(importId: string, run?: QcRun) {
+    const snapshot = await qcRequest<QcTransferSnapshot>(`/api/qc/imports/${encodeURIComponent(importId)}`, undefined, "GET", run?.controller.signal);
+    if (!run || isRunCurrent(run)) setTransfer(snapshot);
     return snapshot;
   }
 
@@ -125,71 +169,162 @@ export function QcImportPanel({ purchaseId, targets, compact = false }: { purcha
   }
   async function confirmLinks() {
     if (!prepared) return;
-    setError(""); setBusy(true);
+    const run = beginRun();
+    if (!run) return;
     try {
       const choices = prepared.rows.map(row => {
         const targetId = selections[row.externalKey] || null;
         const correction = !!row.existingItemId && row.existingItemId !== targetId;
         return { externalKey: row.externalKey, targetKey: targetId, ...(correction ? { correctExisting: true, expectedTargetKey: row.existingItemId } : {}) };
       });
-      const result = await qcRequest<{ revision: number; linked: number; ignored: number; pendingMatching: number; sources: number; eligibleSources: number }>(`/api/qc/imports/${encodeURIComponent(prepared.importId)}`, { operation: "confirm", expectedRevision: prepared.revision, choices });
+      const result = await qcRequest<{ revision: number; linked: number; ignored: number; pendingMatching: number; sources: number; eligibleSources: number }>(`/api/qc/imports/${encodeURIComponent(prepared.importId)}`, { operation: "confirm", expectedRevision: prepared.revision, choices }, "POST", run.controller.signal);
+      if (!isRunCurrent(run)) return;
       setRevision(result.revision); setConfirmed(true); setPendingMatchingCount(result.pendingMatching); setTransfer(null); setImportedIds(new Set()); invalidateSummary(purchaseId);
       const matchingNote = result.pendingMatching ? ` ${result.pendingMatching} ocorrência(s) aguardam vínculo manual.` : "";
-      if (result.eligibleSources > 0) { setBatchInfo("Importando as fotos associadas…"); await drainImport(prepared.importId, result.revision, result.pendingMatching, matchingNote); }
-      else { setTransferComplete(true); await refreshTransfer(prepared.importId); setBatchInfo(`${result.linked} ocorrência(s) associada(s), ${result.ignored} ignorada(s), ${result.sources} foto(s) registrada(s).${matchingNote}`); }
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível confirmar os vínculos."); }
-    finally { setBusy(false); setActiveSourceId(null); invalidateSummary(purchaseId); }
+      if (result.eligibleSources > 0) { setBatchInfo("Importando as fotos associadas…"); await drainBatches(run, { importId: prepared.importId, revision: result.revision, matchingNote }); }
+      else { setTransferComplete(true); await refreshTransfer(prepared.importId, run); if (isRunCurrent(run)) setBatchInfo(`${result.linked} ocorrência(s) associada(s), ${result.ignored} ignorada(s), ${result.sources} foto(s) registrada(s).${matchingNote}`); }
+    } catch (cause) { if (isRunCurrent(run)) setError(cause instanceof Error ? cause.message : "Não foi possível confirmar os vínculos."); }
+    finally { finishRun(run); }
   }
-  async function drainImport(importId: string, initialRevision: number, pendingMatching = 0, matchingNote = "") {
-    let nextRevision = initialRevision, imported = 0, existing = 0, failed = 0, pending = 0, remaining = 0, complete = false;
-    let snapshot = await refreshTransfer(importId);
-    for (let call = 0; call < 12; call++) {
-      setActiveSourceId(snapshot.nextSourceId);
-      const result = await qcRequest<{ processed: number; imported: number; existing: number; failed: number; pending: number; remaining: number; complete: boolean; revision: number; results: { sourceId?: string; status: string }[] }>(`/api/qc/imports/${encodeURIComponent(importId)}`, { operation: "batch", expectedRevision: nextRevision });
-      nextRevision = result.revision; imported += result.imported; existing += result.existing; failed += result.failed; pending += result.pending; remaining = result.remaining; complete = result.complete;
-      setRevision(nextRevision);
-      setImportedIds(current => new Set([...current, ...result.results.filter(row => row.status === "imported" && row.sourceId).map(row => row.sourceId!)]));
-      setActiveSourceId(null);
-      snapshot = await refreshTransfer(importId);
-      setBatchInfo(`${imported} foto(s) importada(s), ${existing} já existente(s), ${failed} falha(s), ${pending} pendente(s); ${remaining} foto(s) ainda aguardam transferência.${matchingNote}`);
-      if (failed || pending || complete) break;
+  async function drainBatches(run: QcRun, options: { importId?: string; externalItemId?: string; revision?: number; matchingNote?: string }) {
+    const { importId, externalItemId, matchingNote = "" } = options;
+    let nextRevision = options.revision, imported = 0, existing = 0, failed = 0, pending = 0, remaining = 0, complete = false;
+    let consecutive429 = 0, transportRecoveries = 0, revisionRecoveries = 0, activeLeaseWaited = false, deadlineNoProgressRetry = false;
+    let previousNoProgress = "", paused = false;
+    const snapshotFingerprint = (snapshot: QcTransferSnapshot) => `${snapshot.importId}:${snapshot.revision}:${snapshot.nextSourceId ?? ""}:${snapshot.photos.map(photo => `${photo.id}:${photo.sourceId ?? ""}:${photo.state}:${photo.errorCode ?? ""}`).join("|")}`;
+    const pause = (message: string) => { paused = true; setError(message); };
+    const progressUrl = importId ? `/api/qc/imports/${encodeURIComponent(importId)}` : `/api/purchases/${encodeURIComponent(purchaseId)}/qc`;
+    const readProgress = async () => {
+      if (importId) {
+        const snapshot = await refreshTransfer(importId, run);
+        nextRevision = snapshot.revision;
+        return snapshot;
+      }
+      await qcRequest<QcSummary>(progressUrl, undefined, "GET", run.controller.signal);
+      return null;
+    };
+    let previousSnapshotFingerprint: string | null = null;
+    if (importId) {
+      const initialSnapshot = await readProgress();
+      if (initialSnapshot) previousSnapshotFingerprint = snapshotFingerprint(initialSnapshot);
     }
-    if (!complete && !failed && !pending) setBatchInfo(`${imported} foto(s) importada(s), ${existing} já existente(s). Importação parcial: ${remaining} foto(s) ainda aguardam transferência.${matchingNote}`);
-    setTransferComplete(complete);
-    if (complete && !pendingMatching) setBatchInfo(`${imported} foto(s) importada(s), ${existing} já existente(s), ${failed} falha(s), ${pending} pendente(s). Importação concluída.${matchingNote}`);
-    else if (complete && pendingMatching) setBatchInfo(`${imported} foto(s) importada(s), ${existing} já existente(s). Transferências concluídas; ${pendingMatching} ocorrência(s) ainda aguardam vínculo manual.`);
-    invalidateSummary(purchaseId);
-  }
-  async function drainOccurrence(externalItemId: string) {
-    let imported = 0, existing = 0, failed = 0, pending = 0, remaining = 0, complete = false;
-    for (let call = 0; call < 12; call++) {
-      const result = await qcRequest<{ imported: number; existing: number; failed: number; pending: number; remaining: number; complete: boolean }>(`/api/purchases/${encodeURIComponent(purchaseId)}/qc`, { operation: "batch", externalItemId });
+    while (isRunCurrent(run)) {
+      let result: QcBatchResult;
+      try {
+        result = await qcRequest<QcBatchResult>(progressUrl, importId
+          ? { operation: "batch", expectedRevision: nextRevision }
+          : { operation: "batch", externalItemId }, "POST", run.controller.signal);
+      } catch (cause) {
+        if (!isRunCurrent(run)) return;
+        if (cause instanceof QcRequestError && cause.code === "QC_TRANSFER_ACTIVE") {
+          if (activeLeaseWaited || !cause.retryAfterSeconds) {
+            pause("Outra transferência QC continua ativa. O progresso salvo ficará disponível ao retomar.");
+            break;
+          }
+          activeLeaseWaited = true;
+          setBatchInfo("Outra transferência QC está terminando. Aguardando a concessão atual…");
+          await waitForQcRetry(Math.min(180, cause.retryAfterSeconds) * 1000 + qcRetryJitter(), run.controller.signal);
+          await readProgress();
+          continue;
+        }
+        if (cause instanceof QcRequestError && cause.code === "QC_REVISION_CONFLICT") {
+          if (revisionRecoveries >= 1) { pause("O progresso QC mudou novamente em outra sessão. Atualize o painel para continuar."); break; }
+          revisionRecoveries++;
+          await readProgress();
+          continue;
+        }
+        if (cause instanceof QcRequestError && cause.status === 429) {
+          consecutive429++;
+          if (consecutive429 >= 3) { pause("A importação pausou após limites temporários repetidos. Retome quando o prazo informado terminar."); break; }
+          if (!cause.retryAfterSeconds) { pause(cause.message); break; }
+          setBatchInfo("Limite temporário atingido. A importação continuará automaticamente após a espera.");
+          await waitForQcRetry(cause.retryAfterSeconds * 1000 + qcRetryJitter(), run.controller.signal);
+          continue;
+        }
+        const transportFailure = cause instanceof TypeError || cause instanceof QcRequestError && [502, 503, 504].includes(cause.status);
+        if (transportFailure) {
+          if (transportRecoveries >= 2) { pause("A resposta da transferência não pôde ser confirmada. O estado salvo foi mantido para retomada."); break; }
+          const delay = (transportRecoveries + 1) * 1000 + qcRetryJitter();
+          transportRecoveries++;
+          setBatchInfo("Reconectando para conferir o progresso salvo antes de continuar…");
+          await waitForQcRetry(delay, run.controller.signal);
+          await readProgress();
+          continue;
+        }
+        throw cause;
+      }
+      if (!isRunCurrent(run)) return;
+      const nextSnapshotFingerprint = result.snapshot ? snapshotFingerprint(result.snapshot) : null;
+      if (!result.complete && nextSnapshotFingerprint && nextSnapshotFingerprint === previousSnapshotFingerprint) {
+        setActiveSourceId(null);
+        pause("O estado QC não avançou neste lote. O progresso salvo foi mantido para retomada.");
+        break;
+      }
+      if (nextSnapshotFingerprint) previousSnapshotFingerprint = nextSnapshotFingerprint;
+      consecutive429 = 0; transportRecoveries = 0; revisionRecoveries = 0;
       imported += result.imported; existing += result.existing; failed += result.failed; pending += result.pending; remaining = result.remaining; complete = result.complete;
-      setBatchInfo(`${imported} foto(s) importada(s), ${existing} já existente(s), ${failed} falha(s), ${pending} pendente(s); ${remaining} foto(s) ainda aguardam transferência.`);
-      if (failed || pending || complete) break;
+      nextRevision = result.snapshot?.revision ?? result.revision ?? nextRevision;
+      if (nextRevision !== undefined) setRevision(nextRevision);
+      setImportedIds(current => new Set([...current, ...result.results.filter(row => row.status === "imported" && row.sourceId).map(row => row.sourceId!)]));
+      if (result.snapshot) setTransfer(result.snapshot);
+      else if (importId) await refreshTransfer(importId, run);
+      setTransferComplete(complete);
+      setActiveSourceId(null);
+      setBatchInfo(`${imported} foto(s) importada(s), ${existing} já existente(s), ${failed} falha(s), ${pending} pendente(s); ${remaining} foto(s) ainda aguardam transferência.${matchingNote}`);
+      if (complete) {
+        setTransferComplete(true);
+        setBatchInfo(pendingMatchingCount
+          ? `${imported} foto(s) importada(s), ${existing} já existente(s). Transferências concluídas; ${pendingMatchingCount} ocorrência(s) ainda aguardam vínculo manual.`
+          : `${imported} foto(s) importada(s), ${existing} já existente(s), ${failed} falha(s), ${pending} pendente(s). Importação concluída.${matchingNote}`);
+        break;
+      }
+      if (result.stopReason && result.stopReason !== "deadline") {
+        const reasons = { quota: "A cota desta importação foi atingida. As fotos concluídas foram preservadas para retomada.", recovery: "Uma transferência permanece incerta e aguarda reconciliação segura.", failure: "Uma ou mais fotos falharam. Confira os estados salvos e retome após corrigir o problema." };
+        pause(reasons[result.stopReason]);
+        break;
+      }
+      if ((failed || pending) && result.stopReason !== "deadline") {
+        pause("Uma ou mais fotos precisam de atenção antes de continuar. Os resultados concluídos foram preservados.");
+        break;
+      }
+      const madeProgress = result.imported + result.existing > 0;
+      if (result.stopReason === "deadline" && !madeProgress) {
+        if (deadlineNoProgressRetry) { pause("O prazo do lote terminou sem novo progresso. As fotos restantes podem ser retomadas."); break; }
+        deadlineNoProgressRetry = true;
+      } else if (madeProgress) deadlineNoProgressRetry = false;
+      const fingerprint = `${remaining}:${result.results.map(row => `${row.sourceId ?? ""}:${row.status}:${row.code ?? ""}`).join("|")}`;
+      if (!madeProgress && result.stopReason !== "deadline" && fingerprint === previousNoProgress) {
+        pause("O estado QC não avançou neste lote. O progresso salvo foi mantido para retomada.");
+        break;
+      }
+      previousNoProgress = madeProgress ? "" : fingerprint;
     }
-    if (!complete && !failed && !pending) setBatchInfo(`${imported} foto(s) importada(s), ${existing} já existente(s). Ainda há ${remaining} foto(s) para transferir; continue a importação.`);
-    if (complete && !pending) setBatchInfo(`${imported} foto(s) importada(s), ${existing} já existente(s), ${failed} falha(s), ${pending} pendente(s). Transferência concluída.`);
+    if (!isRunCurrent(run)) return;
+    if (complete && !pendingMatchingCount) setBatchInfo(`${imported} foto(s) importada(s), ${existing} já existente(s), ${failed} falha(s), ${pending} pendente(s). Importação concluída.${matchingNote}`);
+    else if (!complete && !paused && !failed && !pending) setBatchInfo(`${imported} foto(s) importada(s), ${existing} já existente(s). Importação parcial: ${remaining} foto(s) ainda aguardam transferência.${matchingNote}`);
     invalidateSummary(purchaseId);
   }
   async function runBatch() {
     if (!prepared) return;
-    setError(""); setBusy(true);
-    try { await drainImport(prepared.importId, revision, pendingMatchingCount, pendingMatchingCount ? ` ${pendingMatchingCount} ocorrência(s) ainda aguardam vínculo manual.` : ""); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : "O lote QC falhou."); invalidateSummary(purchaseId); }
-    finally { setBusy(false); setActiveSourceId(null); invalidateSummary(purchaseId); }
+    const run = beginRun();
+    if (!run) return;
+    try { await drainBatches(run, { importId: prepared.importId, revision, matchingNote: pendingMatchingCount ? ` ${pendingMatchingCount} ocorrência(s) ainda aguardam vínculo manual.` : "" }); }
+    catch (cause) { if (isRunCurrent(run)) setError(cause instanceof Error ? cause.message : "O lote QC falhou."); }
+    finally { finishRun(run); }
   }
   async function resolvePending(row: QcPendingMatch) {
     const targetKey = pendingSelections[row.externalItemId];
     if (!targetKey) return;
-    setError(""); setBusy(true);
+    const run = beginRun();
+    if (!run) return;
     try {
-      const result = await qcRequest<{ externalItemId: string; targetKey: string; revision: number; pendingSources: number }>(`/api/purchases/${encodeURIComponent(purchaseId)}/qc`, { operation: "resolve", externalItemId: row.externalItemId, expectedRevision: row.revision, targetKey });
+      const result = await qcRequest<{ externalItemId: string; targetKey: string; revision: number; pendingSources: number }>(`/api/purchases/${encodeURIComponent(purchaseId)}/qc`, { operation: "resolve", externalItemId: row.externalItemId, expectedRevision: row.revision, targetKey }, "POST", run.controller.signal);
+      if (!isRunCurrent(run)) return;
       setBatchInfo("Vínculo salvo. Iniciando a transferência das fotos desta ocorrência."); invalidateSummary(purchaseId);
-      if (result.pendingSources > 0) await drainOccurrence(result.externalItemId);
+      if (result.pendingSources > 0) await drainBatches(run, { externalItemId: result.externalItemId });
       else setBatchInfo("Vínculo salvo. Esta ocorrência não tem fotos pendentes.");
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível resolver o vínculo."); }
-    finally { setBusy(false); invalidateSummary(purchaseId); }
+    } catch (cause) { if (isRunCurrent(run)) setError(cause instanceof Error ? cause.message : "Não foi possível resolver o vínculo."); }
+    finally { finishRun(run); }
   }
   async function reconcile() {
     setError(""); setBusy(true);

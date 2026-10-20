@@ -27,10 +27,94 @@ async function createFinalizedPurchase(page: import("@playwright/test").Page, na
 }
 
 const response = (route: import("@playwright/test").Route, data: unknown) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data }) });
-const transferSnapshot = (completed: number): QcTransferSnapshot => ({
+const transferSnapshot = (completed: number, revision = 1): QcTransferSnapshot => ({
+  importId: "manual-selected", purchaseId: "synthetic-purchase", revision, status: "confirmed", expiresAt: null, bytesReserved: 0, bytesConsumed: 0,
   nextSourceId: completed < 4 ? `source-${completed + 1}` : null,
+  rows: [{ externalKey: "manual", skuInfo: null, title: "Synthetic jersey from another listing", photoCount: 4, match: { status: "MATCHED", targetItemId: "synthetic-target", candidates: [] }, conflict: null }],
   photos: Array.from({ length: 4 }, (_, index) => ({ id: `photo-${index + 1}`, sourceId: `source-${index + 1}`, name: `IMG_00${index + 1}.jpg`, occurrence: "QC Marker Product", state: index < completed ? "ready" : "pending", errorCode: null, byteSize: null, imageId: null, previewUrl: null })),
 });
+
+test("QC import automatically drains more than twelve batches and resumes after a structured rate limit", async ({ page }) => {
+  test.setTimeout(90000);
+  await login(page);
+  const purchase = await createFinalizedPurchase(page, "QC 92 photos automatic drain E2E");
+  const total = 92;
+  let transferred = 0, successfulBatches = 0, batchRequests = 0, snapshotGets = 0, manifestRevision = 1;
+  const snapshot = (): QcTransferSnapshot => ({
+    importId: "auto-drain-92", purchaseId: purchase.purchaseId, revision: manifestRevision, status: "confirmed", expiresAt: null, bytesReserved: 0, bytesConsumed: 0,
+    nextSourceId: transferred < total ? `source-${transferred + 1}` : null,
+    rows: [{ externalKey: "auto-drain", skuInfo: "Blue / 40", title: "QC Marker Product", photoCount: total, match: { status: "MATCHED", targetItemId: purchase.firstItemId, candidates: [] }, conflict: null }],
+    photos: Array.from({ length: total }, (_, index) => ({ id: `photo-${index + 1}`, sourceId: `source-${index + 1}`, name: `IMG_${index + 1}.jpg`, occurrence: "QC Marker Product", state: index < transferred ? "ready" : "pending", errorCode: null, byteSize: null, imageId: null, previewUrl: null })),
+  });
+  await page.route(`**/api/purchases/${purchase.purchaseId}/qc**`, async route => {
+    if (route.request().method() === "GET") return response(route, { canManage: true, counts: [], pendingRows: [], pendingMatching: 0, pendingTransfers: total - transferred, pendingDeletes: 0, pendingPreviews: 0 });
+    const body = route.request().postDataJSON() as { operation: string };
+    if (body.operation === "prepare") return response(route, { importId: "auto-drain-92", revision: 0, partial: false, orderCount: 1, photoCount: total, rows: [{ externalKey: "auto-drain", orderNo: "QC-92", orderGoodsId: "QC-92-GOODS", orderGoodsNo: null, offerId: null, skuInfo: "Blue / 40", title: "QC Marker Product", quantity: 1, photoCount: total, match: { status: "MATCHED", targetItemId: purchase.firstItemId, candidates: [] }, existingItemId: null, conflict: null }] });
+    throw new Error(`Unexpected QC operation ${body.operation}`);
+  });
+  await page.route("**/api/qc/imports/auto-drain-92", async route => {
+    if (route.request().method() === "GET") { snapshotGets++; return response(route, snapshot()); }
+    const body = route.request().postDataJSON() as { operation: string; expectedRevision: number };
+    if (body.operation === "confirm") return response(route, { importId: "auto-drain-92", revision: 1, linked: 1, ignored: 0, pendingMatching: 0, sources: total, eligibleSources: total });
+    if (body.operation !== "batch") throw new Error(`Unexpected import operation ${body.operation}`);
+    batchRequests++;
+    if (batchRequests === 2) return route.fulfill({ status: 429, headers: { "Retry-After": "1" }, contentType: "application/json", body: JSON.stringify({ error: "Limite QC atingido. Tente novamente em 1 s.", code: "QC_RATE_LIMIT", retryAfterSeconds: 1 }) });
+    const count = Math.min(5, total - transferred);
+    const first = transferred + 1;
+    transferred += count; successfulBatches++;
+    manifestRevision = body.expectedRevision + 1;
+    return response(route, { imported: count, existing: 0, failed: 0, pending: 0, processed: count, remaining: total - transferred, complete: transferred === total, hasMore: transferred < total, revision: manifestRevision, results: Array.from({ length: count }, (_, index) => ({ sourceId: `source-${first + index}`, status: "imported" })), snapshot: snapshot() });
+  });
+  await page.goto(`/packages/${purchase.trackingId}`);
+  await page.getByRole("button", { name: "Importar QC", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  const pasted = { code: 0, data: { count: 1, list: [{ orderNo: "QC-92", goodsList: [{ orderGoodsId: "QC-92-GOODS", offerUrl: "https://weidian.com/item.html?itemID=987654321", skuInfo: "Blue / 40", goodsName: "QC Marker Product", quantity: 1, freePhotos: Array.from({ length: total }, (_, index) => `https://scm.hubbuy.app/qc/92-${index + 1}.jpg`) }] }] } };
+  await dialog.getByLabel("JSON HubBuy").fill(JSON.stringify(pasted));
+  await dialog.getByRole("button", { name: "Analisar JSON" }).click();
+  await dialog.getByRole("button", { name: "Confirmar vínculos" }).click();
+  await expect(dialog.getByRole("status")).toContainText("Importação concluída", { timeout: 30000 });
+  await expect(dialog.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "92");
+  await expect(dialog.getByRole("button", { name: "Concluir", exact: true })).toBeEnabled();
+  expect(successfulBatches).toBe(19);
+  expect(batchRequests).toBe(20);
+  expect(snapshotGets).toBe(1);
+});
+
+test("QC automatic drain pauses when a successful response repeats the persisted snapshot", async ({ page }) => {
+  await login(page);
+  const purchase = await createFinalizedPurchase(page, "QC repeated snapshot guard");
+  let batchRequests = 0;
+  const snapshot: QcTransferSnapshot = {
+    importId: "repeated-snapshot", purchaseId: purchase.purchaseId, revision: 1, status: "confirmed", expiresAt: null, bytesReserved: 0, bytesConsumed: 0,
+    nextSourceId: "source-1",
+    rows: [{ externalKey: "repeat", skuInfo: null, title: "Repeated snapshot item", photoCount: 1, match: { status: "MATCHED", targetItemId: purchase.firstItemId, candidates: [] }, conflict: null }],
+    photos: [{ id: "photo-1", sourceId: "source-1", name: "IMG_1.jpg", occurrence: "Repeated snapshot item", state: "pending", errorCode: null, byteSize: null, imageId: null, previewUrl: null }],
+  };
+  await page.route(`**/api/purchases/${purchase.purchaseId}/qc**`, async route => {
+    if (route.request().method() === "GET") return response(route, { canManage: true, counts: [], pendingRows: [], pendingMatching: 0, pendingTransfers: 1, pendingDeletes: 0, pendingPreviews: 0 });
+    const body = route.request().postDataJSON() as { operation: string };
+    if (body.operation === "prepare") return response(route, { importId: "repeated-snapshot", revision: 0, partial: false, orderCount: 1, photoCount: 1, rows: [{ externalKey: "repeat", orderNo: "QC-REPEAT", orderGoodsId: "QC-REPEAT-GOODS", orderGoodsNo: null, offerId: null, skuInfo: null, title: "Repeated snapshot item", quantity: 1, photoCount: 1, match: { status: "MATCHED", targetItemId: purchase.firstItemId, candidates: [] }, existingItemId: null, conflict: null }] });
+    throw new Error(`Unexpected QC operation ${body.operation}`);
+  });
+  await page.route("**/api/qc/imports/repeated-snapshot", async route => {
+    if (route.request().method() === "GET") return response(route, snapshot);
+    const body = route.request().postDataJSON() as { operation: string };
+    if (body.operation === "confirm") return response(route, { importId: "repeated-snapshot", revision: 1, linked: 1, ignored: 0, pendingMatching: 0, sources: 1, eligibleSources: 1 });
+    if (body.operation !== "batch") throw new Error(`Unexpected import operation ${body.operation}`);
+    batchRequests++;
+    return response(route, { imported: 1, existing: 0, failed: 0, pending: 0, processed: 1, remaining: 1, complete: false, hasMore: true, revision: 1, results: [{ sourceId: "source-1", status: "imported" }], snapshot });
+  });
+  await page.goto(`/packages/${purchase.trackingId}`);
+  await page.getByRole("button", { name: "Importar QC", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  const pasted = { code: 0, data: { list: [{ orderNo: "QC-REPEAT", goodsList: [{ orderGoodsId: "QC-REPEAT-GOODS", offerUrl: "https://weidian.com/item.html?itemID=987654321", goodsName: "Repeated snapshot item", quantity: 1, freePhotos: ["https://scm.hubbuy.app/qc/repeat.jpg"] }] }] } };
+  await dialog.getByLabel("JSON HubBuy").fill(JSON.stringify(pasted));
+  await dialog.getByRole("button", { name: "Analisar JSON" }).click();
+  await dialog.getByRole("button", { name: "Confirmar vínculos" }).click();
+  await expect(dialog.getByRole("alert")).toContainText("O estado QC não avançou neste lote.");
+  expect(batchRequests).toBe(1);
+});
+
 async function mockQcMedia(page: import("@playwright/test").Page) {
   const artwork = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="480" height="320" viewBox="0 0 480 320"><rect width="480" height="320" rx="28" fill="#f5f2ee"/><rect x="28" y="28" width="424" height="264" rx="24" fill="#dce8f7"/><circle cx="370" cy="104" r="54" fill="#f77014"/><path d="M110 218h220l-28-92H138z" fill="#fff" stroke="#1c0113" stroke-width="8" stroke-linejoin="round"/><path d="M160 218v-52h112v52" fill="#f7bd81" stroke="#1c0113" stroke-width="8"/><text x="240" y="270" text-anchor="middle" font-family="Arial,sans-serif" font-size="24" fill="#1c0113">QC SAMPLE · BLUE 40</text></svg>');
   const [preview, original] = await Promise.all([
@@ -55,7 +139,7 @@ test("manual QC association completes only the four selected photos and can clos
   });
   await page.route("**/api/qc/imports/manual-selected", route => {
     if (route.request().method() === "GET") {
-      const snapshot = transferSnapshot(transferred ? 4 : 0);
+      const snapshot = transferSnapshot(transferred ? 4 : 0, transferred ? 2 : 1);
       snapshot.photos.push(...Array.from({ length: 88 }, (_, index) => ({ id: `ignored-${index}`, sourceId: null, name: "Ignored photo", occurrence: "Other products", state: "ignored", errorCode: null, byteSize: null, imageId: null, previewUrl: null })));
       return response(route, snapshot);
     }
@@ -65,7 +149,7 @@ test("manual QC association completes only the four selected photos and can clos
       return response(route, { revision: 1, linked: 1, ignored: 1, sources: 4, eligibleSources: 4, pendingMatching: 0 });
     }
     transferred = true;
-    return response(route, { revision: 2, imported: 4, existing: 0, failed: 0, pending: 0, processed: 4, remaining: 0, complete: true, results: [1, 2, 3, 4].map(index => ({ sourceId: `source-${index}`, status: "imported" })) });
+    return response(route, { revision: 2, imported: 4, existing: 0, failed: 0, pending: 0, processed: 4, remaining: 0, complete: true, hasMore: false, results: [1, 2, 3, 4].map(index => ({ sourceId: `source-${index}`, status: "imported" })), snapshot: transferSnapshot(4, 2) });
   });
   await page.goto(`/packages/${purchase.trackingId}`);
   await page.getByRole("button", { name: "Importar QC", exact: true }).click();
@@ -201,7 +285,7 @@ test("QC drawer shows the real queue, existing photos, failures, recovery and pe
   snapshot.photos[1]!.name = "IMG_002_nome_extremamente_longo_para_validar_truncamento_sem_overflow.jpg";
   snapshot.photos[2]!.state = "matching";
   let releaseBatch: (() => void) | undefined;
-  let batches = 0;
+  let batches = 0, snapshotRevision = 1;
   await page.route(`**/api/purchases/${purchase.purchaseId}/qc**`, route => {
     if (route.request().method() === "GET") {
       if (new URL(route.request().url()).searchParams.has("itemIds")) return response(route, { items: [] });
@@ -218,8 +302,10 @@ test("QC drawer shows the real queue, existing photos, failures, recovery and pe
     const sourceIndex = batches === 1 || batches === 3 ? 1 : 3;
     const state = batches === 1 ? "failed" : batches === 2 ? "pending" : "ready";
     Object.assign(snapshot.photos[sourceIndex]!, { state, errorCode: state === "failed" ? "QC_IMAGE_FAILED" : state === "pending" ? "QC_PUT_UNCERTAIN" : null });
+    snapshotRevision = body.expectedRevision + 1;
+    snapshot.revision = snapshotRevision;
     snapshot.nextSourceId = batches === 2 ? "source-2" : batches === 4 ? null : "source-4";
-    return response(route, { imported: state === "ready" ? 1 : 0, existing: 0, failed: state === "failed" ? 1 : 0, pending: state === "pending" ? 1 : 0, processed: 1, remaining: batches === 4 ? 0 : 1, complete: batches === 4, revision: body.expectedRevision + 1, results: [{ sourceId: `source-${sourceIndex + 1}`, status: state === "ready" ? "imported" : state }] });
+    return response(route, { imported: state === "ready" ? 1 : 0, existing: 0, failed: state === "failed" ? 1 : 0, pending: state === "pending" ? 1 : 0, processed: 1, remaining: batches === 4 ? 0 : 1, complete: batches === 4, hasMore: batches !== 4, revision: snapshotRevision, results: [{ sourceId: `source-${sourceIndex + 1}`, status: state === "ready" ? "imported" : state }], snapshot });
   });
   await page.goto(`/packages/${purchase.trackingId}`);
   await expect(page.getByRole("button", { name: /Produtos e custos/ })).toHaveAttribute("aria-expanded", "true");
@@ -233,7 +319,8 @@ test("QC drawer shows the real queue, existing photos, failures, recovery and pe
   await expect(dialog.locator(".qc-transfer-row").nth(0)).toContainText("Já existente");
   await expect(dialog.locator(".qc-transfer-thumbnail img")).toHaveCount(1);
   await expect(dialog.locator(".qc-transfer-row").nth(0)).toContainText("2,4 MB");
-  await expect(dialog.locator(".qc-transfer-row").nth(1)).toContainText("Processando...");
+  await expect(dialog.getByRole("status")).toContainText("Processando suas fotos");
+  await expect(dialog.locator(".qc-transfer-state").filter({ hasText: "Processando..." })).toHaveCount(0);
   await expect(dialog.locator(".qc-transfer-row")).toHaveCount(3);
   await expect(dialog.locator(".qc-transfer-row").nth(2)).toContainText("Aguardando...");
   await expect(dialog.getByRole("button", { name: "Nova importação" })).toBeDisabled();
@@ -247,9 +334,10 @@ test("QC drawer shows the real queue, existing photos, failures, recovery and pe
     await dialog.screenshot({ path: join(qaFolder, `processing-${width}.png`) });
   }
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await expect(dialog.locator(".qc-transfer-spinner")).toHaveCSS("animation-name", "none");
+  await expect(dialog.locator(".qc-transfer-spinner")).toHaveCount(0);
+  await expect(dialog.getByRole("status")).toContainText("Processando suas fotos");
   releaseBatch!();
-  await expect(dialog.getByRole("status")).toContainText("Importação parcial");
+  await expect(dialog.getByRole("status")).toContainText("Importação interrompida");
   await expect(dialog.locator(".qc-transfer-row").nth(1)).toContainText("Falha");
   await expect(dialog.locator(".qc-transfer-row").nth(1)).toContainText("QC_IMAGE_FAILED");
   await dialog.screenshot({ path: join(qaFolder, "failure-320.png") });
@@ -368,7 +456,7 @@ test("HubBuy QC import is session-bound, manually confirmable and responsive", a
 test("HubBuy QC automatically completes four distinct photos and refreshes gallery counts", async ({ page }) => {
   await login(page);
   const purchase = await createFinalizedPurchase(page, "QC four photos E2E");
-  let importedPhotos = 0, batches = 0, coverId: string | null = null, coverRevision = 0;
+  let importedPhotos = 0, batches = 0, transferGets = 0, coverId: string | null = null, coverRevision = 0, manifestRevision = 1;
   let releaseFirstBatch: (() => void) | undefined;
   let releaseLastBatch: (() => void) | undefined;
   const photoIds = Array.from({ length: 4 }, (_, index) => `qc-photo-${index + 1}`);
@@ -390,7 +478,9 @@ test("HubBuy QC automatically completes four distinct photos and refreshes galle
   await mockQcMedia(page);
   await page.route("**/api/qc/imports/mock-import-four", async route => {
     if (route.request().method() === "GET") {
+      transferGets++;
       const snapshot = transferSnapshot(importedPhotos);
+      snapshot.revision = manifestRevision;
       snapshot.photos.push(...Array.from({ length: 88 }, (_, index) => ({ id: `ignored-${index}`, sourceId: null, name: `Ignored photo ${index}`, occurrence: "Ignored product", state: "ignored", errorCode: null, byteSize: null, imageId: null, previewUrl: null })));
       return response(route, snapshot);
     }
@@ -401,9 +491,12 @@ test("HubBuy QC automatically completes four distinct photos and refreshes galle
       if (batches === 3) await new Promise<void>(resolve => { releaseLastBatch = resolve; });
       batches++;
       importedPhotos++;
+      manifestRevision = body.expectedRevision + 1;
       if (!coverId) { coverId = `qc-photo-${importedPhotos}`; coverRevision++; }
       const remaining = 4 - batches;
-      return response(route, { imported: 1, existing: 0, failed: 0, pending: 0, processed: 1, remaining, hasMore: remaining > 0, complete: remaining === 0, partial: remaining > 0, revision: body.expectedRevision + 1, results: [{ sourceId: `source-${batches}`, status: "imported" }] });
+      const snapshot = transferSnapshot(importedPhotos, manifestRevision);
+      snapshot.photos.push(...Array.from({ length: 88 }, (_, index) => ({ id: `ignored-${index}`, sourceId: null, name: `Ignored photo ${index}`, occurrence: "Ignored product", state: "ignored", errorCode: null, byteSize: null, imageId: null, previewUrl: null })));
+      return response(route, { imported: 1, existing: 0, failed: 0, pending: 0, processed: 1, remaining, hasMore: remaining > 0, complete: remaining === 0, partial: remaining > 0, revision: manifestRevision, results: [{ sourceId: `source-${batches}`, status: "imported" }], snapshot });
     }
     throw new Error(`Unexpected import operation ${body.operation}`);
   });
@@ -420,8 +513,9 @@ test("HubBuy QC automatically completes four distinct photos and refreshes galle
   await expect(dialog.getByRole("progressbar")).toHaveAttribute("aria-valuemax", "4");
   await expect(dialog.locator(".qc-transfer-row")).toHaveCount(4);
   await expect(dialog.getByText("Ignored product")).toHaveCount(0);
-  await expect(dialog.locator(".qc-transfer-state").filter({ hasText: "Processando..." })).toHaveCount(1);
-  await expect(dialog.locator(".qc-transfer-state").filter({ hasText: "Aguardando..." })).toHaveCount(3);
+  await expect(dialog.getByRole("status")).toContainText("Processando suas fotos");
+  await expect(dialog.locator(".qc-transfer-state").filter({ hasText: "Processando..." })).toHaveCount(0);
+  await expect(dialog.locator(".qc-transfer-state").filter({ hasText: "Aguardando..." })).toHaveCount(4);
   await page.setViewportSize({ width: 390, height: 844 });
   const progressQa = join(process.cwd(), "artifacts", "qa", "qc-import-progress");
   mkdirSync(progressQa, { recursive: true });
@@ -429,7 +523,8 @@ test("HubBuy QC automatically completes four distinct photos and refreshes galle
   releaseFirstBatch!();
   await expect(dialog.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "3");
   await expect(dialog.locator(".qc-transfer-state").filter({ hasText: "Importada" })).toHaveCount(3);
-  await expect(dialog.locator(".qc-transfer-state").filter({ hasText: "Processando..." })).toHaveCount(1);
+  await expect(dialog.locator(".qc-transfer-state").filter({ hasText: "Processando..." })).toHaveCount(0);
+  await expect(dialog.locator(".qc-transfer-state").filter({ hasText: "Aguardando..." })).toHaveCount(1);
   await dialog.screenshot({ path: join(progressQa, "progress-75-390.png"), animations: "disabled" });
   releaseLastBatch!();
   await expect(dialog.getByRole("status")).toContainText("Importação concluída");
@@ -437,6 +532,7 @@ test("HubBuy QC automatically completes four distinct photos and refreshes galle
   await expect(dialog.locator(".qc-transfer-state").filter({ hasText: "Importada" })).toHaveCount(4);
   await dialog.screenshot({ path: join(progressQa, "success-390.png"), animations: "disabled" });
   expect(batches).toBe(4);
+  expect(transferGets).toBe(1);
   await dialog.getByRole("button", { name: "Concluir", exact: true }).click();
   const galleryButton = page.locator(".qc-cost-photo-strip").getByRole("button", { name: "Ver mais fotos QC de QC Marker Product" });
   await expect(galleryButton).toHaveText("Ver mais");
