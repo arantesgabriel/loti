@@ -1,0 +1,42 @@
+.cost-purchase-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 24px; margin: 24px 0 20px; }
+.cost-purchase-header-main { min-width: 0; }
+.cost-purchase-title-row { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 20px; }
+.cost-purchase-title-row h1 { margin: 0; font-size: 24px; font-weight: 600; line-height: 1.3; letter-spacing: -.025em; text-wrap: pretty; overflow-wrap: anywhere; }
+.cost-purchase-statuses { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.cost-purchase-statuses .cost-status { min-height: 24px; padding: 5px 14px; font-size: 10px; line-height: 1.4; text-transform: none; }
+.cost-purchase-statuses .cost-status:first-child { text-transform: capitalize; }
+.cost-purchase-facts { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px 0; margin-top: 12px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.cost-purchase-facts > * + *::before { content: "·"; display: inline-block; margin: 0 10px; color: var(--muted); }
+.cost-purchase-actions { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.cost-purchase-actions:empty { display: none; }
+.cost-purchase-actions .button { min-height: 36px; height: 36px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); font-size: 11px; font-weight: 500; }
+.cost-purchase-actions .button:hover { background: var(--surface-muted); }
+.cost-purchase-actions .qc-manager-actions { gap: 8px; }
+.cost-purchase-actions .qc-import-primary { width: 36px; min-width: 36px; padding: 0; }
+.cost-purchase-actions .qc-import-primary img { display: block; }
+.cost-purchase-footer { grid-column: 1 / -1; display: flex; align-items: baseline; justify-content: space-between; gap: 12px 24px; min-width: 0; }
+.cost-purchase-audit { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; min-width: 0; }
+.cost-purchase-audit p { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.5; overflow-wrap: anywhere; }
+.cost-purchase-audit strong { font-weight: 400; }
+.cost-purchase-accounts-link { flex-shrink: 0; color: var(--primary-ink); font-size: 10px; font-weight: 500; line-height: 1.5; text-decoration: none; }
+.cost-purchase-accounts-link:hover { text-decoration: underline; }
+.cost-purchase-header + .cost-summary-card { margin-top: 0; padding: 20px 24px; border-radius: 12px; }
+.cost-purchase-header + .cost-summary-card .cost-summary-total strong { font-size: 30px; font-weight: 700; line-height: 1.25; }
+.cost-purchase-header + .cost-summary-card .cost-summary-total > div > span:first-child,
+.cost-purchase-header + .cost-summary-card .cost-next-action > span { font-size: 10px; }
+.cost-purchase-header + .cost-summary-card .cost-next-action .button { min-height: 37px; font-size: 11px; }
+@media (max-width: 767px) {
+  .cost-purchase-header { grid-template-columns: minmax(0, 1fr); gap: 12px; margin: 18px 0 16px; }
+  .cost-purchase-title-row { gap: 10px; }
+  .cost-purchase-title-row h1 { width: 100%; font-size: 23px; }
+  .cost-purchase-facts { margin-top: 10px; font-size: 11px; }
+  .cost-purchase-actions { justify-content: flex-start; }
+  .cost-purchase-actions .button { min-height: 44px; height: 44px; }
+  .cost-purchase-actions .qc-import-primary { width: 44px; min-width: 44px; }
+  .cost-purchase-footer { flex-wrap: wrap; gap: 8px; }
+  .cost-purchase-audit { width: 100%; }
+  .cost-purchase-accounts-link { min-height: 32px; display: inline-flex; align-items: center; font-size: 11px; }
+  .cost-purchase-header + .cost-summary-card { padding: 16px; }
+  .cost-purchase-header + .cost-summary-card .cost-summary-total strong { font-size: 28px; }
+  .cost-purchase-header + .cost-summary-card .cost-next-action .button { min-height: 44px; }
+}

@@ -1,0 +1,32 @@
+import { expect, test } from "@playwright/test";
+import { testEmailUrl } from "./email-helper";
+test("password recovery uses a one-time email link and returns to normal login", async ({ page }) => {
+  await page.goto("/login");
+  await page.getByRole("link", { name: "Esqueceu a senha?" }).click();
+  await page.getByLabel("Email", { exact: true }).fill("reset-email-e2e@loti.test");
+  await page.getByRole("button", { name: "Enviar link de recuperação" }).click();
+  await expect(page.getByRole("status")).toContainText("Se existir uma conta");
+  const link = await testEmailUrl(page.request, "reset-email-e2e@loti.test", "/api/auth/reset-password/");
+  await page.goto(link);
+  await expect(page).toHaveURL(/\/reset-password\?token=/);
+  await expect(page.locator('meta[name="referrer"]')).toHaveAttribute("content", "no-referrer");
+  await page.getByLabel("Nova senha", { exact: true }).fill("New-Reset-Email-E2E-2026!");
+  await page.getByLabel("Confirmar nova senha", { exact: true }).fill("Different-Password-2026!");
+  await page.getByRole("button", { name: "Salvar nova senha" }).click();
+  await expect(page.getByRole("main").getByRole("alert")).toContainText("As senhas precisam ser iguais");
+  await page.getByLabel("Confirmar nova senha", { exact: true }).fill("New-Reset-Email-E2E-2026!");
+  await page.getByRole("button", { name: "Salvar nova senha" }).click();
+  await expect(page.getByRole("heading", { name: "Nova senha salva" })).toBeVisible();
+  await page.getByRole("link", { name: "Voltar ao login" }).click();
+  const login = await page.request.post("/api/auth/sign-in/email", { headers: { Origin: "http://localhost:3100" }, data: { email: "reset-email-e2e@loti.test", password: "New-Reset-Email-E2E-2026!" } });
+  expect(login.status()).toBe(200);
+  await page.goto(link);
+  await expect(page.getByRole("main").getByRole("alert")).toContainText("inválido");
+});
+test("recovery form remains usable on mobile and invalid links explain the next step", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 }); await page.goto("/forgot-password");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: "artifacts/qa/auth-forgot-mobile.png", fullPage: true });
+  await page.goto("/reset-password?error=INVALID_TOKEN");
+  await expect(page.getByRole("link", { name: "Solicitar novo link" })).toBeVisible();
+});

@@ -1,0 +1,118 @@
+.hubbuy-workspace {
+  display: grid;
+  grid-template-columns: minmax(220px, 27%) minmax(0, 1fr);
+  align-items: start;
+  gap: 24px;
+}
+.hubbuy-account-picker, .hubbuy-account-overview, .hubbuy-statement, .hubbuy-create-section, .hubbuy-no-accounts {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+}
+.hubbuy-workspace h2 { margin: 0; font-size: 17px; line-height: 1.4; letter-spacing: -.025em; }
+.hubbuy-account-picker { display: grid; gap: 16px; }
+.hubbuy-account-search { display: flex; align-items: center; gap: 8px; padding: 0 12px; border: 1px solid var(--border); border-radius: 10px; color: var(--muted); }
+.hubbuy-account-search:focus-within { outline: 2px solid var(--primary-ink); outline-offset: 2px; }
+.hubbuy-account-search input { width: 100%; min-width: 0; padding: 11px 0; background: transparent; border: 0; font-size: 13px; box-shadow: none; }
+.hubbuy-account-search input:focus { box-shadow: none; }
+.hubbuy-account-list { display: grid; gap: 6px; max-height: min(60vh, 640px); overflow-y: auto; padding: 3px; margin: -3px; scrollbar-width: thin; }
+.hubbuy-account-option { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 10px; border: 1px solid transparent; border-left: 3px solid transparent; border-radius: 10px; background: transparent; text-align: left; color: var(--foreground); }
+.hubbuy-account-option:hover { background: var(--surface-muted); }
+.hubbuy-account-option.is-selected { background: var(--primary-soft); border-left-color: var(--primary); }
+.hubbuy-account-avatar { display: grid; place-items: center; flex: 0 0 40px; width: 40px; height: 40px; border-radius: 50%; background: var(--surface-muted); color: var(--muted); font-size: 21px; font-weight: 600; }
+.is-selected .hubbuy-account-avatar, .hubbuy-account-avatar-large { background: color-mix(in srgb, var(--primary) 12%, var(--background)); color: var(--primary-ink); }
+.hubbuy-account-option-copy { display: grid; flex: 1; min-width: 0; gap: 3px; }
+.hubbuy-account-option-copy strong { overflow-wrap: anywhere; font-size: 13px; line-height: 1.4; }
+.hubbuy-account-option-copy small { color: var(--muted); font-size: 11px; }
+.hubbuy-account-option > svg { flex-shrink: 0; color: var(--muted); }
+.is-selected > svg { color: var(--primary-ink); }
+.hubbuy-account-select { display: none; }
+.hubbuy-picker-empty { margin: 0; font-size: 13px; }
+.hubbuy-account-content, .hubbuy-selected-account { display: grid; min-width: 0; gap: 16px; }
+.hubbuy-account-overview { gap: 18px; padding: 20px; }
+.hubbuy-account-header { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.hubbuy-account-avatar-large { flex-basis: 56px; width: 56px; height: 56px; font-size: 27px; }
+.hubbuy-account-identity { display: flex; flex: 1; flex-wrap: wrap; align-items: center; min-width: 0; gap: 6px 10px; }
+.hubbuy-account-identity h2 { overflow-wrap: anywhere; font-size: 19px; }
+.hubbuy-account-identity p { width: 100%; margin: 0; font-size: 12px; overflow-wrap: anywhere; }
+.hubbuy-account-header > .button { flex-shrink: 0; align-self: start; }
+.hubbuy-account-status { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 99px; background: var(--surface-muted); color: var(--muted); font-size: 11px; line-height: 1.4; }
+.hubbuy-account-status::before { content: ""; width: 6px; height: 6px; flex-shrink: 0; border-radius: 50%; background: currentColor; }
+.hubbuy-account-status.status-active { background: var(--success-soft); color: var(--success); }
+.hubbuy-balance-card { position: relative; isolation: isolate; display: grid; gap: 5px; min-height: 164px; overflow: hidden; padding: 20px 24px; border-radius: 12px; background: color-mix(in srgb, var(--primary-soft) 58%, var(--surface)); }
+.hubbuy-balance-label { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; }
+.hubbuy-balance-label > span { display: inline-flex; }
+.hubbuy-balance-value { position: relative; width: fit-content; max-width: 100%; font-size: clamp(30px, 3.3vw, 46px); line-height: 1.2; letter-spacing: -.045em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.hubbuy-balance-brl { position: relative; font-size: 16px; font-weight: 500; }
+.hubbuy-balance-brl small { font-size: 11px; font-weight: 400; }
+.hubbuy-balance-waves { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; fill: var(--primary); opacity: .07; pointer-events: none; }
+.hubbuy-balance-waves path + path { opacity: .7; }
+.hubbuy-balance-symbol { position: absolute; display: grid; place-items: center; width: 64px; height: 64px; right: 24px; top: 50%; transform: translateY(-50%); border-radius: 50%; color: var(--primary-ink); background: color-mix(in srgb, var(--primary) 8%, transparent); }
+.hubbuy-account-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; min-height: 90px; }
+.hubbuy-account-fact { display: flex; align-items: start; min-width: 0; gap: 12px; padding: 14px; border: 1px solid var(--border); border-radius: 10px; }
+.hubbuy-account-fact > svg { flex-shrink: 0; margin-top: 2px; }
+.hubbuy-account-fact > div { min-width: 0; }
+.hubbuy-account-fact h3 { margin: 0 0 5px; font-size: 12px; font-weight: 600; }
+.hubbuy-account-fact p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.hubbuy-account-fact p + p { margin-top: 8px; }
+.hubbuy-account-fact p strong { display: block; font-weight: 500; color: var(--foreground); }
+.hubbuy-account-fact p span { display: block; }
+.hubbuy-account-notice { display: flex; align-items: start; gap: 10px; padding: 12px 14px; background: #eff6fc; color: #325775; border-radius: 10px; }
+.hubbuy-account-notice svg { flex-shrink: 0; margin-top: 1px; }
+.hubbuy-account-notice p { margin: 0; font-size: 12px; line-height: 1.6; }
+.hubbuy-statement { display: grid; gap: 14px; }
+.hubbuy-section-heading { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.hubbuy-section-heading p, .hubbuy-create-section > p { margin: 4px 0 0; font-size: 12px; line-height: 1.6; }
+.hubbuy-statement-order { font-size: 11px; white-space: nowrap; padding-top: 4px; }
+.hubbuy-statement-mobile-hint { display: none; }
+.hubbuy-statement-scroll { min-width: 0; overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; scrollbar-width: thin; }
+.hubbuy-statement table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.hubbuy-statement th { background: var(--surface-muted); color: var(--muted); font-size: 11px; font-weight: 500; text-align: left; white-space: nowrap; }
+.hubbuy-statement td, .hubbuy-statement th { padding: 10px 12px; }
+.hubbuy-statement td { border-top: 1px solid var(--border); color: var(--muted); }
+.hubbuy-statement td:first-child { min-width: 150px; font-size: 11px; }
+.hubbuy-statement .hubbuy-entry-date { text-align: left; }
+.hubbuy-statement td:nth-child(3) { min-width: 140px; max-width: 260px; overflow-wrap: anywhere; }
+.hubbuy-statement td:nth-child(n+4), .hubbuy-statement th:nth-child(n+4) { text-align: right; white-space: nowrap; }
+.hubbuy-statement td small { display: block; margin-top: 4px; font-size: 10px; }
+.hubbuy-statement .hubbuy-entry-amount { font-weight: 600; color: var(--foreground); font-variant-numeric: tabular-nums; }
+.hubbuy-entry-type { display: inline-flex; align-items: center; gap: 4px; border-radius: 99px; padding: 4px 7px; white-space: nowrap; background: var(--surface-muted); color: var(--foreground); font-size: 11px; }
+.hubbuy-entry-type.credit { background: var(--success-soft); color: var(--success); }
+.hubbuy-statement .hubbuy-statement-empty { height: 90px; text-align: center; }
+.hubbuy-statement > .button { justify-self: start; }
+.hubbuy-create-section .cost-account-create { max-width: none; margin-top: 12px; }
+.hubbuy-create-section input { scroll-margin-block: 40px; }
+.hubbuy-load-error { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.hubbuy-load-error p { margin: 0; color: var(--danger); font-size: 12px; }
+.hubbuy-no-accounts { display: grid; justify-items: start; gap: 12px; }
+.hubbuy-no-accounts p { margin: 0; font-size: 13px; }
+.hubbuy-actions-menu { max-width: min(320px, calc(100vw - 24px)); }
+.hubbuy-actions-menu [data-disabled] { opacity: .5; cursor: default; }
+@media (min-width: 1101px) and (max-width: 1199px) {
+  .hubbuy-workspace { grid-template-columns: minmax(190px, 29%) minmax(0, 1fr); gap: 16px; }
+  .hubbuy-account-picker, .hubbuy-account-overview, .hubbuy-statement, .hubbuy-create-section { padding: 16px; }
+  .hubbuy-account-avatar-large { display: none; }
+  .hubbuy-account-facts { grid-template-columns: 1fr; }
+}
+@media (max-width: 1100px) {
+  .hubbuy-workspace { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .hubbuy-account-picker { gap: 12px; padding: 16px; }
+  .hubbuy-account-list, .hubbuy-account-search, .hubbuy-picker-empty { display: none; }
+  .hubbuy-account-select { display: grid; min-width: 0; gap: 6px; color: var(--muted); font-size: 12px; }
+  .hubbuy-account-select select { width: 100%; min-width: 0; min-height: 44px; }
+  .hubbuy-account-overview, .hubbuy-statement, .hubbuy-create-section { padding: 16px; }
+  .hubbuy-account-header { gap: 10px; align-items: start; }
+  .hubbuy-account-avatar-large { display: none; }
+  .hubbuy-account-identity h2 { font-size: 17px; }
+  .hubbuy-account-facts { grid-template-columns: minmax(0, 1fr); }
+  .hubbuy-balance-card { padding: 18px; }
+  .hubbuy-balance-value { font-size: clamp(29px, 8vw, 40px); }
+  .hubbuy-balance-symbol { display: none; }
+  .hubbuy-balance-brl { font-size: 14px; }
+  .hubbuy-statement-order { display: none; }
+  .hubbuy-statement-mobile-hint { display: block; margin: -4px 0 0; font-size: 11px; }
+  .hubbuy-create-section .cost-account-create { flex-direction: column; align-items: stretch; }
+  .hubbuy-account-content .cost-account-share { grid-template-columns: minmax(0, 1fr) repeat(2, minmax(0, .8fr)); }
+}

@@ -1,0 +1,9 @@
+{
+  "users": { "Gabriel": "gabriel@example.com", "Brunna": "brunna@example.com", "Amanda": "amanda@example.com", "Bola": "bola@example.com", "Vinicius": "vinicius@example.com" },
+  "createdBy": "Gabriel",
+  "qcValues": {},
+  "purchases": {
+    "Próxima compra Set26": { "status": "finalized", "createdAt": "CONFIRM ISO DATE", "finalizedAt": "CONFIRM ISO DATE", "cartStatus": "added" },
+    "Compra Out26": { "status": "CHOOSE active OR finalized", "createdAt": "CONFIRM ISO DATE", "finalizedAt": null, "cartStatus": "pending" }
+  }
+}

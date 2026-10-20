@@ -1,0 +1,154 @@
+# MVP Scope
+
+## In scope
+
+### Authentication and workspace
+
+Approved extension (20 October 2026): self-service email password recovery, mandatory native email verification before each new invitation membership, Resend transactional delivery and persistent distributed authentication/mail limits. Existing memberships keep access without marking legacy addresses verified. Public signup remains disabled. This supersedes older manual-only recovery/invitation-email exclusions. See `31_AUTH_EMAIL_SECURITY_PLAN.md`.
+
+- private email/password login;
+- no public signup screen;
+- one shared workspace in the UI;
+- five initial users created by operator/seed tooling;
+- logout and persistent sessions.
+- edit the authenticated member's complete display name and change their password from Profile;
+- changing a password requires the current password and revokes other sessions while preserving the current session.
+
+### Favorites
+
+- view all workspace favorites;
+- quick `Meus` view;
+- create, edit and delete own favorite;
+- product name and URL required;
+- optional price, variation/model and notes;
+- optional collection;
+- QC state: `Não avaliado`, `Aprovado`, `Reprovado`;
+- automatic platform detection from URL;
+- duplicate-product warning without blocking save;
+- search by name/variation/notes;
+- filters by person, platform, collection, QC and price presence;
+- list and simple-card view modes;
+- view-mode preference persisted per user;
+- external “Abrir produto” action;
+- add any visible favorite to the active purchase.
+
+### Collections
+
+- create personal collection;
+- rename own collection;
+- delete own collection;
+- collections visible to workspace;
+- deleting a collection preserves favorites and sets them to no collection;
+- a favorite belongs to zero or one collection.
+
+### Purchases
+
+- create one active purchase;
+- optional HubBuy account/email metadata;
+- add favorite to active purchase;
+- add manual item directly to purchase;
+- choose one or more workspace members who share the item's cost;
+- split item cost equally, by percentages, or by fixed currency amounts;
+- variation/model per purchase item;
+- quantity >= 1;
+- optional unit price;
+- automatic subtotal and totals;
+- total by person;
+- show each participant's allocated share while counting the physical item and its quantity once in overall purchase totals;
+- total overall;
+- unit count;
+- group items by person;
+- `Pendente` / `Adicionado` HubBuy-cart status;
+- filters: Todos / Pendentes / Adicionados;
+- progress based on quantity, not row count;
+- all workspace members can edit active-purchase items;
+- finalization with warnings for pending/no-price items but no hard block;
+- finalized purchase becomes read-only.
+
+### History
+
+- list finalized purchases, newest first;
+- purchase detail page;
+- historical snapshots remain stable after favorites change.
+
+### Product visuals
+
+- no real product/listing images;
+- small neutral functional category marker inferred from product name;
+- deterministic keyword-based resolver;
+- generic fallback;
+- editorial illustrations inspired by Visor Finance are reserved for sparse branding surfaces; existing login remains independent.
+
+### Legacy migration
+
+- one-time script for the provided workbook;
+- no spreadsheet-import feature in the UI.
+
+## Explicitly out of scope
+
+Do not implement any of the following in the MVP:
+
+- Supabase, Neon, PostgreSQL or RLS;
+- marketplace scraping;
+- automatic listing metadata extraction;
+- runtime generative AI or runtime image generation;
+- real product thumbnails;
+- live marketplace integrations;
+- HubBuy API integration;
+- automated shipment tracking/shipping integrations (manual package stages are in the approved extension);
+- automated freight calculation, freight estimation or weight management;
+- automated tax/customs calculations (manually entered customs charges are in the approved extension);
+- RMB/BRL exchange conversion;
+- inventory/resale management;
+- purchase cost sharing does not record ownership transfers, transfers between members, revenue, profit or stock;
+- payments/Pix between members or payment processing by Loti;
+- notifications;
+- chat/comments;
+- realtime/websockets;
+- public signup;
+- social login;
+- MFA;
+- multiple-workspace management UI;
+- admin dashboard;
+- advanced user-management UI;
+- many-to-many tags;
+- bulk add-to-purchase flow;
+- re-open finalized purchase;
+- offline mode;
+- native iOS/Android app;
+- PWA requirement;
+- analytics dashboard;
+- advanced reports;
+- Excel upload/import screen.
+
+## Definition of MVP success
+
+The MVP succeeds when the five users can complete the full favorite → shared purchase → HubBuy transfer checklist → history cycle without opening the spreadsheet.
+
+## Approved extension: private invitations
+
+- Profile → Meu grupo: current members, pending invitations, email input and manual sharing.
+- Any member may invite, revoke or regenerate links valid for seven days.
+- New invited users choose their name/password; existing users authenticate before accepting.
+- Public signup stays disabled. Operator tooling remains for bootstrap.
+- No automatic invitation email, member removal, roles or multiple-workspace navigation.
+
+### Approved Packages and costs extension
+
+The original MVP exclusions above are superseded only for the manual, post-finalization cost follow-up in [the phased plan](21_PACKAGES_AND_COSTS_PLAN.md): effective prices, per-item China freight, package-level Brazil freight and customs values, Pix/card transaction fees, package assignments, manual payment states, manual preparation/sent/received stages, and independent financial closure/reopening. It adds no freight automation, tracking codes, exchange rates, payment processing, transfers between members, or resale/accounting features.
+
+The approved extension in [the refund plan](23_PRODUCT_REFUNDS_PLAN.md) adds only manually registered product/China refunds for units that remain in packages marked for preparation or are unassigned. It adds no payment processing, refund integration, or edits to finalized snapshots.
+
+### Approved HubBuy QC extension — V1 + V1.1
+
+- Manually paste a bounded HubBuy order JSON for a finalized purchase; there is no HubBuy authentication or API synchronization.
+- Conservatively associate purchased occurrences with existing purchase-item snapshots, with explicit suggestions and manual correction.
+- Back up only validated `freePhotos` to private R2 and show them in authorized per-item QC galleries, including History.
+- Use the source HubBuy image URL first and an authorization-checked, short-lived private R2 URL only as fallback.
+- Keep matching, upload, retry, deletion, quotas and audit independent from packages, costs, refunds and purchase snapshots.
+
+This is the only photo exception: no listing thumbnails or product images in operational cards/lists. Do not add a bookmarklet, browser extension, automatic collection, scraping, AI, workers or queues. External Cloudflare configuration, secrets, bucket creation, production migration and publication require specific authorization.
+
+### Approved post-MVP financial extension — 17 October 2026
+
+The user authorized local implementation of [the HubBuy balance and mixed-payment plan](26_HUBBUY_BALANCE_AND_MIXED_PAYMENTS_PLAN.md). It is a narrow post-MVP extension: one HubBuy CNY account may hold individual proportional credit rights; another member's share may fund a purchase through an explicit CNY advance; additional orders and package admission are limited to the same open tracking and verified account. This supersedes the earlier no-exchange/no-reusable-balance/multiple-order exclusions only for this handoff. It does not process bank payments, infer real balances, mutate finalized purchases, or authorize production migration/publication.

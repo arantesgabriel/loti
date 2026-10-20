@@ -1,0 +1,30 @@
+.cost-correction-form fieldset {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.cost-correction-form .cost-correction-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.cost-correction-form .cost-correction-check input {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  margin: 2px 0 0;
+  padding: 0;
+  accent-color: var(--primary);
+}
+
+.cost-correction-form .cost-editor-preview {
+  overflow-wrap: anywhere;
+}

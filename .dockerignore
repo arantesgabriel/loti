@@ -1,0 +1,17 @@
+.git
+node_modules
+.next*
+data
+.env*
+artifacts
+playwright-report
+test-results
+coverage
+docs
+AGENTS.md
+PROMPT_ONE_SHOT.md
+LOTI_HANDOFF_README.md
+PACKAGE_MANIFEST.json
+legacy/source
+legacy/mapping.local.json
+legacy/*.report.json

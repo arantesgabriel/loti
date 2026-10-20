@@ -1,0 +1,177 @@
+{
+  "package": "Loti MVP Handoff",
+  "spec_version": "1.0",
+  "generated_date": "2026-10-05",
+  "files": [
+    {
+      "path": "AGENTS.md",
+      "bytes": 3131,
+      "sha256": "36037c4e2b3937e69ea00c176ab48367e1cab6762b43436729e4034609b2c94f"
+    },
+    {
+      "path": "LOTI_HANDOFF_README.md",
+      "bytes": 1262,
+      "sha256": "686fbaa09ae5c6bd43f44e80734c58bf49aa003ef79b3ece6c46c09aa8c760f8"
+    },
+    {
+      "path": "PROMPT_ONE_SHOT.md",
+      "bytes": 20683,
+      "sha256": "119ae5a88dba24acc033d0321e02b8da567a6dfbf5d791f8f69f7c0814be8fd3"
+    },
+    {
+      "path": "docs/00_CONTEXT.md",
+      "bytes": 3064,
+      "sha256": "8e17dba57117b2129fc81944a278c8cdb55d04b5a53f8cd12d0a4021b73ef052"
+    },
+    {
+      "path": "docs/01_PRODUCT.md",
+      "bytes": 2550,
+      "sha256": "f4c4d4dbe407c0bb9960fd43449cb0fcdeaec41c80100da647084e0816008925"
+    },
+    {
+      "path": "docs/02_MVP_SCOPE.md",
+      "bytes": 3380,
+      "sha256": "bceb8794870392765ca2eb23341a8f97f695232dbb8277a12f4df01d2f4c93a0"
+    },
+    {
+      "path": "docs/03_BUSINESS_RULES.md",
+      "bytes": 4681,
+      "sha256": "ad5614421194b228ca2cb495d817c1e42b91ac1ce019819fea275374ef7bc6ed"
+    },
+    {
+      "path": "docs/04_USER_FLOWS.md",
+      "bytes": 4636,
+      "sha256": "3ac99cdfc3bd77a16c3efa3809262ea6f1f9266e5610877d53fcf889086f317a"
+    },
+    {
+      "path": "docs/05_INFORMATION_ARCHITECTURE.md",
+      "bytes": 2908,
+      "sha256": "38b4a321da7e92009f30af73a6c3695d3b6275dd3f65362e6b888c132f71de0d"
+    },
+    {
+      "path": "docs/06_DESIGN.md",
+      "bytes": 5184,
+      "sha256": "f3a0e86762ccdf9b57267703f717e57efd41d8925464bc3e3dde07bcc9fb53d8"
+    },
+    {
+      "path": "docs/07_PRODUCT_VISUALS.md",
+      "bytes": 2951,
+      "sha256": "736a9982a2490477bb1d87f2c6c5b6c4e33ad5486bdec2df362fd2d3e5886437"
+    },
+    {
+      "path": "docs/08_TECHNICAL_ARCHITECTURE.md",
+      "bytes": 3880,
+      "sha256": "bae9b88000af1f6c4cae610c9bc852c620194cbcd4cecf83a93877bcf4bf450a"
+    },
+    {
+      "path": "docs/09_DATABASE_SCHEMA.md",
+      "bytes": 5139,
+      "sha256": "016064beeff0cedbe878f0e58892c04c1dff6b1f4c90fc4f51fbd05c7ec64986"
+    },
+    {
+      "path": "docs/10_IMPLEMENTATION_PLAN.md",
+      "bytes": 4002,
+      "sha256": "35e1356899beef11b627493df9714e62dcfb76567b3ec8a455901c017715043c"
+    },
+    {
+      "path": "docs/11_ACCEPTANCE_CRITERIA.md",
+      "bytes": 4164,
+      "sha256": "70075ac97a7c1e7f8d87334fc1ca9ab7eb2fc305a863f333360e710b3648dfeb"
+    },
+    {
+      "path": "docs/12_TEST_PLAN.md",
+      "bytes": 2983,
+      "sha256": "81bfa55145a8fb5d44ce77372bb508bec6f57e66c482fdf9b8a49ea924e9936a"
+    },
+    {
+      "path": "docs/13_DEPLOYMENT.md",
+      "bytes": 2864,
+      "sha256": "4be84ab92406784c6258f6db2877b13df15836e8b714bc191db647c0f7a3c622"
+    },
+    {
+      "path": "docs/14_LEGACY_MIGRATION.md",
+      "bytes": 3533,
+      "sha256": "2a8e0322e996f96b647fdf7de46d98f160b37b8433260fc9c0a228e4bcec4e81"
+    },
+    {
+      "path": "docs/15_DECISIONS.md",
+      "bytes": 2420,
+      "sha256": "c686577f6e2621e5f574f6c83d89dcf9f65e3cf096e6947cec22301bb4bfb608"
+    },
+    {
+      "path": "docs/16_HUMAN_INPUTS.md",
+      "bytes": 1394,
+      "sha256": "7fcee5234e54040476c09b1f4ffa516a2e4840843e664da8f0cf2d1780b1e8f2"
+    },
+    {
+      "path": "docs/INDEX.md",
+      "bytes": 1646,
+      "sha256": "8ea1679d2a22e6e4a16164c477f81b693dc0e74ce40a9b0195db28d30f111d9e"
+    },
+    {
+      "path": "docs/design/MOCKUPS.md",
+      "bytes": 1102,
+      "sha256": "9e984d6afc093ea5fc28a67983f999b0aa6fbe95913fe9447ea2e3a8213bba3f"
+    },
+    {
+      "path": "docs/design/REFERENCES.md",
+      "bytes": 1655,
+      "sha256": "9106fcf310453d9437359b63a9ce9357134dc77f0ebfbe7dd530590b135334e3"
+    },
+    {
+      "path": "docs/design/mockups/favorites-desktop.png",
+      "bytes": 1285306,
+      "sha256": "3ea8b41201babf8440926c86986c51a45aaf468246ba702a340488a9bc501938",
+      "image_dimensions": [
+        1448,
+        1086
+      ],
+      "image_mode": "RGB"
+    },
+    {
+      "path": "docs/design/mockups/favorites-mobile.png",
+      "bytes": 1334652,
+      "sha256": "b9f7792e9e97f557e98f0022946e027ed68e339c0069ed6a720339dd4c23095e",
+      "image_dimensions": [
+        941,
+        1672
+      ],
+      "image_mode": "RGB"
+    },
+    {
+      "path": "docs/design/mockups/purchase-desktop.png",
+      "bytes": 1370045,
+      "sha256": "0811916eb00bd97ab1f64b761b7d85a7e5fb5f3b9865e8581473232d49ce1be8",
+      "image_dimensions": [
+        1448,
+        1086
+      ],
+      "image_mode": "RGB"
+    },
+    {
+      "path": "docs/design/mockups/purchase-mobile.png",
+      "bytes": 1353439,
+      "sha256": "61ccfdae93deb68d8fde748d99e693929fbe4b0a9aea0a987f77100cdb5df34a",
+      "image_dimensions": [
+        941,
+        1672
+      ],
+      "image_mode": "RGB"
+    },
+    {
+      "path": "docs/design/references/mobile-nav-island-reference.png",
+      "bytes": 31237,
+      "sha256": "23309d04f19c0b0ef21ca6c0f34998b07a6a7e1659e05fbd4f85fe1b10cdeb89",
+      "image_dimensions": [
+        609,
+        200
+      ],
+      "image_mode": "RGBA"
+    },
+    {
+      "path": "legacy/source/Favoritos_Hubbuy_original.xlsx",
+      "bytes": 58075,
+      "sha256": "a42326bc2eb856b3141ef3bb7fe59d4b5c666c5b970bbd0fc13b1704552f7770"
+    }
+  ]
+}
