@@ -73,6 +73,7 @@
 .hubbuy-statement td, .hubbuy-statement th { padding: 10px 12px; }
 .hubbuy-statement td { border-top: 1px solid var(--border); color: var(--muted); }
 .hubbuy-statement td:first-child { min-width: 150px; font-size: 11px; }
+.hubbuy-statement .hubbuy-entry-date { text-align: left; }
 .hubbuy-statement td:nth-child(3) { min-width: 140px; max-width: 260px; overflow-wrap: anywhere; }
 .hubbuy-statement td:nth-child(n+4), .hubbuy-statement th:nth-child(n+4) { text-align: right; white-space: nowrap; }
 .hubbuy-statement td small { display: block; margin-top: 4px; font-size: 10px; }
