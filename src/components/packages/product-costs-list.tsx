@@ -154,6 +154,7 @@ type Props = {
   onToggle: (id: string) => void;
   onDetails: (id: string) => void;
   onEdit: (item: DetailItem) => void;
+  onEditAdditional: (id: string) => void;
   onRefund: (id: string) => void;
   onResumeOrder: (id: string) => void;
   onAssociate: (id: string) => void;
@@ -261,6 +262,7 @@ function RowComposition({
   locked,
   onDetails,
   onEdit,
+  onEditAdditional,
   onRefund,
   onResumeOrder,
   onAssociate,
@@ -387,6 +389,8 @@ function RowComposition({
           <ProductCostActions
             id={item.id}
             name={item.name}
+            editable
+            onEdit={() => onEditAdditional(item.id)}
             allowRefund
             onRefund={onRefund}
           />

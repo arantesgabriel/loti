@@ -36,6 +36,7 @@ import {
   parseCostCents,
 } from "./package-cost-client";
 import { ProductCostsList } from "./product-costs-list";
+import { AdditionalProductEditor } from "./additional-product-editor";
 import "./purchase-cost-header.css";
 import "./package-cost-layout.css";
 import { RefundsSection } from "./refunds-section";
@@ -136,6 +137,7 @@ export function PackageCostDetailScreen({
     null,
   );
   const [resumeOrderId, setResumeOrderId] = useState<string | null>(null);
+  const [additionalEditorId, setAdditionalEditorId] = useState<string | null>(null);
   const [openSections, setOpenSections] = useState<
     Record<CostSectionKey, boolean>
   >({ products: true, payments: true, packages: true, people: true });
@@ -210,6 +212,16 @@ export function PackageCostDetailScreen({
       return false;
     }
     if (result.ok && result.data) {
+      if (operation === "order.additional.correct") {
+        const correction = result.data.orderCorrections.find(row => row.previousOrderId === rest.orderId);
+        const oldItem = detail.productOrders.find(order => order.id === rest.orderId)?.items.find(row => row.cost.id === (rest.input as { itemId?: string })?.itemId);
+        const replacement = result.data.productOrders.find(order => order.id === correction?.replacementOrderId)?.items.find(row => row.cost.itemOrder === oldItem?.cost.itemOrder);
+        if (replacement) {
+          setExpandedProducts(current => ({ ...current, [replacement.cost.id]: true }));
+          focusTarget.current = `item-cost-${replacement.cost.id}`;
+          setFocusRequestId(current => current + 1);
+        }
+      }
       setCurrentDetail(result.data);
       setError("");
       return true;
@@ -640,6 +652,7 @@ export function PackageCostDetailScreen({
             detail={detail}
             locked={!!locked}
             onDetails={setItemDetailId}
+            onEditAdditional={setAdditionalEditorId}
             onEdit={(item) =>
               setItemEditor({ id: item.id, name: item.original.name })
             }
@@ -992,6 +1005,9 @@ export function PackageCostDetailScreen({
           onClose={() => setAssociateItemId(null)}
           saveAllocations={saveAllocations}
         />
+      )}
+      {additionalEditorId && detail.productOrders.some(order => order.items.some(row => row.cost.id === additionalEditorId)) && (
+        <AdditionalProductEditor key={additionalEditorId} detail={detail} itemId={additionalEditorId} busy={busy} onClose={() => setAdditionalEditorId(null)} mutate={mutate}/>
       )}
       {itemEditor && (
         <ItemCostSurface
