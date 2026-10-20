@@ -27,7 +27,7 @@ export async function GET(_request: Request, context: RouteContext) {
 export async function POST(request: Request, context: RouteContext) {
   try {
     requireQcOrigin(request);
-    const user = await requireUser(), { importId } = await context.params, service = qcServices(db, user.id);
+    const user = await requireUser(), { importId } = await context.params, service = qcServices(db, user.id, { signal: request.signal });
     const body = postSchema.parse(await readBoundedJson(request));
     const data = body.operation === "confirm" ? await service.confirmImport(importId, body.expectedRevision, body.choices) : await service.runImportBatch(importId, body.expectedRevision);
     return NextResponse.json({ data }, { headers: qcPrivateHeaders });

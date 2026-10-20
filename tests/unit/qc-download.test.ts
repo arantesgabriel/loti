@@ -43,9 +43,24 @@ describe("HubBuy SSRF boundary", () => {
     } finally { vi.useRealTimers(); }
   });
 
+  it("cancels a stalled DNS lookup before opening the pinned connection", async () => {
+    const controller = new AbortController(), connect = vi.fn();
+    const pending = downloadHubbuyImage("https://scm.hubbuy.app/photo.png", { signal: controller.signal, resolve: () => new Promise(() => {}), request: connect });
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ code: "QC_REQUEST_ABORTED" });
+    expect(connect).not.toHaveBeenCalled();
+  });
+
   it("rejects redirects without following their destination", async () => {
     const connect = vi.fn(async () => ({ statusCode: 302, headers: { location: "http://127.0.0.1/latest/meta-data" }, body: Buffer.alloc(0) }));
     await expect(downloadHubbuyImage("https://scm.hubbuy.app/photo.png", { resolve: async () => [{ address: "1.1.1.1", family: 4 }], request: connect })).rejects.toMatchObject({ code: "QC_SOURCE_UNAVAILABLE" });
     expect(connect).toHaveBeenCalledTimes(1);
+  });
+
+  it("sanitizes upstream rate limits and Retry-After without returning raw headers", async () => {
+    await expect(downloadHubbuyImage("https://scm.hubbuy.app/photo.png", {
+      resolve: async () => [{ address: "1.1.1.1", family: 4 }],
+      request: async () => ({ statusCode: 429, headers: { "retry-after": "23", "x-private-token": "never-return" }, body: Buffer.alloc(0) }),
+    })).rejects.toMatchObject({ status: 502, code: "QC_SOURCE_UNAVAILABLE", retryAfterSeconds: 23, upstreamStatus: 429 });
   });
 });

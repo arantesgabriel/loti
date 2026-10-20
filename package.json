@@ -15,6 +15,7 @@
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
     "test:e2e": "playwright test",
+    "benchmark:qc": "node --conditions=react-server --import tsx scripts/benchmark-qc-import.ts",
     "check": "npm run typecheck && npm run lint && npm test && npm run build",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node --import tsx scripts/migrate.ts",

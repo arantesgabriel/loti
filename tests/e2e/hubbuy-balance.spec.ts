@@ -66,7 +66,7 @@ test("creates zero-balance HubBuy accounts and credits the first confirmed refun
 
   await page.goto(`/packages/${trackingId}`);
   await expect(page.getByRole("button", { name: /Produtos e custos/ })).toHaveAttribute("aria-expanded", "true");
-  await page.getByRole("button", { name: /Ver detalhes de Item base QA/ }).click();
+  await page.getByRole("row").filter({ hasText: "Item base QA" }).getByRole("button", { name: "Ver composição", exact: true }).click();
   await page.getByRole("button", { name: "Registrar recebimento" }).click();
   const refundDialog = page.getByRole("dialog").filter({ hasText: "Registrar recebimento" });
   await refundDialog.getByLabel("Produto recebido (R$)").fill("3,50");
@@ -112,7 +112,7 @@ test("creates zero-balance HubBuy accounts and credits the first confirmed refun
   await accountSelector.selectOption(await refundOption.getAttribute("value")!);
   await additional.getByRole("textbox", { name: "Produto", exact: true }).fill(`Moletom adicional QA ${suffix}`);
   await additional.getByLabel("Link").fill(`https://weidian.com/item.html?itemID=${suffix}`);
-  await additional.getByLabel("Preço produto · CNY").fill("10,00");
+  await additional.getByLabel("Preço do produto por unidade (CNY)").fill("10,00");
   await additional.getByLabel("Sem cobrança de frete China").check();
   const participants = additional.locator(".cost-order-participants label");
   for (const participant of await participants.all()) {
@@ -128,7 +128,7 @@ test("creates zero-balance HubBuy accounts and credits the first confirmed refun
   await expect(additional).toContainText("Base de saldo R$ 3,50 · Dinheiro novo R$ 8,08 (taxas R$ 0,08)");
   await additional.getByRole("button", { name: "Associar ao pacote" }).click();
   await expect(additional).toBeHidden();
-  await expect(page.getByText("Pedido adicional", { exact: true }).filter({ visible: true })).toBeVisible();
+  await expect(page.getByRole("row").filter({ hasText: `Moletom adicional QA ${suffix}` }).getByText("Pedido adicional", { exact: true })).toBeVisible();
 
   await expect(page.getByRole("button", { name: /^Pacotes / })).toHaveAttribute("aria-expanded", "true");
   const packageCard = page.locator(".cost-package").first();

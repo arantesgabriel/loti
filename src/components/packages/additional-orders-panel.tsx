@@ -10,6 +10,8 @@ import type { CostTrackingView } from "@/lib/domain/package-cost-reading";
 import { allocateExactMinor } from "@/lib/domain/hubbuy-balance-calculations";
 import { formatBrlMinor, formatCnyMinor, parseFinancialMinor } from "@/lib/domain/financial-money";
 import { costRequest } from "./package-cost-client";
+import { additionalProductTotal, productPriceEntry, type ProductPriceEntry } from "@/lib/domain/additional-product-pricing";
+import { AdditionalProductPriceInput } from "./additional-product-price-input";
 
 type Detail = CostTrackingView;
 type Order = Detail["productOrders"][number];
@@ -25,16 +27,21 @@ function readMinor(value: string, currency: "CNY" | "BRL", label: string) {
   } catch (error) { throw new Error(error instanceof Error ? error.message : `Valor inválido: ${label}.`); }
 }
 
+function minorToInput(value: number | null | undefined) {
+  if (value == null) return "";
+  return `${Math.floor(value / 100)}.${String(value % 100).padStart(2, "0")}`;
+}
+
 export function AdditionalOrdersPanel({ detail, locked, busy, mutate, createPackage, resumeOrderId, onResumeHandled }: {
   detail: Detail; locked: boolean; busy: boolean; mutate: (operation: string, rest: Record<string, unknown>, mayInvalidatePayment?: boolean) => Promise<boolean>;
   createPackage: () => Promise<boolean>; resumeOrderId: string | null; onResumeHandled: () => void;
 }) {
   const activeAccounts = detail.hubbuyAccounts.filter(account => account.status === "active");
-  const [open, setOpen] = useState(false), [activeOrderId, setActiveOrderId] = useState<string | null>(null), [autoSelectLatestDraft, setAutoSelectLatestDraft] = useState(false);
+  const [open, setOpen] = useState(false), [activeOrderId, setActiveOrderId] = useState<string | null>(null), [autoSelectLatestDraft, setAutoSelectLatestDraft] = useState(false), [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [accountId, setAccountId] = useState(activeAccounts[0]?.id ?? "");
   const [name, setName] = useState(""); const [url, setUrl] = useState(""); const [platform, setPlatform] = useState("Taobao");
   const [variant, setVariant] = useState(""); const [quantity, setQuantity] = useState("1");
-  const [productCny, setProductCny] = useState(""); const [chinaCny, setChinaCny] = useState("");
+  const [productPrice, setProductPrice] = useState<ProductPriceEntry>({ basis: "unit", value: "" }); const [chinaCny, setChinaCny] = useState("");
   const [productFree, setProductFree] = useState(false); const [chinaFree, setChinaFree] = useState(false);
   const [participantIds, setParticipantIds] = useState<string[]>(detail.members.map(member => member.id));
   const [balances, setBalances] = useState<Record<string, Balance>>({});
@@ -71,6 +78,43 @@ export function AdditionalOrdersPanel({ detail, locked, busy, mutate, createPack
     return sum + Math.max(0, shippingQuantity - assigned);
   }, 0) : 0;
 
+  function beginDraftEdit(order: Order) {
+    const row = order.items[0], item = row?.item;
+    if (!row || !item || order.items.length !== 1) { toast.error("Este rascunho não pode ser editado neste fluxo."); return; }
+    setEditingDraftId(order.id);
+    setAccountId(order.accountId ?? activeAccounts[0]?.id ?? "");
+    setName(item.name); setUrl(item.url); setPlatform(item.platform); setVariant(item.variant ?? ""); setQuantity(String(row.quantity));
+    setProductPrice(productPriceEntry(row.cost.nativeProductCnyMinor, row.quantity)); setChinaCny(minorToInput(row.cost.nativeChinaCnyMinor));
+    setProductFree(row.cost.nativeProductState === "no_charge"); setChinaFree(row.cost.nativeChinaState === "no_charge");
+    setParticipantIds(row.participants.map(person => person.personId));
+  }
+
+  async function updateDraft(event: React.FormEvent) {
+    event.preventDefault();
+    if (!editingDraftId) return;
+    try {
+      if (!selectedAccountId) throw new Error("Cadastre e concilie uma conta HubBuy antes de editar o pedido.");
+      if (!participantIds.length) throw new Error("Escolha ao menos uma pessoa para dividir o item.");
+      const itemQuantity = Number(quantity);
+      if (!Number.isInteger(itemQuantity) || itemQuantity < 1 || itemQuantity > 10_000) throw new Error("Informe uma quantidade entre 1 e 10.000.");
+      const productAmount = productFree ? null : additionalProductTotal(productPrice.value, itemQuantity, productPrice.basis);
+      const chinaAmount = chinaFree ? null : parseFinancialMinor(chinaCny, "CNY");
+      const ok = await mutate("order.additional.update_draft", { orderId: editingDraftId, input: {
+        expectedRevision: detail.tracking.revision, idempotencyKey: crypto.randomUUID(), accountId: selectedAccountId,
+        item: {
+          name: name.trim(), url: url.trim(), platform, variant: variant.trim() || null, quantity: itemQuantity,
+          nativeProductState: productFree ? "no_charge" : productAmount === null ? "unknown" : "known", nativeProductCnyMinor: productFree ? null : productAmount,
+          nativeChinaState: chinaFree ? "no_charge" : chinaAmount === null ? "unknown" : "known", nativeChinaCnyMinor: chinaFree ? null : chinaAmount,
+          participants: participantIds.map(personId => ({ personId, weightMode: "equal", weight: 1 })),
+        },
+      } });
+      if (ok) {
+        setEditingDraftId(null); setActiveOrderId(editingDraftId); setAutoSelectLatestDraft(false); setAdvances([]); onResumeHandled();
+        toast.success("Rascunho atualizado.");
+      }
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Confira os campos do rascunho."); }
+  }
+
   async function createOrder(event: React.FormEvent) {
     event.preventDefault();
     try {
@@ -78,7 +122,8 @@ export function AdditionalOrdersPanel({ detail, locked, busy, mutate, createPack
       if (!participantIds.length) throw new Error("Escolha ao menos uma pessoa para dividir o item.");
       const itemQuantity = Number(quantity);
       if (!Number.isInteger(itemQuantity) || itemQuantity < 1 || itemQuantity > 10_000) throw new Error("Informe uma quantidade entre 1 e 10.000.");
-      const product = productFree ? null : readMinor(productCny, "CNY", "o preço do produto em CNY");
+      const product = productFree ? null : additionalProductTotal(productPrice.value, itemQuantity, productPrice.basis);
+      if (!productFree && product === null) throw new Error("Informe o preço do produto em CNY.");
       const china = chinaFree ? null : readMinor(chinaCny, "CNY", "o frete China em CNY");
       if (!name.trim() || !url.trim()) throw new Error("Informe o nome e o link do produto.");
       const ok = await mutate("order.additional.create", { input: {
@@ -88,7 +133,7 @@ export function AdditionalOrdersPanel({ detail, locked, busy, mutate, createPack
           nativeChinaState: chinaFree ? "no_charge" : "known", nativeChinaCnyMinor: china,
           participants: participantIds.map(personId => ({ personId, weightMode: "equal", weight: 1 })) }],
       } });
-      if (ok) { setName(""); setUrl(""); setVariant(""); setProductCny(""); setChinaCny(""); setProductFree(false); setChinaFree(false); setAdvances([]); setActiveOrderId(null); setAutoSelectLatestDraft(true); toast.success("Produto registrado. Confirme o pagamento para incluir no pacote."); }
+      if (ok) { setName(""); setUrl(""); setVariant(""); setQuantity("1"); setProductPrice({ basis: "unit", value: "" }); setChinaCny(""); setProductFree(false); setChinaFree(false); setAdvances([]); setActiveOrderId(null); setAutoSelectLatestDraft(true); toast.success("Produto registrado. Confirme o pagamento para incluir no pacote."); }
     } catch (error) { toast.error(error instanceof Error ? error.message : "Confira os campos do pedido."); }
   }
 
@@ -194,25 +239,28 @@ export function AdditionalOrdersPanel({ detail, locked, busy, mutate, createPack
   }
 
   const estimate = activeOrder?.state === "draft" ? preview(activeOrder) : null;
+  const isEditingDraft = activeOrder?.state === "draft" && editingDraftId === activeOrder.id;
 
   return <>
     {!locked && <Button className="cost-additional-order-trigger" type="button" variant="outline" disabled={busy} onClick={() => setOpen(true)}><Plus size={16}/><span>Adicionar produto</span>{draftOrders.length > 0 && <span className="cost-draft-count">{draftOrders.length} rascunhos</span>}</Button>}
-    <Surface sheet open={open || !!resumeOrderId} title={activeOrder?.state === "recorded" ? "Associar ao pacote" : activeOrder?.state === "draft" ? "Confirmar compra" : "Adicionar produto comprado"} subtitle={activeOrder?.items[0]?.item?.name} description="Registre o item, confirme o pagamento observado e associe as unidades a um pacote." onOpenChange={value => { if (!busy) { setOpen(value); if (!value) { setActiveOrderId(null); setAutoSelectLatestDraft(false); onResumeHandled(); } } }} className="cost-additional-order-surface">
-      {!activeOrder && <>
-      {!locked && <form className="cost-additional-order-create" onSubmit={event => void createOrder(event)}>
-      <p className="cost-order-step-title"><strong>1. Dados do produto</strong><span>A compra adicional mantém seu próprio pagamento.</span></p>
+    <Surface sheet open={open || !!resumeOrderId} title={activeOrder?.state === "recorded" ? "Associar ao pacote" : isEditingDraft ? "Editar rascunho" : activeOrder?.state === "draft" ? "Confirmar compra" : "Adicionar produto comprado"} subtitle={activeOrder?.items[0]?.item?.name} description="Registre o item, confirme o pagamento observado e associe as unidades a um pacote." onOpenChange={value => { if (!busy) { setOpen(value); if (!value) { setActiveOrderId(null); setAutoSelectLatestDraft(false); setEditingDraftId(null); onResumeHandled(); } } }} className="cost-additional-order-surface">
+      {(!activeOrder || isEditingDraft) && <>
+      {!locked && <form className="cost-additional-order-create" onSubmit={event => void (isEditingDraft ? updateDraft(event) : createOrder(event))}>
+      <p className="cost-order-step-title"><strong>{isEditingDraft ? "Editar dados do produto" : "1. Dados do produto"}</strong><span>{isEditingDraft ? "Ajuste o rascunho antes de confirmar o pagamento." : "A compra adicional mantém seu próprio pagamento."}</span></p>
       <label>Conta HubBuy<select required value={selectedAccountId} onChange={event => setAccountId(event.target.value)}><option value="">Escolher conta conciliada</option>{activeAccounts.map(account => <option key={account.id} value={account.id}>{account.label} · {formatCnyMinor(account.balanceCnyMinor)}</option>)}</select></label>
       <div className="cost-additional-order-fields"><label>Produto<input required maxLength={200} value={name} onChange={event => setName(event.target.value)} placeholder="Nome do produto"/></label><label>Link<input required type="url" maxLength={2048} value={url} onChange={event => setUrl(event.target.value)} placeholder="https://…"/></label><label>Plataforma<input required maxLength={100} value={platform} onChange={event => setPlatform(event.target.value)} /></label><label>Variação<input maxLength={500} value={variant} onChange={event => setVariant(event.target.value)} placeholder="Opcional"/></label><label>Quantidade<input required type="number" min={1} max={10000} value={quantity} onChange={event => setQuantity(event.target.value)}/></label>
-        <label>Preço produto · CNY<input inputMode="decimal" disabled={productFree} value={productCny} onChange={event => setProductCny(event.target.value)} placeholder="0,00"/></label><label>Frete China · CNY<input inputMode="decimal" disabled={chinaFree} value={chinaCny} onChange={event => setChinaCny(event.target.value)} placeholder="0,00"/></label>
-        <label className="cost-order-free"><input type="checkbox" checked={productFree} onChange={event => setProductFree(event.target.checked)}/> Sem cobrança de produto</label><label className="cost-order-free"><input type="checkbox" checked={chinaFree} onChange={event => setChinaFree(event.target.checked)}/> Sem cobrança de frete China</label></div>
+        <AdditionalProductPriceInput entry={productPrice} quantity={Number(quantity)} onChange={setProductPrice} disabled={productFree}/><label>Frete China — total (CNY)<input inputMode="decimal" disabled={chinaFree} value={chinaCny} onChange={event => setChinaCny(event.target.value)} placeholder="0,00"/></label>
+        <label className="cost-order-free"><input type="checkbox" checked={productFree} disabled={productPrice.value.trim().length > 0} onChange={event => setProductFree(event.target.checked)}/> Sem cobrança de produto</label><label className="cost-order-free"><input type="checkbox" checked={chinaFree} disabled={chinaCny.trim().length > 0} onChange={event => setChinaFree(event.target.checked)}/> Sem cobrança de frete China</label></div>
+      <p className="muted">O frete China informado é o total para todas as unidades deste produto.</p>
       <fieldset className="cost-order-participants"><legend>Dividir o custo igualmente</legend>{detail.members.map(member => <label key={member.id}><input type="checkbox" checked={participantIds.includes(member.id)} onChange={event => setParticipantIds(current => event.target.checked ? [...current, member.id] : current.filter(id => id !== member.id))}/>{member.name}</label>)}</fieldset>
-      <Button type="submit" disabled={busy || !activeAccounts.length}><ShoppingBag size={15}/>Continuar para o pagamento</Button>
+      {isEditingDraft ? <div className="form-actions"><Button type="button" variant="outline" disabled={busy} onClick={() => setEditingDraftId(null)}>Voltar ao pagamento</Button><Button type="submit" disabled={busy || !activeAccounts.length}><ShoppingBag size={15}/>Salvar alterações</Button></div> : <Button type="submit" disabled={busy || !activeAccounts.length}><ShoppingBag size={15}/>Continuar para o pagamento</Button>}
       {!activeAccounts.length && <small className="muted">Cadastre uma conta HubBuy ativa na <Link href="/packages/accounts">gestão de contas</Link> para registrar o pedido.</small>}
     </form>}
-    {draftOrders.length > 0 && <details className="cost-order-existing-drafts"><summary>Retomar rascunho pendente ({draftOrders.length})</summary><div>{draftOrders.map(order => <button key={order.id} type="button" disabled={busy} onClick={() => { setActiveOrderId(order.id); setAutoSelectLatestDraft(false); }}><span><strong>{order.items[0]?.item?.name ?? "Produto adicional"}</strong><small>{order.account?.label ?? "Conta HubBuy"} · falta confirmar pagamento</small></span><ArrowRight size={16}/></button>)}</div></details>}
+    {!activeOrder && draftOrders.length > 0 && <details className="cost-order-existing-drafts"><summary>Retomar rascunho pendente ({draftOrders.length})</summary><div>{draftOrders.map(order => <button key={order.id} type="button" disabled={busy} onClick={() => { setActiveOrderId(order.id); setAutoSelectLatestDraft(false); setEditingDraftId(null); }}><span><strong>{order.items[0]?.item?.name ?? "Produto adicional"}</strong><small>{order.account?.label ?? "Conta HubBuy"} · falta confirmar pagamento</small></span><ArrowRight size={16}/></button>)}</div></details>}
       </>}
-      {activeOrder?.state === "draft" && activeOrder.accountId && <div className="cost-additional-order-flow">
+      {activeOrder?.state === "draft" && !isEditingDraft && activeOrder.accountId && <div className="cost-additional-order-flow">
         <p className="cost-order-step-title"><strong>2. Confirme o pagamento</strong><span>{activeOrder.items.map(row => row.item?.name ?? "Produto").join(" · ")} · {formatCnyMinor(activeOrder.nativeCnyMinor ?? 0)}</span></p>
+        {!locked && activeOrder.items.length === 1 && <Button type="button" variant="outline" disabled={busy} onClick={() => beginDraftEdit(activeOrder)}>Editar dados do produto</Button>}
         <form className="cost-additional-order-payment" onSubmit={event => void payOrder(activeOrder, event)}>
           <div><strong>Pagamento observado</strong><small>Saldo próprio previsto: {formatCnyMinor(estimate?.ownUsed ?? 0)} · Adiantamento: {formatCnyMinor(estimate?.crossUsed ?? 0)} · Complemento: {formatCnyMinor(estimate?.externalCnyMinor ?? 0)}</small></div>
           <label className="cost-order-free"><input type="checkbox" checked={useOwnBalance} onChange={event => setUseOwnBalance(event.target.checked)}/> Usar o saldo próprio dos participantes</label>

@@ -13,6 +13,7 @@ type RouteContext = { params: Promise<{ trackingId: string }> };
 const bodySchema = z.discriminatedUnion("operation", [
   z.object({ operation: z.literal("item.save"), input: z.unknown() }).strict(),
   z.object({ operation: z.literal("order.additional.create"), input: z.unknown() }).strict(),
+  z.object({ operation: z.literal("order.additional.update_draft"), orderId: z.string().min(1), input: z.unknown() }).strict(),
   z.object({ operation: z.literal("order.additional.correct"), orderId: z.string().min(1), input: z.unknown() }).strict(),
   z.object({ operation: z.literal("order.additional.preview_correction"), orderId: z.string().min(1), input: z.unknown() }).strict(),
   z.object({ operation: z.literal("order.additional.record_payment"), orderId: z.string().min(1), input: z.unknown() }).strict(),
@@ -50,6 +51,7 @@ export async function POST(request: Request, context: RouteContext) {
     switch (body.operation) {
       case "item.save": await service.saveItemCosts(trackingId, body.input); break;
       case "order.additional.create": await service.createAdditionalOrder(trackingId, body.input); break;
+      case "order.additional.update_draft": await service.updateAdditionalOrderDraft(trackingId, body.orderId, body.input); break;
       case "order.additional.correct": await service.correctAdditionalOrder(trackingId, body.orderId, body.input); break;
       case "order.additional.preview_correction": return NextResponse.json({ data: await service.correctAdditionalOrder(trackingId, body.orderId, body.input, true) }, { headers: packageCostPrivateHeaders });
       case "order.additional.record_payment": await service.recordAdditionalOrderPayment(trackingId, body.orderId, body.input); break;

@@ -8,7 +8,7 @@ export type QcTransferPhoto = {
   id: string; sourceId: string | null; name: string; occurrence: string | null;
   state: string; errorCode: string | null; byteSize: number | null; imageId: string | null; previewUrl: string | null;
 };
-export type QcTransferSnapshot = { photos: QcTransferPhoto[]; nextSourceId: string | null };
+export type QcTransferSnapshot = { importId: string; purchaseId: string; revision: number; status: string; expiresAt: string | null; bytesReserved: number; bytesConsumed: number; photos: QcTransferPhoto[]; nextSourceId: string | null; rows: { externalKey: string; skuInfo: string | null; title: string | null; photoCount: number; match: { status: string; targetItemId: string | null; candidates: { itemId: string; name: string; reasons: string[] }[] }; conflict: string | null }[] };
 
 function photoSize(bytes: number) {
   const unit = bytes < 1024 ? "B" : bytes < 1024 * 1024 ? "KB" : "MB";
@@ -70,6 +70,6 @@ export function QcImportProgress({ photos: importPhotos, activeSourceId, importe
       failed ? `${failed} ${failed === 1 ? "foto com falha" : "fotos com falha"}` : "",
       pending ? `${pending} ${pending === 1 ? "transferência pendente" : "transferências pendentes"}` : "",
     ].filter(Boolean).join(" · ")}</p>}
-    <div className="qc-transfer-callout"><ShieldCheck size={18} aria-hidden="true"/><p>As fotos são transferidas em sequência. Os vínculos são confirmados antes de iniciar a transferência.</p></div>
+    <div className="qc-transfer-callout"><ShieldCheck size={18} aria-hidden="true"/><p>As fotos são transferidas em pequenos grupos. Os vínculos são confirmados antes de iniciar a transferência.</p></div>
   </div>;
 }

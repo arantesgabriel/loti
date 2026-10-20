@@ -32,6 +32,16 @@ const createSchema = z.object({
   externalReference: z.string().trim().min(1).max(200).nullable().optional(), occurredAt: z.coerce.date().nullable().optional(),
   items: z.array(itemSchema).min(1).max(100),
 }).strict();
+const updateDraftSchema = z.object({
+  expectedRevision: revision, idempotencyKey: z.string().trim().min(1).max(200), accountId: z.string().min(1),
+  item: z.object({
+    name: z.string().trim().min(1).max(200), url: z.string().url().max(2048), platform: z.string().trim().min(1).max(100),
+    variant: z.string().max(500).nullable(), quantity: z.number().int().min(1).max(10_000),
+    nativeProductState: z.enum(["unknown", "known", "no_charge"]), nativeProductCnyMinor: z.number().int().min(0).max(maxMinor).nullable(),
+    nativeChinaState: z.enum(["unknown", "known", "no_charge"]), nativeChinaCnyMinor: z.number().int().min(0).max(maxMinor).nullable(),
+    participants: z.array(z.object({ personId: z.string().min(1), weightMode: z.enum(["equal", "percentage", "fixed"]), weight: z.number().int().min(0).max(maxMinor) }).strict()).min(1).max(100),
+  }).strict(),
+}).strict();
 const paymentSchema = z.object({
   expectedRevision: revision, idempotencyKey: z.string().trim().min(1).max(200),
   paymentMethod: z.enum(["pix", "card"]), principalBrlCents: z.number().int().min(1).max(maxMinor),
@@ -127,6 +137,71 @@ export function purchaseCostOrderServices(db: AppDatabase, actorId: string) {
       }).run();
       await updateTracking(tx, trackingId, value.expectedRevision, actorId);
       return { orderId, replayed: false };
+    }));
+  }
+
+  async function updateDraft(trackingId: string, orderId: string, input: unknown) {
+    const value = updateDraftSchema.parse(input);
+    const normalized = { ...value, item: { ...value.item, variant: value.item.variant?.trim() || null } };
+    const item = normalized.item;
+    if (new Set(item.participants.map(row => row.personId)).size !== item.participants.length) throw new DomainError("Cada participante deve aparecer uma única vez por produto.", 400);
+    const totalWeight = item.participants.reduce((sum, row) => sum + BigInt(row.weightMode === "equal" ? 1 : row.weight), 0n);
+    if (item.participants.some(row => row.weightMode !== item.participants[0].weightMode) || totalWeight === 0n) throw new DomainError("A divisão do item precisa usar uma única modalidade e ter peso positivo.", 400);
+    if (item.participants[0].weightMode === "percentage" && totalWeight !== 10_000n) throw new DomainError("Os percentuais do item precisam somar 100%.", 400);
+    assertValue(item.nativeProductState, item.nativeProductCnyMinor, "produto");
+    assertValue(item.nativeChinaState, item.nativeChinaCnyMinor, "frete China");
+
+    return serializeDomainTransaction(() => db.transaction(async tx => {
+      const tracking = await tx.select().from(purchaseCostTrackings).where(eq(purchaseCostTrackings.id, trackingId)).get();
+      if (!tracking) throw new DomainError("Acompanhamento de custos não encontrado.", 404);
+      await authorization(tx, actorId).requireWorkspaceMember(tracking.workspaceId);
+      const payloadHash = hash({ trackingId, orderId, ...normalized });
+      const prior = await tx.select().from(financialOperations).where(and(eq(financialOperations.workspaceId, tracking.workspaceId), eq(financialOperations.idempotencyKey, value.idempotencyKey))).get();
+      if (prior) {
+        if (prior.operationType !== "additional_order_draft_updated" || prior.payloadHash !== payloadHash) throw new DomainError("Esta chave já foi usada com outros dados.", 409, "IDEMPOTENCY_CONFLICT");
+        return { operationId: prior.id, replayed: true };
+      }
+      if (tracking.status !== "open" || tracking.revision !== value.expectedRevision) throw new DomainError("Os custos foram alterados ou encerrados. Atualize a tela.", 409);
+      const order = await tx.select().from(purchaseCostOrders).where(and(eq(purchaseCostOrders.id, orderId), eq(purchaseCostOrders.trackingId, trackingId))).get();
+      if (!order || order.kind !== "additional" || order.state !== "draft" || !order.accountId) throw new DomainError("Somente um rascunho ainda não pago pode ser editado.", 409);
+      const account = await tx.select().from(hubbuyAccounts).where(eq(hubbuyAccounts.id, value.accountId)).get();
+      if (!account || account.deletedAt || account.workspaceId !== tracking.workspaceId || account.status !== "active") throw new DomainError("Escolha uma conta HubBuy ativa e conciliada deste espaço.", 409, "HUBBUY_ACCOUNT_UNAVAILABLE");
+      if (order.externalReference) {
+        const duplicateReference = await tx.select().from(purchaseCostOrders).where(and(eq(purchaseCostOrders.accountId, account.id), eq(purchaseCostOrders.externalReference, order.externalReference))).get();
+        if (duplicateReference && duplicateReference.id !== order.id) throw new DomainError("Esta referência de pedido já foi registrada nesta conta.", 409, "ORDER_REFERENCE_DUPLICATE");
+      }
+      await authorization(tx, actorId).requireWorkspaceMembers([...new Set(item.participants.map(person => person.personId))], tracking.workspaceId);
+      const [charge, costs] = await Promise.all([
+        tx.select().from(purchaseCostCharges).where(and(eq(purchaseCostCharges.orderId, orderId), eq(purchaseCostCharges.chargeType, "products"))).get(),
+        tx.select().from(purchaseItemCosts).where(eq(purchaseItemCosts.orderId, orderId)).orderBy(asc(purchaseItemCosts.itemOrder)).all(),
+      ]);
+      if (!charge || charge.paymentStatus !== "pending" || costs.length !== 1 || !costs[0].additionalOrderItemId) throw new DomainError("Este rascunho não pode ser editado neste fluxo.", 409);
+      const operationId = crypto.randomUUID(), now = new Date(), cost = costs[0], itemId = cost.additionalOrderItemId;
+      if (!itemId) throw new DomainError("Este rascunho não pode ser editado neste fluxo.", 409);
+      await tx.insert(financialOperations).values({
+        id: operationId, workspaceId: tracking.workspaceId, operationType: "additional_order_draft_updated", idempotencyKey: value.idempotencyKey,
+        payloadHash, actorId, occurredAt: null, recordedAt: now, reason: null, reversalOfId: null,
+        contextJson: JSON.stringify({ accountId: account.id, orderId, trackingId, itemId }),
+      }).run();
+      const updatedItem = await tx.update(purchaseAdditionalOrderItems).set({
+        name: item.name, url: item.url, platform: item.platform, variant: item.variant, quantity: item.quantity,
+      }).where(eq(purchaseAdditionalOrderItems.id, itemId)).returning().get();
+      if (!updatedItem) throw new DomainError("O produto deste rascunho não foi encontrado.", 409);
+      await tx.update(purchaseItemCosts).set({
+        nativeProductState: item.nativeProductState, nativeProductCnyMinor: item.nativeProductCnyMinor,
+        nativeChinaState: item.nativeChinaState, nativeChinaCnyMinor: item.nativeChinaCnyMinor,
+      }).where(eq(purchaseItemCosts.id, cost.id)).run();
+      await tx.delete(purchaseCostParticipants).where(eq(purchaseCostParticipants.costItemId, cost.id)).run();
+      await tx.insert(purchaseCostParticipants).values(item.participants.map((person, allocationOrder) => ({
+        costItemId: cost.id, personId: person.personId, allocationOrder,
+        weightMode: person.weightMode, weight: person.weightMode === "equal" ? 1 : person.weight,
+      }))).run();
+      const updatedOrder = await tx.update(purchaseCostOrders).set({
+        accountId: account.id, revision: order.revision + 1, operationId, updatedBy: actorId, updatedAt: now,
+      }).where(and(eq(purchaseCostOrders.id, orderId), eq(purchaseCostOrders.revision, order.revision), eq(purchaseCostOrders.state, "draft"))).returning().get();
+      if (!updatedOrder) throw new DomainError("O rascunho foi alterado em outra sessão. Atualize a tela.", 409);
+      await updateTracking(tx, trackingId, value.expectedRevision, actorId);
+      return { operationId, replayed: false };
     }));
   }
 
@@ -434,5 +509,5 @@ export function purchaseCostOrderServices(db: AppDatabase, actorId: string) {
     }));
   }
 
-  return { createDraft, recordExternalPayment, recordMixedPayment, recordMixedPaymentInTransaction, voidDraft };
+  return { createDraft, updateDraft, recordExternalPayment, recordMixedPayment, recordMixedPaymentInTransaction, voidDraft };
 }

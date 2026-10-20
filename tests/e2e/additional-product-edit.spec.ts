@@ -35,7 +35,7 @@ test("edits a paid additional product using the existing action and confirms its
   await cost("refund.request", { expectedRevision: detail.tracking.revision, costItemId: donor.id, quantity: 1, requestedProductCents: 2_000, requestedChinaCents: 0, reason: "Crédito sintético para teste", packageRemovals: [{ packageId: detail.packages[0].id, quantity: 1 }], unassignedQuantity: 0 });
   await cost("refund.receive", { expectedRevision: detail.tracking.revision, receivedProductCents: 2_000, receivedChinaCents: 0, destination: "hubbuy", newAccountLabel: "Conta QA da edição", confirmZeroBalance: true, receivedProductCnyMinor: 2_500, receivedChinaCnyMinor: 0, nativeEvidence: "Crédito sintético confirmado", confirmed: true }, { refundId: detail.refunds[0].id });
   const accountId = detail.refunds[0].hubbuyAccountId;
-  await cost("order.additional.create", { expectedRevision: detail.tracking.revision, idempotencyKey: "edit-e2e-draft", accountId, items: [{ name: "Cordas Elixir QA", url: "https://shop.test/elixir", platform: "Taobao", visualKey: "generic", quantity: 1, itemOrder: 0, nativeProductState: "known", nativeProductCnyMinor: 2_500, nativeChinaState: "no_charge", nativeChinaCnyMinor: null, participants: [{ personId, weightMode: "equal", weight: 1 }] }] });
+  await cost("order.additional.create", { expectedRevision: detail.tracking.revision, idempotencyKey: "edit-e2e-draft", accountId, items: [{ name: "Cordas Elixir QA", url: "https://shop.test/elixir", platform: "Taobao", visualKey: "generic", quantity: 3, itemOrder: 0, nativeProductState: "known", nativeProductCnyMinor: 2_500, nativeChinaState: "no_charge", nativeChinaCnyMinor: null, participants: [{ personId, weightMode: "equal", weight: 1 }] }] });
   const order = detail.productOrders.find(order => order.kind === "additional")!;
   await cost("order.additional.pay_mixed", { expectedRevision: detail.tracking.revision, idempotencyKey: "edit-e2e-paid", useOwnBalance: true }, { orderId: order.id });
   await cost("package.allocations", { expectedRevision: detail.tracking.revision, packageId: detail.packages[0].id, allocations: [{ costItemId: detail.items.find(item => item.original.name === "Camisa QA")!.id, quantity: 1 }, { costItemId: order.items[0].cost.id, quantity: 1 }] });
@@ -46,13 +46,18 @@ test("edits a paid additional product using the existing action and confirms its
   const composition = page.locator(`#cost-composition-desktop-${order.items[0].cost.id}`);
   await composition.getByRole("button", { name: "Editar", exact: true }).click();
   let dialog = page.getByRole("dialog", { name: "Custos do produto" });
+  await expect(dialog.getByLabel("Informar preço por")).toHaveValue("total");
+  await expect(dialog.getByLabel("Preço do produto — total (CNY)")).toHaveValue("25,00");
   await dialog.getByLabel("Produto", { exact: true }).fill("Alteração cancelada");
   await dialog.getByRole("button", { name: "Cancelar", exact: true }).click();
   await expect(row).toContainText("Cordas Elixir QA");
   await composition.getByRole("button", { name: "Editar", exact: true }).click();
   dialog = page.getByRole("dialog", { name: "Custos do produto" });
   await dialog.getByLabel("Produto", { exact: true }).fill("Cordas Elixir corrigidas QA");
-  await dialog.getByLabel("Preço do produto — total (CNY)").fill("20,00");
+  await dialog.getByLabel("Quantidade", { exact: true }).fill("2");
+  await dialog.getByLabel("Informar preço por").selectOption("unit");
+  await dialog.getByLabel("Preço do produto por unidade (CNY)").fill("10,00");
+  await expect(dialog).toContainText("2 × ¥ 10,00 = ¥ 20,00 no total");
   await dialog.getByLabel("Motivo da correção").fill("Preço CNY registrado incorretamente no teste");
   await dialog.getByRole("checkbox", { name: /Confirmo que estou corrigindo/ }).check();
   await dialog.getByRole("button", { name: "Conferir correção", exact: true }).click();
@@ -82,4 +87,54 @@ test("edits a paid additional product using the existing action and confirms its
   expect(account.ledgerBalanceCnyMinor).toBe(500);
   expect(account.reconciled).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+
+  // Create and resume a two-unit draft through the real form, then pay with mixed sources.
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.getByRole("button", { name: /Adicionar produto/ }).click();
+  const additional = page.locator(".cost-additional-order-surface");
+  await additional.getByLabel("Produto", { exact: true }).fill("Elixir duas unidades QA");
+  await additional.getByLabel("Link", { exact: true }).fill("https://shop.test/elixir-two");
+  await additional.getByLabel("Quantidade", { exact: true }).fill("2");
+  await additional.getByLabel("Preço do produto por unidade (CNY)").fill("18,06");
+  await additional.getByLabel("Frete China — total (CNY)").fill("20,00");
+  await expect(additional).toContainText("2 × ¥ 18,06 = ¥ 36,12 no total");
+  await additional.getByLabel("Informar preço por").selectOption("total");
+  await expect(additional.getByLabel("Preço do produto — total (CNY)")).toHaveValue("36,12");
+  await additional.getByLabel("Informar preço por").selectOption("unit");
+  await expect(additional.getByLabel("Preço do produto por unidade (CNY)")).toHaveValue("18,06");
+  for (const width of [320, 390, 1440]) {
+    await page.setViewportSize({ width, height: width < 400 ? 844 : 1000 });
+    await additional.getByLabel("Preço do produto por unidade (CNY)").scrollIntoViewIfNeeded();
+    expect(await additional.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    if (process.env.LOTI_CAPTURE_CORRECTION_QA === "1") await page.screenshot({ path: resolve(screenshotDir, `unit-price-${width}.png`) });
+  }
+  for (const label of await additional.locator(".cost-order-participants label").all()) {
+    if ((await label.innerText()).includes("Profile QA")) await label.locator("input").check();
+    else await label.locator("input").uncheck();
+  }
+  await additional.getByRole("button", { name: "Continuar para o pagamento" }).click();
+  await expect(additional).toContainText("¥ 56,12");
+  await additional.getByRole("button", { name: "Editar dados do produto" }).click();
+  await expect(additional.getByLabel("Preço do produto por unidade (CNY)")).toHaveValue("18,06");
+  await additional.getByLabel("Quantidade", { exact: true }).fill("3");
+  await expect(additional).toContainText("3 × ¥ 18,06 = ¥ 54,18 no total");
+  await additional.getByLabel("Quantidade", { exact: true }).fill("2");
+  await additional.getByRole("button", { name: "Salvar alterações", exact: true }).click();
+  await additional.getByLabel("Principal externo em BRL").fill("40,00");
+  await additional.getByRole("button", { name: "Confirmar compra", exact: true }).click();
+  await expect(additional).toContainText("3. Associe as unidades ao pacote");
+  await additional.getByRole("button", { name: "Associar ao pacote", exact: true }).click();
+  await page.reload();
+  const twoUnitDetail = (await (await page.request.get(endpoint)).json()).data as CostTrackingView;
+  const twoUnitOrder = twoUnitDetail.productOrders.find(order => order.items.some(row => row.item?.name === "Elixir duas unidades QA"))!;
+  expect(twoUnitOrder).toMatchObject({ nativeCnyMinor: 5612, state: "recorded", items: [{ quantity: 2, cost: { nativeProductCnyMinor: 3612, nativeChinaCnyMinor: 2000 } }] });
+  expect(twoUnitOrder.paymentComponents.map(component => component.cnyMinor).reduce((sum, amount) => sum + amount, 0)).toBe(5612);
+  expect(twoUnitDetail.productsCharge).toEqual(originalCharge);
+  const twoUnitRow = page.locator("tr.cost-compact-row").filter({ hasText: "Elixir duas unidades QA" });
+  await twoUnitRow.getByRole("button", { name: "Ver composição de Elixir duas unidades QA", exact: true }).click();
+  const twoUnitComposition = page.locator(`#cost-composition-desktop-${twoUnitOrder.items[0].cost.id}`);
+  await expect(twoUnitComposition).toContainText("2 × ¥ 18,06 = ¥ 36,12 no total");
+  await twoUnitComposition.getByRole("button", { name: "Editar", exact: true }).click();
+  await expect(page.getByRole("dialog").getByLabel("Preço do produto por unidade (CNY)")).toHaveValue("18,06");
+  await page.getByRole("dialog").getByRole("button", { name: "Cancelar", exact: true }).click();
 });

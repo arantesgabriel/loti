@@ -20,7 +20,7 @@ const postSchema = z.discriminatedUnion("operation", [
 
 export async function GET(request: Request, context: RouteContext) {
   try {
-    const user = await requireUser(), { purchaseId } = await context.params, service = qcServices(db, user.id);
+    const user = await requireUser(), { purchaseId } = await context.params, service = qcServices(db, user.id, { signal: request.signal });
     const params = new URL(request.url).searchParams;
     const itemIdsRaw = params.get("itemIds");
     if (itemIdsRaw !== null) {
