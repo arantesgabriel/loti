@@ -200,7 +200,7 @@ As quatro referências são complementares, não quatro temas alternativos. A se
 
 **Drawer de cobrança (C):** campos rotulados, método e percentual capturado, bloco de composição com base/taxa/total e ação Marcar como pago após a prévia. Exemplo: `Frete R$ 500,00 + Pix 1% R$ 5,00 = R$ 505,00`. Usar a Surface existente; não criar editor e documento de fatura duplicados lado a lado. Detalhamento somente leitura para acompanhamento encerrado.
 
-**Mobile (D):** linhas compactas com produto, variação, quantidade, total/parcela pertinente e pendência. Mostrar componentes financeiros ao abrir o drawer, com rótulos à esquerda e valores à direita. Adaptar a lista de pacotes da mesma forma. Não espremer as oito colunas na tela nem exigir rolagem horizontal da página. Preservar a ilha arredondada com quatro destinos; rótulo curto `Pacotes`, label acessível `Pacotes e custos`.
+**Mobile (D):** linhas compactas com produto, variação, quantidade, total/parcela pertinente e pendência. Mostrar componentes financeiros ao abrir o drawer, com rótulos à esquerda e valores à direita. Adaptar a lista de pacotes da mesma forma. Não espremer as oito colunas na tela nem exigir rolagem horizontal da página. Preservar a ilha arredondada com cinco destinos, incluindo Contas HubBuy; rótulo curto `Pacotes`, label acessível `Pacotes e custos`.
 
 **Resumo pessoal:** avatar/iniciais, nome e total/parcela, com acesso aos componentes. Participantes não são unidades físicas adicionais. Não apresentar esses valores como saldo de dívida ou acerto entre pessoas.
 
@@ -220,7 +220,7 @@ As quatro referências são complementares, não quatro temas alternativos. A se
 - Ler os documentos e mapear mudanças em andamento. Confirmar a versão estabilizada do rateio e migrações aplicadas em teste.
 - Atualizar `AGENTS.md`, `PROMPT_ONE_SHOT.md` e docs 01–05, 08–09, 11–12 e 15 apenas onde necessário para reconhecer esta extensão. Referenciar o plano, sem duplicar todos os detalhes ou desfazer o escopo anterior de outras funcionalidades.
 - Fixar entradas/leituras, estados, limites financeiros, revisão, cobrança conjunta e desempates. Documentar que parcelas fixas históricas não são reescritas.
-- Ler as quatro referências visuais aprovadas e a seção 7; registrar o mapeamento de cada uma às telas sem reabrir a decisão estética. Ajustar a antiga regra de três destinos para quatro nesta extensão.
+- Ler as quatro referências visuais aprovadas e a seção 7; registrar o mapeamento de cada uma às telas sem reabrir a decisão estética. A ilha mobile possui cinco destinos com Contas HubBuy incluída.
 - Executar baseline de lint/typecheck/testes/build. Registrar e resolver impedimentos; não atribuir falhas anteriores à feature.
 
 **Aceite:** contratos e padrões conhecidos; nenhuma dúvida sobre linha versus unidade, custos versus histórico ou pagamento externo versus acerto pessoal.
@@ -295,7 +295,7 @@ As quatro referências são complementares, não quatro temas alternativos. A se
 
 - Executar lint, typecheck, unit/integration, Playwright e build. Conferir migração em banco vazio e banco anterior com compras ativas/finalizadas.
 - Verificar jornada completa com duas pessoas, produto compartilhado, vários pacotes, preço corrigido, mudança de settings e reabertura.
-- Inspecionar 320/390/768/1024/1440px, teclado, drawers, tabelas, estados e ilha de quatro destinos. Não aceitar overflow horizontal na página.
+- Inspecionar 320/390/768/1024/1440px, teclado, drawers, tabelas, estados e ilha de cinco destinos. Não aceitar overflow horizontal na página.
 - Salvar screenshots em 390/1440px de lista de acompanhamentos, tabela/detalhe, pacotes e drawer de pagamento; incluir total parcial, Receita sem cobrança, cobrança paga e acompanhamento encerrado. Comparar com os padrões A/B/C/D e com as telas atuais do Loti, conforme referências aprovadas.
 - Revisar regressões em favoritos, compra/histórico, rateio, Meu grupo/convites e perfil.
 - Atualizar `docs/IMPLEMENTATION_REPORT.md` com checks reais, arquivos e limitações.

@@ -42,7 +42,7 @@ Creation/editing should generally stay in context via Sheet/Drawer/Dialog instea
 
 - no sidebar;
 - page header + avatar/menu;
-- compact floating rounded bottom navigation island with four items: Favoritos, Compra, Pacotes e custos, Histórico;
+- compact floating rounded bottom navigation island with five items: Favoritos, Compra, Pacotes e custos, Contas HubBuy, Histórico;
 - only the active destination shows its short label; the full selected fill moves between destinations;
 - on desktop, show separate `Editar compra` and `Finalizar compra` buttons beside `Adicionar item`; retain the three-dot options menu on mobile;
 - on desktop, show a lower-right floating `+` only while the heading `Adicionar item` action is outside the viewport; hide it again when that action returns into view. Mobile keeps its separate floating `+` action;

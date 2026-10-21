@@ -8,6 +8,7 @@
     --font-sans: var(--font-geist);
 }
 
+html,
 body {
     margin: 0;
     background: var(--background);
@@ -397,6 +398,7 @@ a {
 
 .app-content {
     margin-left: 240px;
+    background: var(--background);
 }
 
 .mobile-header {
@@ -762,11 +764,27 @@ details .details-fields {
     }
 
     .mobile-header {
+        position: sticky;
+        top: 0;
+        z-index: 10;
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 20px 20px 12px;
+        padding: max(20px, env(safe-area-inset-top)) 20px 12px;
         min-height: 72px;
+        background: var(--background);
+        border-bottom: 1px solid var(--border);
+    }
+
+    .mobile-header-actions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .mobile-header-theme {
+        padding-inline: 8px;
+        gap: 8px;
     }
 
     .mobile-header .brand {
@@ -796,7 +814,7 @@ details .details-fields {
 
     .mobile-island {
         position: fixed;
-        bottom: calc(12px + env(safe-area-inset-bottom));
+        bottom: calc(32px + env(safe-area-inset-bottom));
         left: 50%;
         transform: translateX(-50%);
         display: flex;
