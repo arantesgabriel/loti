@@ -1,67 +1,112 @@
 
-name: Loti - Database Migrations
+name: Loti CI/CD
 
 on:
+  push:
+    branches: [dev, main]
   workflow_dispatch:
-    inputs:
-      target:
-        description: "Banco de destino"
-        required: true
-        type: choice
-        options:
-          - dev
-          - prod
 
 permissions:
   contents: read
 
 concurrency:
-  group: loti-migrate-${{ inputs.target }}
+  group: loti-deploy-${{ github.ref_name }}
   cancel-in-progress: false
 
 jobs:
-  migrate:
+  deploy:
+    if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    environment: ${{ inputs.target }}
+    timeout-minutes: 30
+    environment: ${{ github.ref_name == 'main' && 'prod' || 'dev' }}
+
+    env:
+      TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
 
     steps:
-      - name: Validar branch
-        env:
-          TARGET: ${{ inputs.target }}
-        run: |
-          case "$TARGET:$GITHUB_REF_NAME" in
-            dev:dev|prod:main) ;;
-            *)
-              echo "::error::Branch incompatível"
-              exit 1
-              ;;
-          esac
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: "24"
           cache: npm
 
-      - name: Instalar dependências
+      - name: Install
         run: npm ci
 
-      - name: Executar e verificar migrations
-        env:
-          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
-          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+      - name: Quality checks
         run: |
+          npm run typecheck
+          npm run lint
+          npm run test:unit
+
+      - name: Validate configuration
+        run: |
+          test -n "$TURSO_AUTH_TOKEN"
+          test -n "$VERCEL_TOKEN"
+          test -n "$VERCEL_ORG_ID"
+          test -n "$VERCEL_PROJECT_ID"
+
           case "$TURSO_DATABASE_URL" in
             libsql://*) ;;
-            *)
-              echo "::error::URL Turso inválida"
-              exit 1
-              ;;
+            *) exit 1 ;;
           esac
 
-          test -n "$TURSO_AUTH_TOKEN" || exit 1
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
 
-          npm run db:migrate
-          npm run db:verify
+      - name: Pull Vercel configuration
+        run: |
+          if [ "$GITHUB_REF_NAME" = "main" ]; then
+            vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+          else
+            vercel pull --yes --environment=preview --git-branch=dev --token="$VERCEL_TOKEN"
+          fi
+
+      - name: Verify database environment alignment
+        run: |
+          node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            import { parse } from "dotenv";
+
+            const target = process.env.GITHUB_REF_NAME === "main"
+              ? "production" : "preview";
+
+            const file = `.vercel/.env.${target}.local`;
+            const actual = parse(readFileSync(file));
+
+            for (const key of ["TURSO_DATABASE_URL", "TURSO_AUTH_TOKEN"]) {
+              if (!process.env[key] || actual[key] !== process.env[key]) {
+                console.error(`${key} differs between GitHub and Vercel`);
+                process.exit(1);
+              }
+            }
+          '
+
+      - name: Build
+        run: |
+          if [ "$GITHUB_REF_NAME" = "main" ]; then
+            vercel build --prod --token="$VERCEL_TOKEN"
+          else
+            vercel build --token="$VERCEL_TOKEN"
+          fi
+
+      - name: Apply migrations
+        run: npm run db:migrate
+
+      - name: Verify database
+        run: npm run db:verify
+
+      - name: Deploy
+        run: |
+          if [ "$GITHUB_REF_NAME" = "main" ]; then
+            vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+          else
+            vercel deploy --prebuilt --token="$VERCEL_TOKEN"
+          fi
