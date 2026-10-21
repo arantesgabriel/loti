@@ -22,7 +22,7 @@ Este handoff delimita uma refatoração de UX. A missão geral do one-shot não 
 ## 2. Limites de escopo
 
 - Preserve Next.js, TypeScript, Tailwind/shadcn, Better Auth, Drizzle e Turso/libSQL; não introduza bibliotecas de interface sem necessidade concreta.
-- Preserve Geist, paleta, marcadores SVG, identidade Loti e ilha flutuante mobile com quatro destinos.
+- Preserve Geist, paleta, marcadores SVG, identidade Loti e ilha flutuante mobile com cinco destinos.
 - Preserve desktop funcional e visualmente coerente. Não transforme sheets desktop em telas completas por efeito colateral.
 - Não altere cálculos, bases de incidência, arredondamento, proporções, autorização, snapshots finalizados, pagamentos ou regras de reembolso.
 - Não altere schema nem crie migrações para resolver layout.

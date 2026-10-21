@@ -76,7 +76,7 @@
 .hubbuy-right-origin-context { color: var(--muted); font-size: 11px; line-height: 1.5; }
 .hubbuy-right-toggle { padding: 8px 0; margin-top: 4px; border: 0; background: transparent; color: var(--primary-ink); font-size: 12px; text-align: left; cursor: pointer; }
 .hubbuy-right-toggle:focus-visible { outline: 2px solid var(--primary-ink); outline-offset: 3px; border-radius: 3px; }
-.hubbuy-account-notice { display: flex; align-items: start; gap: 10px; padding: 12px 14px; background: #eff6fc; color: #325775; border-radius: 10px; }
+.hubbuy-account-notice { display: flex; align-items: start; gap: 10px; padding: 12px 14px; background: var(--info-soft); color: var(--info); border-radius: 10px; }
 .hubbuy-account-notice svg { flex-shrink: 0; margin-top: 1px; }
 .hubbuy-account-notice p { margin: 0; font-size: 12px; line-height: 1.6; }
 .hubbuy-statement { display: grid; gap: 14px; }

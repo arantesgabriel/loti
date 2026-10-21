@@ -50,7 +50,7 @@ Contrato de telas, fases e aceite: [plano de implementação](../21_PACKAGES_AND
 
 **Aproveitar:** especialmente as telas laterais, com produto/quantidade/valor em linhas compactas e componentes financeiros abaixo. Usar também a legibilidade da lista central e a identificação de participantes.
 
-**Aplicação:** acompanhamentos e pacotes como listas compactas; produtos com quantidade e total visíveis; composição aberta em drawer; parcelas pessoais identificadas por avatar/iniciais. Preservar a ilha de navegação do Loti, ampliada para quatro destinos.
+**Aplicação:** acompanhamentos e pacotes como listas compactas; produtos com quantidade e total visíveis; composição aberta em drawer; parcelas pessoais identificadas por avatar/iniciais. Preservar a ilha de navegação do Loti, ampliada para cinco destinos, incluindo Contas HubBuy.
 
 **Limite:** não trazer cartões saturados, gradientes, decoração de recibo, fotos de produtos, dívidas entre amigos ou pagamentos pelo aplicativo.
 
@@ -73,7 +73,7 @@ Reutilizar Geist, fundo claro quente, superfícies brancas, laranja funcional, b
 
 - Desktop tem tabela de custos e lista de pacotes distintas, com números legíveis e informação progressiva.
 - Drawer mostra método, percentual capturado, base, taxa e total antes da confirmação de pagamento.
-- Mobile mostra quantidade e total da linha, com detalhamento acessível e ilha de quatro destinos sem clipping.
+- Mobile mostra quantidade e total da linha, com detalhamento acessível e ilha de cinco destinos sem clipping.
 - Total parcial, pendente, sem cobrança, pago e encerrado são reconhecíveis; enviado/recebido não se confundem com pagamento.
 - Verificar 320/390/768/1024/1440px; inspecionar screenshots de lista, detalhe, pacotes e drawer em 390/1440px e comparar a coerência com o app atual.
 - Essas referências encerram a escolha estrutural. Refinamentos de densidade e responsividade são trabalho normal de implementação, sem nova escolha estética obrigatória.
