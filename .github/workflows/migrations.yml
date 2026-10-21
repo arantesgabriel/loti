@@ -1,4 +1,3 @@
-
 name: Loti - CI/CD
 
 on:
@@ -25,18 +24,20 @@ concurrency:
 jobs:
   validate:
     name: Validar aplicação
-    if: github.ref_name == 'main' && github.event_name == 'workflow_dispatch'
+
+    if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main'
+
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
     steps:
       - name: Exigir confirmação explícita em Production
-        if: github.ref_name == 'main'
+        if: github.ref_name == 'main' && github.event_name == 'workflow_dispatch'
         env:
           CONFIRM_PRODUCTION: ${{ inputs.confirm_production }}
         run: |
-          if [[ "$GITHUB_EVENT_NAME" != "workflow_dispatch" || "$CONFIRM_PRODUCTION" != "true" ]]; then
-            echo "::error::Production exige execução manual na main com confirmação explícita."
+          if [[ "$CONFIRM_PRODUCTION" != "true" ]]; then
+            echo "::error::Production exige confirmação explícita."
             exit 1
           fi
 
