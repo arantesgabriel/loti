@@ -72,6 +72,7 @@ jobs:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+      VERCEL_TEAM_SLUG: ${{ vars.VERCEL_TEAM_SLUG }}
 
     steps:
       # ========================================
@@ -286,12 +287,18 @@ jobs:
             exit 1
           fi
 
+          if [ -z "${VERCEL_TEAM_SLUG:-}" ]; then
+            echo "::error::VERCEL_TEAM_SLUG não configurado"
+            exit 1
+          fi
+
           if [ "$GITHUB_REF_NAME" = "main" ]; then
             echo "Promovendo para produção..."
 
             vercel promote \
               "$DEPLOY_URL" \
               --yes \
+              --scope="$VERCEL_TEAM_SLUG" \
               --token="$VERCEL_TOKEN"
 
             DOMAIN="useloti.com"
@@ -301,6 +308,7 @@ jobs:
             vercel alias set \
               "$DEPLOY_URL" \
               dev.useloti.com \
+              --scope="$VERCEL_TEAM_SLUG" \
               --token="$VERCEL_TOKEN"
 
             DOMAIN="dev.useloti.com"
