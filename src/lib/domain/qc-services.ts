@@ -21,7 +21,7 @@ import { matchesQcEtag, qcPreviewEtag, qcPreviewVersion } from "../qc/preview-ht
 type ManagerConfig = { managerId?: string | null; storage?: QcStorage; download?: typeof downloadHubbuyImage; validate?: typeof validateQcImage; makePreview?: typeof generateQcPreview; now?: () => number; metrics?: QcMetricCollector; pipelineConcurrency?: number; sleep?: (ms: number) => Promise<void>; random?: () => number; signal?: AbortSignal };
 type QcRestoreSnapshot = { imageId: string; revision: number; r2Key: string; sourceUrlHash: string; contentSha256: string | null; preview: { revision: number; r2Key: string } | null };
 type PreviewOccurrence = { occurrence: QcOccurrenceInput; match: QcMatch; existingId: string | null; existingRevision: number | null; existingItemId: string | null; restoreSnapshots?: QcRestoreSnapshot[]; conflict?: string };
-type ImportManifest = ParsedQcImport & { rows: PreviewOccurrence[] };
+type ImportManifest = ParsedQcImport & { rows: PreviewOccurrence[]; emptyTargetsOnly?: boolean; transferSourceIds?: string[] };
 type RequestBudget = { deadline: number };
 type QcTargetRef = { origin: "purchase" | "additional"; id: string; key: string };
 
@@ -444,10 +444,19 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
     return { targetKey: target.key, primaryImageId: imageId, revision: expectedRevision + 1 };
   }
 
+  async function photographedTargetKeys(purchaseId: string, source: Pick<AppDatabase, "select"> = db) {
+    const images = await source.select({ purchaseItemId: hubbuyExternalItems.purchaseItemId, additionalOrderItemId: hubbuyExternalItems.additionalOrderItemId })
+      .from(qcImages).innerJoin(hubbuyExternalItems, eq(qcImages.externalItemId, hubbuyExternalItems.id))
+      .where(and(eq(hubbuyExternalItems.purchaseId, purchaseId), eq(qcImages.status, "ready"), eq(qcImages.deleteState, "none"))).all();
+    return new Set(images.flatMap(image => { const key = targetKeyForExternal(image); return key ? [key] : []; }));
+  }
+
   async function prepare(purchaseId: string, raw: unknown) {
     const purchase = await rate(purchaseId, "prepare");
     const parsed = await measureQcStage(metrics, "parse", () => parseHubBuyImport(raw));
     const targets = await getTargets(purchaseId);
+    const photographed = await photographedTargetKeys(purchaseId);
+    const eligibleTargets = targets.filter(target => !photographed.has(target.id));
     const existing = await db.select().from(hubbuyExternalItems).where(eq(hubbuyExternalItems.purchaseId, purchaseId)).all();
     const preliminary = await measureQcStage(metrics, "matching", () => parsed.occurrences.map(occurrence => {
       const main = occurrence.orderGoodsId ? existing.filter(row => row.orderNo === occurrence.orderNo && row.orderGoodsId === occurrence.orderGoodsId) : [];
@@ -459,7 +468,10 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
       const existingTargetKey = found ? targetKeyForExternal(found) : null;
       const match = suggestQcMatch(occurrence, targets, existingTargetKey);
       return { occurrence, match, existing: found ?? null, existingId: found?.id ?? null, existingRevision: found?.revision ?? null, existingItemId: existingTargetKey };
-    }));
+    }).filter(entry => eligibleTargets.length > 0 && entry.occurrence.photos.length > 0
+      && !(entry.existingItemId && photographed.has(entry.existingItemId))
+      && !(entry.match.targetItemId && photographed.has(entry.match.targetItemId)))
+      .map(entry => ({ ...entry, match: normalizeQcMatch({ ...entry.match, candidates: entry.match.candidates.filter(candidate => !photographed.has(candidate.itemId)) }) })));
     const matchedExternalIds = [...new Set(preliminary.flatMap(entry => entry.existingId ? [entry.existingId] : []))];
     const tombstones = matchedExternalIds.length ? await db.select().from(qcImages).where(and(inArray(qcImages.externalItemId, matchedExternalIds), eq(qcImages.status, "deleted"))).all() : [];
     const tombstoneIds = tombstones.map(image => image.id);
@@ -476,15 +488,18 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
       const restoreSnapshots = existing ? tombstonesByExternalId.get(existing.id) ?? [] : [];
       return { ...entry, ...(restoreSnapshots.length ? { restoreSnapshots } : {}) };
     });
-    const manifest: ImportManifest = { ...parsed, rows };
+    const photoCount = rows.reduce((total, entry) => total + entry.occurrence.photos.length, 0);
+    const orderCount = new Set(rows.map(entry => entry.occurrence.orderNo)).size;
+    const skippedOccurrenceCount = parsed.occurrences.length - rows.length;
+    const manifest: ImportManifest = { ...parsed, occurrences: rows.map(entry => entry.occurrence), orderCount, photoCount, rows, emptyTargetsOnly: true };
     const id = randomUUID(), date = nowDate(now), expires = new Date(now() + QC_LIMITS.manifestMs);
     const json = JSON.stringify(manifest);
     if (Buffer.byteLength(json, "utf8") > QC_LIMITS.bodyBytes) throw new DomainError("O manifesto QC excede 1 MiB.", 413, "QC_BODY_LIMIT");
     await db.transaction(async tx => {
       await tx.insert(qcImports).values({ id, workspaceId: purchase.workspaceId, purchaseId, actorId: userId, manifestJson: json, status: "prepared", revision: 0, bytesReserved: 0, bytesConsumed: 0, expiresAt: expires, createdAt: date, updatedAt: date }).run();
-      await tx.insert(qcEvents).values({ id: randomUUID(), workspaceId: purchase.workspaceId, purchaseId, actorId: userId, eventType: "QC_IMPORT", resultCode: "PREPARED", contextJson: JSON.stringify({ importId: id, orders: parsed.orderCount, occurrences: rows.length, photos: parsed.photoCount }), createdAt: date }).run();
+      await tx.insert(qcEvents).values({ id: randomUUID(), workspaceId: purchase.workspaceId, purchaseId, actorId: userId, eventType: "QC_IMPORT", resultCode: "PREPARED", contextJson: JSON.stringify({ importId: id, orders: orderCount, occurrences: rows.length, photos: photoCount, skippedOccurrenceCount }), createdAt: date }).run();
     });
-    return { importId: id, revision: 0, expiresAt: expires.toISOString(), partial: parsed.partial, orderCount: parsed.orderCount, photoCount: parsed.photoCount, rows: rows.map(row => ({ externalKey: row.occurrence.externalKey, orderNo: row.occurrence.orderNo, orderGoodsId: row.occurrence.orderGoodsId, orderGoodsNo: row.occurrence.orderGoodsNo, offerId: row.occurrence.offerId, skuInfo: row.occurrence.skuInfo, title: row.occurrence.title, quantity: row.occurrence.quantity, photoCount: row.occurrence.photos.length, match: row.match, existingItemId: row.existingItemId, conflict: row.conflict ?? null })) };
+    return { importId: id, revision: 0, expiresAt: expires.toISOString(), partial: parsed.partial, orderCount, photoCount, skippedOccurrenceCount, eligibleTargetKeys: eligibleTargets.map(target => target.id), rows: rows.map(row => ({ externalKey: row.occurrence.externalKey, orderNo: row.occurrence.orderNo, orderGoodsId: row.occurrence.orderGoodsId, orderGoodsNo: row.occurrence.orderGoodsNo, offerId: row.occurrence.offerId, skuInfo: row.occurrence.skuInfo, title: row.occurrence.title, quantity: row.occurrence.quantity, photoCount: row.occurrence.photos.length, match: row.match, existingItemId: row.existingItemId, conflict: row.conflict ?? null })) };
   }
 
   async function getImport(importId: string) {
@@ -493,8 +508,9 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
     await authorizedPurchase(row.purchaseId, true);
     const manifest = JSON.parse(row.manifestJson) as ImportManifest;
     manifest.rows = manifest.rows.map(entry => ({ ...entry, match: normalizeQcMatch(entry.match) }));
-    // Read persisted sources, including ready photos from an earlier import.
-    // Never expose storage keys or fetch the original just to render progress.
+    // Progress belongs to the confirmed transfer, not every photo in the pasted
+    // JSON or in the purchase's existing galleries. Completed work in this same
+    // transfer stays visible when the drawer is reopened.
     const externals = await db.select().from(hubbuyExternalItems).where(eq(hubbuyExternalItems.purchaseId, row.purchaseId)).all();
     const validTargetKeys = new Set<string>();
     const purchaseTargetIds = [...new Set(externals.flatMap(external => external.purchaseItemId ? [external.purchaseItemId] : []))];
@@ -516,7 +532,7 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
       .innerJoin(hubbuyExternalItems, eq(qcImageSources.externalItemId, hubbuyExternalItems.id))
       .leftJoin(qcImages, eq(qcImageSources.imageId, qcImages.id))
       .leftJoin(qcImagePreviews, eq(qcImages.id, qcImagePreviews.imageId))
-      .where(and(eq(hubbuyExternalItems.purchaseId, row.purchaseId), inArray(qcImageSources.sourceUrlHash, hashes)))
+      .where(and(eq(hubbuyExternalItems.purchaseId, row.purchaseId), eq(qcImageSources.importId, importId), inArray(qcImageSources.sourceUrlHash, hashes), ...(manifest.transferSourceIds ? [inArray(qcImageSources.id, manifest.transferSourceIds)] : [])))
       .orderBy(asc(qcImageSources.updatedAt), asc(qcImageSources.createdAt), asc(qcImageSources.ordinal)).all() : [];
     const externalByIdentity = new Map<string, typeof externals[number]>();
     for (const external of externals) {
@@ -524,28 +540,31 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
       if (external.orderGoodsNo) externalByIdentity.set(`${external.orderNo ?? ""}\u0000no\u0000${external.orderGoodsNo}`, external);
     }
     const storedByExternalAndHash = new Map(sources.map(candidate => [`${candidate.source.externalItemId}\u0000${candidate.source.sourceUrlHash}`, candidate]));
+    const seenSources = new Set<string>();
+    const progressCounts = new Map<string, number>();
     const photos = manifest.rows.flatMap(entry => {
       const occurrence = entry.occurrence;
       const external = entry.conflict ? undefined : occurrence.orderGoodsId
         ? externalByIdentity.get(`${occurrence.orderNo ?? ""}\u0000id\u0000${occurrence.orderGoodsId}`)
         : occurrence.orderGoodsNo ? externalByIdentity.get(`${occurrence.orderNo ?? ""}\u0000no\u0000${occurrence.orderGoodsNo}`) : undefined;
-      return occurrence.photos.map(photo => {
+      return occurrence.photos.flatMap(photo => {
         const stored = external ? storedByExternalAndHash.get(`${external.id}\u0000${photo.urlHash}`) : undefined;
         const linked = !!external && validExternalIds.has(external.id);
+        if (!linked || !stored || stored.source.state === "deleted" || stored.image?.status === "deleted" || seenSources.has(stored.source.id)) return [];
+        seenSources.add(stored.source.id);
+        progressCounts.set(occurrence.externalKey, (progressCounts.get(occurrence.externalKey) ?? 0) + 1);
         const ready = linked && stored?.source.state === "ready" && stored.image?.status === "ready" && stored.image.deleteState === "none";
-        const state = !linked ? external && entry.match.status === "PENDING" ? "matching" : "ignored" : ready ? "ready"
-          : stored?.image?.status === "deleted" || stored?.source.state === "deleted" ? "deleted"
-          : stored?.source.state === "ready" ? "pending" : stored?.source.state ?? "pending";
+        const state = ready ? "ready" : stored.source.state === "ready" ? "pending" : stored.source.state;
         let name = "";
         try { name = decodeURIComponent(new URL(photo.url).pathname.split("/").pop() ?? "").slice(0, 180); } catch { /* A readable fallback is provided by the UI. */ }
-        return { id: `${occurrence.externalKey}:${photo.ordinal}`, sourceId: stored?.source.id ?? null, name, occurrence: occurrence.title || occurrence.skuInfo || occurrence.orderNo,
+        return [{ id: `${occurrence.externalKey}:${photo.ordinal}`, sourceId: stored.source.id, name, occurrence: occurrence.title || occurrence.skuInfo || occurrence.orderNo,
           state, errorCode: stored?.source.errorCode ?? null, byteSize: ready ? stored!.image!.byteSize : null,
           imageId: ready ? stored!.image!.id : null,
-          previewUrl: ready && stored?.preview?.status === "ready" && stored.preview.deleteState === "none" && stored.preview.transformVersion === QC_PREVIEW.version ? `/api/qc/images/${stored.image!.id}/preview` : null };
+          previewUrl: ready && stored.preview?.status === "ready" && stored.preview.deleteState === "none" && stored.preview.transformVersion === QC_PREVIEW.version ? `/api/qc/images/${stored.image!.id}/preview` : null }];
       });
     });
     const nextSourceId = sources.find(({ source }) => source.importId === importId && (source.state === "pending" || source.state === "failed") && validExternalIds.has(source.externalItemId))?.source.id ?? null;
-    return { importId: row.id, purchaseId: row.purchaseId, revision: row.revision, status: row.status, expiresAt: row.expiresAt, bytesReserved: row.bytesReserved, bytesConsumed: row.bytesConsumed, photos, nextSourceId, rows: manifest.rows.map(entry => ({ externalKey: entry.occurrence.externalKey, skuInfo: entry.occurrence.skuInfo, title: entry.occurrence.title, photoCount: entry.occurrence.photos.length, match: normalizeQcMatch(entry.match), conflict: entry.conflict ?? null })) };
+    return { importId: row.id, purchaseId: row.purchaseId, revision: row.revision, status: row.status, expiresAt: row.expiresAt, bytesReserved: row.bytesReserved, bytesConsumed: row.bytesConsumed, photos, nextSourceId, rows: manifest.rows.filter(entry => row.status === "prepared" || progressCounts.has(entry.occurrence.externalKey)).map(entry => ({ externalKey: entry.occurrence.externalKey, skuInfo: entry.occurrence.skuInfo, title: entry.occurrence.title, photoCount: row.status === "prepared" ? entry.occurrence.photos.length : progressCounts.get(entry.occurrence.externalKey)!, match: normalizeQcMatch(entry.match), conflict: entry.conflict ?? null })) };
   }
 
   async function confirmImport(importId: string, expectedRevision: number, choices: Array<{ externalKey: string; targetKey?: string | null; purchaseItemId?: string | null; correctExisting?: boolean; expectedTargetKey?: string | null; expectedItemId?: string | null }>) {
@@ -579,6 +598,10 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
         const raw = choice ? choice.targetKey : normalizeQcMatch(entry.match).targetItemId;
         return raw ? [parseTargetKey(raw).key] : [];
       });
+      if (manifest.emptyTargetsOnly) {
+        const photographed = await photographedTargetKeys(row.purchaseId, tx);
+        if (requestedTargetKeys.some(key => photographed.has(key))) throw new DomainError("Um produto selecionado já possui fotos QC. Analise o JSON novamente para atualizar as opções.", 409, "QC_TARGET_HAS_PHOTOS");
+      }
       const purchaseTargetIdsInTransaction = [...new Set(requestedTargetKeys.flatMap(key => parseTargetKey(key).origin === "purchase" ? [parseTargetKey(key).id] : []))];
       const additionalTargetIdsInTransaction = [...new Set(requestedTargetKeys.flatMap(key => parseTargetKey(key).origin === "additional" ? [parseTargetKey(key).id] : []))];
       const validTargetKeysInTransaction = new Set<string>();
@@ -604,6 +627,7 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
       const sourceByExternalAndHash = new Map<string, ConfirmSourceRecord>(sourceRecords.map(record => [qcSourceMapKey(record.source.externalItemId, record.source.sourceUrlHash), record]));
       const sourceRowsToInsert: Array<typeof qcImageSources.$inferInsert> = [];
       const presentationTargetKeys: string[] = [];
+      const selectedExternalIds = new Set<string>();
       for (const entry of manifest.rows) {
         const choice = choicesByKey.get(entry.occurrence.externalKey);
         const match = normalizeQcMatch(entry.match);
@@ -664,7 +688,7 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
           externalRows.push(insertedExternal);
         }
         if (currentExternal) { const oldTargetKey = targetKeyForExternal(currentExternal); if (oldTargetKey) presentationTargetKeys.push(oldTargetKey); }
-        if (destinationId) presentationTargetKeys.push(destinationId);
+        if (destinationId) { presentationTargetKeys.push(destinationId); selectedExternalIds.add(externalId); }
         if (destinationId) result.linked++; else if (pendingMatch) result.pendingMatching++; else result.ignored++;
         if (entry.existingItemId !== destinationId || !entry.existingId) await tx.insert(qcEvents).values({ id: randomUUID(), workspaceId: purchase.workspaceId, purchaseId: row.purchaseId, actorId: userId, eventType: "QC_MATCH", resultCode: entry.existingItemId ? "CORRECTED" : destinationId ? "LINKED" : pendingMatch ? "PENDING" : "IGNORED", contextJson: JSON.stringify({ externalItemId: externalId, fromItemId: entry.existingItemId, toItemId: destinationId }), createdAt: current }).run();
         if (!destinationId && !pendingMatch) continue;
@@ -722,8 +746,12 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
         }
       }
       for (let offset = 0; offset < sourceRowsToInsert.length; offset += 20) await tx.insert(qcImageSources).values(sourceRowsToInsert.slice(offset, offset + 20)).run();
+      manifest.transferSourceIds = [...new Set([...sourceByExternalAndHash.values()].flatMap(({ source }) => source.importId === importId && selectedExternalIds.has(source.externalItemId) && (source.state === "pending" || source.state === "failed") ? [source.id] : []))];
+      result.eligibleSources = manifest.transferSourceIds.length;
+      const confirmedManifestJson = JSON.stringify(manifest);
+      if (Buffer.byteLength(confirmedManifestJson, "utf8") > QC_LIMITS.bodyBytes) throw new DomainError("O manifesto QC excede 1 MiB.", 413, "QC_BODY_LIMIT");
       if (presentationTargetKeys.length) await repairPresentation(tx, row.purchaseId, presentationTargetKeys, current);
-      const updated = await tx.update(qcImports).set({ status: "confirmed", revision: expectedRevision + 1, updatedAt: current }).where(and(eq(qcImports.id, importId), eq(qcImports.revision, expectedRevision))).returning({ id: qcImports.id }).get();
+      const updated = await tx.update(qcImports).set({ manifestJson: confirmedManifestJson, status: "confirmed", revision: expectedRevision + 1, updatedAt: current }).where(and(eq(qcImports.id, importId), eq(qcImports.revision, expectedRevision))).returning({ id: qcImports.id }).get();
       if (!updated) throw new DomainError("A importação foi alterada em outra solicitação.", 409, "QC_REVISION_CONFLICT");
       await tx.insert(qcEvents).values({ id: randomUUID(), workspaceId: purchase.workspaceId, purchaseId: row.purchaseId, actorId: userId, eventType: "QC_IMPORT", resultCode: "CONFIRMED", contextJson: JSON.stringify({ importId, linked: result.linked, ignored: result.ignored, sources: result.sources, restored: result.restored }), createdAt: current }).run();
     }); } finally { await releaseLock(lock); }
@@ -743,6 +771,7 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
         if (external.revision !== expectedRevision || targetKeyForExternal(external) !== null) throw new DomainError("A ocorrência mudou desde que as pendências foram carregadas.", 409, "QC_REVISION_CONFLICT");
         const target = parseTargetKey(targetKey);
         if (!await resolveTarget(tx, purchaseId, target.key)) throw new DomainError("O produto selecionado não pertence a esta compra ou não está registrado.", 403, "QC_ITEM_CROSS_PURCHASE");
+        if ((await photographedTargetKeys(purchaseId, tx)).has(target.key)) throw new DomainError("Este produto já possui fotos QC. Atualize as opções de vínculo.", 409, "QC_TARGET_HAS_PHOTOS");
         const targets = await getTargets(purchaseId, tx);
         const match = suggestQcMatch(occurrenceFromExternal(external), targets);
         if (match.status !== "PENDING" || match.candidates.length === 0) throw new DomainError("Esta ocorrência já não possui candidatos de associação pendentes.", 409, "QC_MATCH_NOT_PENDING");
@@ -1287,16 +1316,18 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
       const external = await db.select({ id: hubbuyExternalItems.id }).from(hubbuyExternalItems).where(and(eq(hubbuyExternalItems.id, externalItemId), eq(hubbuyExternalItems.purchaseId, purchaseId), or(sql`${hubbuyExternalItems.purchaseItemId} IS NOT NULL`, sql`${hubbuyExternalItems.additionalOrderItemId} IS NOT NULL`))).get();
       if (!external) throw new DomainError("Ocorrência QC não encontrada ou ainda não associada.", 404, "QC_EXTERNAL_NOT_FOUND");
     }
+    let transferSourceIds: string[] | undefined;
     if (importId) {
       const manifest = await db.select().from(qcImports).where(and(eq(qcImports.id, importId), eq(qcImports.purchaseId, purchaseId))).get();
       if (!manifest) throw new DomainError("Importação QC não encontrada nesta compra.", 404, "QC_IMPORT_NOT_FOUND");
       if (manifest.status !== "confirmed" || manifest.expiresAt && manifest.expiresAt.getTime() <= now()) throw new DomainError("A importação expirou. Use reconciliar pendências da compra.", 409, "QC_IMPORT_EXPIRED");
       if (expectedRevision !== undefined && manifest.revision !== expectedRevision) throw new DomainError("O progresso da importação mudou. Atualize antes de tentar novamente.", 409, "QC_REVISION_CONFLICT");
+      transferSourceIds = (JSON.parse(manifest.manifestJson) as ImportManifest).transferSourceIds;
     }
     const lock = await acquireLock(purchase.workspaceId);
     try {
       // Select a stable, bounded batch and preserve the current oldest-first order.
-      const eligibleWhere = and(eq(hubbuyExternalItems.purchaseId, purchaseId), inArray(qcImageSources.state, ["pending", "failed"]), ...(importId ? [eq(qcImageSources.importId, importId)] : []), ...(externalItemId ? [eq(qcImageSources.externalItemId, externalItemId)] : []), or(sql`${hubbuyExternalItems.purchaseItemId} IS NOT NULL`, sql`${hubbuyExternalItems.additionalOrderItemId} IS NOT NULL`));
+      const eligibleWhere = and(eq(hubbuyExternalItems.purchaseId, purchaseId), inArray(qcImageSources.state, ["pending", "failed"]), ...(importId ? [eq(qcImageSources.importId, importId)] : []), ...(transferSourceIds ? [inArray(qcImageSources.id, transferSourceIds)] : []), ...(externalItemId ? [eq(qcImageSources.externalItemId, externalItemId)] : []), or(sql`${hubbuyExternalItems.purchaseItemId} IS NOT NULL`, sql`${hubbuyExternalItems.additionalOrderItemId} IS NOT NULL`));
       const eligible = await db.select({ id: qcImageSources.id, updatedAt: qcImageSources.updatedAt, createdAt: qcImageSources.createdAt, ordinal: qcImageSources.ordinal, externalItemId: qcImageSources.externalItemId, purchaseItemId: hubbuyExternalItems.purchaseItemId, additionalOrderItemId: hubbuyExternalItems.additionalOrderItemId }).from(qcImageSources).innerJoin(hubbuyExternalItems, eq(qcImageSources.externalItemId, hubbuyExternalItems.id)).where(eligibleWhere).orderBy(asc(qcImageSources.updatedAt), asc(qcImageSources.createdAt), asc(qcImageSources.ordinal), asc(qcImageSources.id)).limit(QC_LIMITS.batch).all();
       const pendingDeletes = importId || externalItemId ? [] : await db.select({ id: qcImages.id, updatedAt: qcImages.updatedAt }).from(qcImages).innerJoin(hubbuyExternalItems, eq(qcImages.externalItemId, hubbuyExternalItems.id)).where(and(eq(hubbuyExternalItems.purchaseId, purchaseId), eq(qcImages.status, "deleted"), eq(qcImages.deleteState, "pending"))).orderBy(asc(qcImages.updatedAt)).limit(1).all();
       const previewWork = importId || externalItemId ? [] : await db.select({ id: qcImages.id, updatedAt: qcImages.updatedAt }).from(qcImages).innerJoin(hubbuyExternalItems, eq(qcImages.externalItemId, hubbuyExternalItems.id)).leftJoin(qcImagePreviews, eq(qcImagePreviews.imageId, qcImages.id)).where(and(eq(hubbuyExternalItems.purchaseId, purchaseId), eq(qcImages.status, "ready"), or(isNull(qcImagePreviews.imageId), inArray(qcImagePreviews.status, ["pending", "failed"]), and(eq(qcImagePreviews.status, "ready"), sql`${qcImagePreviews.transformVersion} != ${QC_PREVIEW.version}`)))).orderBy(asc(qcImages.updatedAt), asc(qcImages.createdAt), asc(qcImages.id)).limit(1).all();

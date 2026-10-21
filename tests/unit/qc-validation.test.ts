@@ -23,6 +23,24 @@ describe("HubBuy QC parser", () => {
     expect(result.occurrences[0]).toMatchObject({ channel: "2", title: "Título HubBuy" });
   });
 
+  it.each(["goodsName", "title"])("trims outer spaces in %s while preserving the title content", (field) => {
+    const result = parseHubBuyImport(payload({ goodsName: null, [field]: "  DT版本  530系列  " }));
+    expect(result.occurrences[0]?.title).toBe("DT版本  530系列");
+  });
+
+  it("treats a title containing only spaces as absent", () => {
+    expect(parseHubBuyImport(payload({ goodsName: "   " })).occurrences[0]?.title).toBeNull();
+  });
+
+  it.each([123, "x".repeat(2_001), "x".repeat(2_000) + " ", "Title\n", "\tTitle", "Title\u0000", "Title\u007f"])("still rejects invalid title content %#", (goodsName) => {
+    expect(() => parseHubBuyImport(payload({ goodsName }))).toThrow("Campo HubBuy inválido: goodsName/title.");
+  });
+
+  it("keeps identifiers and photo URLs strict about outer spaces", () => {
+    expect(() => parseHubBuyImport(payload({ orderGoodsId: " GOODS-1 " }))).toThrow("Campo HubBuy inválido: orderGoodsId.");
+    expect(() => parseHubBuyImport(payload({ freePhotos: [` ${photoUrl} `] }))).toThrow("Campo HubBuy inválido: URL.");
+  });
+
   it("accepts empty freePhotos and reports a partial page without deleting absent rows", () => {
     const result = parseHubBuyImport({ code: 0, data: { count: 4, list: [{ orderNo: "1", goodsList: [{ orderGoodsNo: "NO-1", freePhotos: [] }] }] } });
     expect(result).toMatchObject({ photoCount: 0, partial: true, reportedCount: 4 });
