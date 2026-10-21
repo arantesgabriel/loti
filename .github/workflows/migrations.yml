@@ -275,53 +275,55 @@ jobs:
       # PUBLICAR VERSÃO APROVADA
       # ========================================
 
-      - name: Publicar deployment
+      - name: Publicar Preview via API Vercel
+        if: github.ref_name == 'dev'
         shell: bash
         env:
           DEPLOY_URL: ${{ steps.staged.outputs.url }}
         run: |
           set -euo pipefail
 
-          if [ -z "$DEPLOY_URL" ]; then
+          if [[ -z "${DEPLOY_URL:-}" ]]; then
             echo "::error::Deployment não encontrado"
             exit 1
           fi
 
-          if [ -z "${VERCEL_TEAM_SLUG:-}" ]; then
-            echo "::error::VERCEL_TEAM_SLUG não configurado"
+          HOST="${DEPLOY_URL#https://}"
+
+          echo "Consultando deployment na Vercel..."
+
+          DEPLOYMENT=$(curl --fail-with-body -sS \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$HOST?teamId=$VERCEL_ORG_ID")
+
+          DEPLOYMENT_ID=$(jq -r \
+            --arg project "$VERCEL_PROJECT_ID" \
+            'if .projectId == $project and .readyState == "READY"
+             then (.id // .uid // empty)
+             else empty end' \
+            <<< "$DEPLOYMENT")
+
+          if [[ -z "$DEPLOYMENT_ID" ]]; then
+            echo "::error::Deployment não está READY ou não pertence ao projeto"
             exit 1
           fi
 
-          if [ "$GITHUB_REF_NAME" = "main" ]; then
-            echo "Promovendo para produção..."
+          echo "Associando dev.useloti.com..."
 
-            vercel promote \
-              "$DEPLOY_URL" \
-              --yes \
-              --scope="$VERCEL_TEAM_SLUG" \
-              --token="$VERCEL_TOKEN"
+          curl --fail-with-body -sS \
+            -X POST \
+            "https://api.vercel.com/v2/deployments/$DEPLOYMENT_ID/aliases?teamId=$VERCEL_ORG_ID" \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data '{"alias":"dev.useloti.com"}' \
+            -o /dev/null
 
-            DOMAIN="useloti.com"
-          else
-            echo "Atualizando Preview..."
-
-            vercel alias set \
-              "$DEPLOY_URL" \
-              dev.useloti.com \
-              --scope="$VERCEL_TEAM_SLUG" \
-              --token="$VERCEL_TOKEN"
-
-            DOMAIN="dev.useloti.com"
-          fi
-
-          echo "Publicação concluída: $DOMAIN"
+          echo "Domínio atualizado com sucesso."
 
           {
-            echo "### Deploy concluído"
+            echo "### Preview publicado"
             echo ""
-            echo "Branch: $GITHUB_REF_NAME"
-            echo ""
-            echo "Domínio: https://$DOMAIN"
+            echo "Domínio: https://dev.useloti.com"
             echo ""
             echo "Deployment: $DEPLOY_URL"
           } >> "$GITHUB_STEP_SUMMARY"
