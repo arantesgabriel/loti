@@ -1,4 +1,3 @@
-
 name: Loti - CI/CD
 
 on:
@@ -8,6 +7,12 @@ on:
       - main
 
   workflow_dispatch:
+    inputs:
+      confirm_production:
+        description: "Confirmo migrations e deploy em Production"
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -19,10 +24,23 @@ concurrency:
 jobs:
   validate:
     name: Validar aplicação
+
+    if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main'
+
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
     steps:
+      - name: Exigir confirmação explícita em Production
+        if: github.ref_name == 'main' && github.event_name == 'workflow_dispatch'
+        env:
+          CONFIRM_PRODUCTION: ${{ inputs.confirm_production }}
+        run: |
+          if [[ "$CONFIRM_PRODUCTION" != "true" ]]; then
+            echo "::error::Production exige confirmação explícita."
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -45,10 +63,11 @@ jobs:
         run: npm run test:unit
 
   deploy:
-    name: Migrations e Deploy
+    name: Build, migrations e publicação
     needs: validate
+    if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     environment:
       name: ${{ github.ref_name == 'main' && 'Production' || 'Development' }}
@@ -56,7 +75,6 @@ jobs:
     env:
       TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
       TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
-
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
@@ -74,39 +92,54 @@ jobs:
       - name: Instalar dependências
         run: npm ci
 
-      - name: Validar configurações
+      - name: Garantir que a execução usa o HEAD da branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          REMOTE_SHA=$(git ls-remote origin "refs/heads/$GITHUB_REF_NAME" | awk '{print $1}')
+          if [[ -z "$REMOTE_SHA" || "$REMOTE_SHA" != "$GITHUB_SHA" ]]; then
+            echo "::error::A branch mudou desde o início da execução. Inicie um novo workflow."
+            exit 1
+          fi
+
+      - name: Validar credenciais e banco Turso
+        shell: bash
         run: |
           set -euo pipefail
 
-          for key in \
-            TURSO_DATABASE_URL \
-            TURSO_AUTH_TOKEN \
-            VERCEL_TOKEN \
-            VERCEL_ORG_ID \
-            VERCEL_PROJECT_ID
-          do
-            if [ -z "${!key:-}" ]; then
-              echo "::error::$key não configurado"
+          for key in TURSO_DATABASE_URL TURSO_AUTH_TOKEN VERCEL_TOKEN VERCEL_ORG_ID VERCEL_PROJECT_ID; do
+            if [[ -z "${!key:-}" ]]; then
+              echo "::error::$key ausente"
               exit 1
             fi
           done
 
-          case "$TURSO_DATABASE_URL" in
-            libsql://*) ;;
-            *)
-              echo "::error::URL Turso inválida"
-              exit 1
-              ;;
-          esac
-
-          echo "Configurações validadas."
+          node --input-type=module <<'NODE'
+          const expected = process.env.GITHUB_REF_NAME === "main" ? "loti-prod" : "loti-dev";
+          let parsed;
+          try {
+            parsed = new URL(process.env.TURSO_DATABASE_URL);
+          } catch {
+            console.error("URL Turso inválida.");
+            process.exit(1);
+          }
+          if (parsed.protocol !== "libsql:" ||
+              !parsed.hostname.startsWith(`${expected}-`) ||
+              !parsed.hostname.endsWith(".turso.io")) {
+            console.error(`Destino Turso incompatível com ${process.env.GITHUB_REF_NAME}.`);
+            process.exit(1);
+          }
+          console.log(`Destino Turso ${expected} validado.`);
+          NODE
 
       - name: Instalar Vercel CLI
-        run: npm install --global vercel@latest
+        run: npm install --global vercel@65.0.0
 
-      - name: Carregar ambiente da Vercel
+      - name: Vincular ambiente Vercel
+        shell: bash
         run: |
-          if [ "$GITHUB_REF_NAME" = "main" ]; then
+          set -euo pipefail
+          if [[ "$GITHUB_REF_NAME" == "main" ]]; then
             vercel pull \
               --yes \
               --environment=production \
@@ -119,75 +152,123 @@ jobs:
               --token="$VERCEL_TOKEN"
           fi
 
-      - name: Validar banco GitHub x Vercel
+      - name: Criar deployment sem atualizar os domínios
+        id: staged
+        shell: bash
         run: |
-          node --input-type=module <<'NODE'
-          import { readFileSync } from "node:fs";
-          import { parse } from "dotenv";
-
-          const environment =
-            process.env.GITHUB_REF_NAME === "main"
-              ? "production"
-              : "preview";
-
-          const path =
-            `.vercel/.env.${environment}.local`;
-
-          const vercelEnv = parse(readFileSync(path));
-
-          for (const key of [
-            "TURSO_DATABASE_URL",
-            "TURSO_AUTH_TOKEN"
-          ]) {
-            if (
-              !vercelEnv[key] ||
-              vercelEnv[key] !== process.env[key]
-            ) {
-              console.error(
-                `Divergência na configuração: ${key}`
-              );
-              process.exit(1);
-            }
-          }
-
-          console.log(
-            "GitHub e Vercel utilizam o mesmo banco."
-          );
-          NODE
-
-      - name: Gerar build
-        run: |
-          if [ "$GITHUB_REF_NAME" = "main" ]; then
-            vercel build \
+          set -euo pipefail
+          if [[ "$GITHUB_REF_NAME" == "main" ]]; then
+            URL=$(vercel deploy \
               --prod \
-              --token="$VERCEL_TOKEN"
+              --skip-domain \
+              --yes \
+              --token="$VERCEL_TOKEN")
           else
-            vercel build \
-              --token="$VERCEL_TOKEN"
+            URL=$(vercel deploy \
+              --yes \
+              --token="$VERCEL_TOKEN")
           fi
+
+          if [[ "$URL" != https://*.vercel.app ]]; then
+            echo "::error::URL de deployment inesperada"
+            exit 1
+          fi
+
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "Build remoto concluído: $URL"
+          echo "### Deployment preparado: $URL" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Validar deployment da Vercel antes das migrations
+        id: inspected
+        shell: bash
+        env:
+          DEPLOY_URL: ${{ steps.staged.outputs.url }}
+        run: |
+          set -euo pipefail
+          HOST="${DEPLOY_URL#https://}"
+
+          DATA=$(curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$HOST?teamId=$VERCEL_ORG_ID")
+
+          EXPECTED_TARGET="preview"
+          if [[ "$GITHUB_REF_NAME" == "main" ]]; then
+            EXPECTED_TARGET="production"
+          fi
+
+          DEPLOYMENT_ID=$(jq -r \
+            --arg project "$VERCEL_PROJECT_ID" \
+            --arg target "$EXPECTED_TARGET" \
+            'if .projectId == $project and .readyState == "READY" and
+                ($target != "production" or .target == "production") and
+                ($target != "preview" or .target != "production")
+             then (.id // .uid // empty) else empty end' <<< "$DATA")
+
+          if [[ -z "$DEPLOYMENT_ID" ]]; then
+            echo "::error::Deployment não está READY, tem ambiente incorreto ou pertence a outro projeto."
+            exit 1
+          fi
+          echo "id=$DEPLOYMENT_ID" >> "$GITHUB_OUTPUT"
 
       - name: Executar migrations
-        run: |
-          echo "Executando migrations..."
-          npm run db:migrate
+        run: npm run db:migrate
 
       - name: Verificar integridade do banco
-        run: |
-          echo "Verificando banco..."
-          npm run db:verify
+        run: npm run db:verify
 
-      - name: Publicar na Vercel
+      - name: Garantir branch atual antes de publicar
+        shell: bash
         run: |
-          if [ "$GITHUB_REF_NAME" = "main" ]; then
-            URL=$(vercel deploy \
-              --prebuilt \
-              --prod \
-              --token="$VERCEL_TOKEN")
-          else
-            URL=$(vercel deploy \
-              --prebuilt \
-              --token="$VERCEL_TOKEN")
+          set -euo pipefail
+          REMOTE_SHA=$(git ls-remote origin "refs/heads/$GITHUB_REF_NAME" | awk '{print $1}')
+          if [[ -z "$REMOTE_SHA" || "$REMOTE_SHA" != "$GITHUB_SHA" ]]; then
+            echo "::error::A branch mudou durante a execução. Deployment preparado, mas não publicado."
+            exit 1
           fi
 
-          echo "Deploy concluído: $URL"
-          echo "Deploy: $URL" >> "$GITHUB_STEP_SUMMARY"
+      - name: Publicar Preview via API Vercel
+        if: github.ref_name == 'dev'
+        shell: bash
+        env:
+          DEPLOYMENT_ID: ${{ steps.inspected.outputs.id }}
+          DEPLOY_URL: ${{ steps.staged.outputs.url }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error \
+            -X POST \
+            "https://api.vercel.com/v2/deployments/$DEPLOYMENT_ID/aliases?teamId=$VERCEL_ORG_ID" \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data '{"alias":"dev.useloti.com"}' \
+            -o /dev/null
+
+          {
+            echo "### Preview publicado"
+            echo "Domínio: https://dev.useloti.com"
+            echo "Deployment: $DEPLOY_URL"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Promover Production via API Vercel
+        if: github.ref_name == 'main'
+        shell: bash
+        env:
+          DEPLOYMENT_ID: ${{ steps.inspected.outputs.id }}
+          DEPLOY_URL: ${{ steps.staged.outputs.url }}
+        run: |
+          set -euo pipefail
+          echo "Solicitando promoção do deployment Production..."
+
+          curl --fail-with-body --silent --show-error \
+            -X POST \
+            "https://api.vercel.com/v10/projects/$VERCEL_PROJECT_ID/promote/$DEPLOYMENT_ID?teamId=$VERCEL_ORG_ID" \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data '{}' \
+            -o /dev/null
+
+          {
+            echo "### Promoção Production solicitada"
+            echo "Domínio previsto: https://useloti.com"
+            echo "Deployment: $DEPLOY_URL"
+            echo "Confira a conclusão da promoção no dashboard Vercel."
+          } >> "$GITHUB_STEP_SUMMARY"
