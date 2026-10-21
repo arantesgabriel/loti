@@ -119,7 +119,8 @@ jobs:
               --token="$VERCEL_TOKEN"
           fi
 
-      - name: Validar banco GitHub x Vercel
+
+      - name: Diagnosticar banco GitHub x Vercel
         run: |
           node --input-type=module <<'NODE'
           import { readFileSync } from "node:fs";
@@ -130,29 +131,45 @@ jobs:
               ? "production"
               : "preview";
 
-          const path =
-            `.vercel/.env.${environment}.local`;
+          const file = `.vercel/.env.${environment}.local`;
+          const vercelEnv = parse(readFileSync(file, "utf8"));
 
-          const vercelEnv = parse(readFileSync(path));
+          let failed = false;
 
           for (const key of [
             "TURSO_DATABASE_URL",
             "TURSO_AUTH_TOKEN"
           ]) {
-            if (
-              !vercelEnv[key] ||
-              vercelEnv[key] !== process.env[key]
-            ) {
-              console.error(
-                `Divergência na configuração: ${key}`
-              );
-              process.exit(1);
+            const github = process.env[key] ?? "";
+            const vercel = vercelEnv[key] ?? "";
+
+            const existsGithub = github.length > 0;
+            const existsVercel = vercel.length > 0;
+            const exact = github === vercel;
+            const trimmedMatch =
+              existsGithub &&
+              existsVercel &&
+              github.trim() === vercel.trim();
+
+            console.log(`\n${key}`);
+            console.log(`GitHub presente: ${existsGithub}`);
+            console.log(`Vercel presente: ${existsVercel}`);
+            console.log(`Valores identicos: ${exact}`);
+            console.log(`Iguais sem espacos externos: ${trimmedMatch}`);
+
+            if (!existsGithub || !existsVercel || !exact) {
+              failed = true;
             }
           }
 
-          console.log(
-            "GitHub e Vercel utilizam o mesmo banco."
-          );
+          if (failed) {
+            console.error(
+              "\nErro: configuracoes divergentes."
+            );
+            process.exit(1);
+          }
+
+          console.log("\nConfiguracoes validadas.");
           NODE
 
       - name: Gerar build
