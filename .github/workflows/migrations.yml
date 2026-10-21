@@ -1,0 +1,67 @@
+
+name: Loti - Database Migrations
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Banco de destino"
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+
+permissions:
+  contents: read
+
+concurrency:
+  group: loti-migrate-${{ inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: ${{ inputs.target }}
+
+    steps:
+      - name: Validar branch
+        env:
+          TARGET: ${{ inputs.target }}
+        run: |
+          case "$TARGET:$GITHUB_REF_NAME" in
+            dev:dev|prod:main) ;;
+            *)
+              echo "::error::Branch incompatível"
+              exit 1
+              ;;
+          esac
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Executar e verificar migrations
+        env:
+          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+        run: |
+          case "$TURSO_DATABASE_URL" in
+            libsql://*) ;;
+            *)
+              echo "::error::URL Turso inválida"
+              exit 1
+              ;;
+          esac
+
+          test -n "$TURSO_AUTH_TOKEN" || exit 1
+
+          npm run db:migrate
+          npm run db:verify
