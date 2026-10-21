@@ -17,3 +17,4 @@ legacy/source/*.xlsx
 .next-e2e-auth-email/
 .next-auth-email-build/
 artifacts/
+.vercel
