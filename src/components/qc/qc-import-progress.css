@@ -8,16 +8,16 @@
 .qc-transfer-hero h3 { margin: 12px 0 6px; font-size: 19px; font-weight: 650; line-height: 1.35; }
 .qc-transfer-hero p { min-height: 3.3em; margin: 0; color: var(--muted); font-size: 13px; line-height: 1.65; }
 .qc-transfer-art { position: relative; width: 156px; height: 92px; margin: 0 auto; color: var(--success); }
-.qc-transfer-art-back { position: absolute; top: 24px; display: grid; place-items: center; width: 62px; height: 72px; border-radius: 12px; background: var(--success-soft); color: #afc8b7; }
+.qc-transfer-art-back { position: absolute; top: 24px; display: grid; place-items: center; width: 62px; height: 72px; border-radius: 12px; background: var(--success-soft); color: var(--transfer-art-muted); }
 .qc-transfer-art-back svg { width: 39px; height: 39px; stroke-width: 1.2; }
 .qc-transfer-art-back.left { left: 9px; transform: rotate(-17deg); }
 .qc-transfer-art-back.right { right: 6px; transform: rotate(15deg); }
-.qc-transfer-art-front { position: absolute; inset: 4px 37px 12px; display: flex; flex-direction: column; gap: 5px; padding: 8px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); box-shadow: 0 6px 16px #24644910; }
+.qc-transfer-art-front { position: absolute; inset: 4px 37px 12px; display: flex; flex-direction: column; gap: 5px; padding: 8px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); box-shadow: 0 6px 16px var(--transfer-shadow); }
 .qc-transfer-art-front > svg { flex: 1; width: 100%; height: 42px; padding: 3px; border-radius: 6px; background: var(--success-soft); }
-.qc-transfer-art-front i { width: 60%; height: 3px; border-radius: 2px; background: #dce8df; }
+.qc-transfer-art-front i { width: 60%; height: 3px; border-radius: 2px; background: var(--transfer-art-line); }
 .qc-transfer-art-front i:last-child { width: 38%; }
-.qc-transfer-art-badge { position: absolute; bottom: 6px; right: 28px; display: grid; place-items: center; width: 40px; height: 40px; border: 3px solid var(--surface); border-radius: 50%; background: var(--success); color: #fff; box-shadow: 0 3px 8px #24644920; }
-.qc-transfer-progress { flex: 0 0 auto; padding: 14px 16px; border-radius: 12px; background: var(--surface-muted, #f5f4f3); }
+.qc-transfer-art-badge { position: absolute; bottom: 6px; right: 28px; display: grid; place-items: center; width: 40px; height: 40px; border: 3px solid var(--surface); border-radius: 50%; background: var(--success); color: var(--on-success); box-shadow: 0 3px 8px var(--transfer-badge-shadow); }
+.qc-transfer-progress { flex: 0 0 auto; padding: 14px 16px; border-radius: 12px; background: var(--surface-muted); }
 .qc-transfer-progress > div:first-child { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 10px; font-size: 12px; font-variant-numeric: tabular-nums; }
 .qc-transfer-progress strong { font-weight: 600; }
 .qc-transfer-track { height: 9px; overflow: hidden; border-radius: 999px; background: var(--border); }
@@ -25,7 +25,7 @@
 .qc-transfer-list { flex: 1 1 150px; min-height: 90px; overflow-y: auto; overscroll-behavior: contain; margin: 0; padding: 0 5px 0 0; list-style: none; scrollbar-width: thin; }
 .qc-transfer-row { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 62px; padding: 9px 4px; border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent); }
 .qc-transfer-row:last-child { border-bottom: 0; }
-.qc-transfer-thumbnail { display: grid; place-items: center; width: 42px; height: 42px; overflow: hidden; border-radius: 8px; background: var(--surface-muted, #f5f4f3); color: #a7aea8; }
+.qc-transfer-thumbnail { display: grid; place-items: center; width: 42px; height: 42px; overflow: hidden; border-radius: 8px; background: var(--surface-muted); color: var(--transfer-placeholder); }
 .qc-transfer-thumbnail img { width: 100%; height: 100%; object-fit: cover; }
 .qc-transfer-thumbnail .qc-preview-placeholder { width: 100%; min-height: 0; height: 100%; font-size: 9px; text-align: center; }
 .qc-transfer-file { min-width: 0; }
@@ -39,7 +39,7 @@
 .qc-transfer-row.success .qc-transfer-state { color: var(--success); }
 .qc-transfer-row.success .qc-transfer-state > svg { animation: qc-transfer-check 180ms ease-out; }
 .qc-transfer-row.error .qc-transfer-state { color: var(--danger); }
-.qc-transfer-row.pending .qc-transfer-state { color: #805d21; }
+.qc-transfer-row.pending .qc-transfer-state { color: var(--warning); }
 .qc-transfer-spinner { animation: qc-transfer-spin 1s linear infinite; }
 .qc-transfer-loading { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 120px; color: var(--muted); font-size: 13px; }
 .qc-transfer-summary { flex: 0 0 auto; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }

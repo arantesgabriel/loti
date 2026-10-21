@@ -78,13 +78,12 @@ test("captures refund readability states with synthetic purchase data", async ({
   const groupToggle = page.locator(".refund-group-toggle:visible").first();
   await groupToggle.click();
   await expect(page.locator(".refund-group-composition:visible")).toContainText("Taxa do pagamento dessas unidades");
-  await expect(page.locator(".refund-record-toggle:visible")).toHaveAttribute("aria-expanded", "false");
-  await page.locator(".refund-record-toggle:visible").first().click();
-  await expect(page.locator(".refund-row:visible .refund-details")).toContainText("Base original da faixa · produto");
+  await expect(page.locator(".refund-record-flat:visible")).toContainText("Cancelamento de uma unidade sintética");
+  await expect(page.locator(".refund-record-flat:visible .refund-events")).toBeVisible();
+  await expect(page.locator(".refund-record-toggle")).toHaveCount(0);
   await capture("04-refund-composition-desktop");
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.locator(".refund-record-toggle:visible").first().click();
   await page.locator(".refund-group-toggle:visible").first().click();
   await page.locator(".refunds-section").scrollIntoViewIfNeeded();
   await capture("05-requested-mobile-390", false);
@@ -127,7 +126,6 @@ test("captures refund readability states with synthetic purchase data", async ({
   await page.goto(`/packages/${trackingId}`);
   await expect(page.getByText("Custos encerrados", { exact: true })).toBeVisible();
   await page.locator(".refund-group-toggle:visible").first().click();
-  await page.locator(".refund-record-toggle:visible").first().click();
   await expect(page.locator(".refunds-section").getByRole("button", { name: "Corrigir valores recebidos", exact: true })).toHaveCount(0);
   await capture("10-closed-desktop");
 });

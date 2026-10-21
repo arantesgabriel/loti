@@ -43,7 +43,7 @@ O cadastro independente também fica simples: abrir **Contas HubBuy** → nome d
 
 ### Área própria: Contas HubBuy
 
-A lista, o saldo por pessoa, o extrato e a conciliação deixam de ocupar o detalhe de cada acompanhamento. Viram uma página própria em `/packages/accounts`, com um item **separado** na navbar lateral, imediatamente abaixo de **Pacotes e custos**, usando ícone de carteira. Não é filho indentado e não há menu/aba “Acompanhamentos · Contas HubBuy” nas páginas. Implementar como `src/app/(app)/packages/accounts/page.tsx`, rota estática que deve ter precedência sobre `[trackingId]`. A ilha mobile mantém os quatro destinos aprovados.
+A lista, o saldo por pessoa, o extrato e a conciliação deixam de ocupar o detalhe de cada acompanhamento. Viram uma página própria em `/packages/accounts`, com um item **separado** na navbar lateral, imediatamente abaixo de **Pacotes e custos**, usando ícone de carteira. Não é filho indentado e não há menu/aba “Acompanhamentos · Contas HubBuy” nas páginas. Implementar como `src/app/(app)/packages/accounts/page.tsx`, rota estática que deve ter precedência sobre `[trackingId]`. A ilha mobile inclui também Contas HubBuy como destino próprio.
 
 O detalhe do acompanhamento não exibe mais a seção extensa de contas e saldo. Continua mostrando o nome da conta associada e usando o seletor de conta nos fluxos que precisam dela. O recebimento de reembolso mantém a criação inline e reduzida a um nome; gerenciamento, conciliação, extrato, titularidade e arquivamento vivem na área própria. Para a densidade não reaparecer nessa nova página, a lista inicial mostra nome, estado, saldo e ação **Gerenciar**; extrato, eventos de conciliação e formulários detalhados abrem sob demanda para a conta escolhida.
 
@@ -94,7 +94,7 @@ Na área **Contas HubBuy e saldo**, a ação de histórico aparece separada como
 
 ### Fase 3 — área própria de contas HubBuy
 
-**Entrega:** separar gerenciamento de conta do detalhe financeiro da compra; a sidebar tem um item próprio, enquanto a ilha mobile conserva os quatro destinos.
+**Entrega:** separar gerenciamento de conta do detalhe financeiro da compra; a sidebar tem um item próprio, e a ilha mobile inclui Contas HubBuy como destino próprio.
 
 1. Criar a página **Contas HubBuy** e seu próprio item visível na navbar lateral, como destino separado imediatamente após **Pacotes e custos**, com ícone pertinente e estado ativo acessível.
 2. Criar `src/app/(app)/packages/accounts/page.tsx` para `/packages/accounts`, garantindo que a rota estática não seja interpretada como `trackingId`; se a estrutura atual pedir outro caminho, manter a relação pai/filho com `/packages`.
@@ -102,9 +102,9 @@ Na área **Contas HubBuy e saldo**, a ação de histórico aparece separada como
 4. Remover o painel detalhado `Contas HubBuy e saldo` do detalhe do acompanhamento. Preservar ali apenas o contexto mínimo da conta usada e links/ações contextuais para a área de contas.
 5. Manter o seletor de conta nos refunds e pedidos adicionais. A criação inline do recebimento não deve abrir nem exigir a página de gerenciamento.
 6. Reutilizar `HubBuyAccountsPanel` extraindo-o para a nova página; passar permissões e dados pelo servidor com autorização do workspace. Não copiar a lógica financeira para um segundo componente/serviço.
-7. Não adicionar abas/submenus “Acompanhamentos” e “Contas HubBuy” nas páginas. O item próprio da sidebar não altera a ilha mobile, que continua com quatro destinos.
+7. Não adicionar abas/submenus “Acompanhamentos” e “Contas HubBuy” nas páginas. O item próprio da sidebar também aparece na ilha mobile como destino Contas HubBuy.
 
-**Gate G3:** área de gestão é independente do detalhe da compra e aparece como item próprio logo abaixo de Pacotes e custos na sidebar; a ilha mobile e seus quatro destinos e todos os deep links financeiros continuam funcionando.
+**Gate G3:** área de gestão é independente do detalhe da compra e aparece como item próprio logo abaixo de Pacotes e custos na sidebar; a ilha mobile e seus cinco destinos e todos os deep links financeiros continuam funcionando.
 
 ### Fase 4 — recuperação segura de contas vazias já cadastradas
 
@@ -156,7 +156,7 @@ Usar a rota/serviço já existentes sempre que possível. O mapa indica responsa
 | Criar conta sem histórico pela área HubBuy | Conta ativa, saldo ¥0, ledger sem crédito, sem formulário de reconciliação. |
 | Acessar Contas HubBuy | Disponível pela página `/packages/accounts` e por item próprio na sidebar logo abaixo de Pacotes e custos; lista e gestão não ficam embutidas em cada acompanhamento. |
 | Abrir a página de contas com várias contas | A listagem mostra resumos; extrato e formulários detalhados só aparecem ao gerenciar uma conta. |
-| Navbar lateral e ilha mobile | Sidebar tem item independente “Contas HubBuy” abaixo de Pacotes e custos; ilha mobile permanece com quatro destinos. |
+| Navbar lateral e ilha mobile | Sidebar tem item independente “Contas HubBuy” abaixo de Pacotes e custos; ilha mobile também inclui Contas HubBuy como destino próprio. |
 | Abrir detalhe de acompanhamento | Mostra contexto mínimo da conta associada, sem repetir lista, extrato e conciliação completos. |
 | Receber refund em conta existente ativa | Mesmo resultado e ledger anteriores, com direitos individuais calculados como hoje. |
 | Receber refund e criar conta no formulário | Uma confirmação cria conta e crédito uma vez; o formulário não exige navegação para outra tela. |

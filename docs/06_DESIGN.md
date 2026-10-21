@@ -1,5 +1,11 @@
 # Design System
 
+## Themes — approved 20 October 2026
+
+Loti supports Claro, Escuro and Sistema from Profile → Aparência. Light remains the default when no valid browser preference exists. The theme is stored per browser, not per account or workspace. Existing layouts, Geist, operational category markers, restrained orange accents and reduced-motion behavior remain unchanged.
+
+Use semantic properties from `src/app/theme.css` in every new visual surface. Its dark palette uses warm neutral surfaces, readable secondary text and distinct financial/status colors; do not invert photos or duplicate component styles with theme conditionals. Brand text, text on orange controls, avatar backgrounds, destructive fills and destructive text have separate roles. The QC viewer keeps a locally dark image stage in both themes. Original editorial and QC image contents are unchanged. See [theme implementation](35_DARK_MODE.md).
+
 ## Direction
 
 The visual direction is intentionally a combination of:
@@ -149,7 +155,7 @@ The final mobile navigation is **not** a full-width fixed bar. It is a floating 
 
 Properties:
 
-- three destinations only;
+- five destinations: Favoritos, Compra, Pacotes e custos, Contas HubBuy and Histórico;
 - compact rounded container;
 - one full-size selection fill slides between destinations;
 - every destination shows its icon; only the active destination shows its short label;
@@ -205,9 +211,9 @@ Use operational Loti typography, colors, buttons and compact rows. Group lists a
 
 The approved structure combines A (QuickSuite financial table) and B (shipment list), with C (Monefy input/financial summary) in existing drawers and D (Smart Split Bill compact expense/detail rows) on mobile. This extends the existing product design system: preserve Geist, warm light background, white surfaces, orange functional accent, quiet borders and category SVG markers. The reference screenshots are not Loti mockups or new asset dependencies.
 
-Desktop separates cost-by-product tables from package lists. Drawers place a clear base/fee/total preview before payment confirmation. Mobile uses compact rows and contextual detail, rather than squeezing all cost columns into the viewport. Distinguish financial pending/paid states from manual package stages, and use text alongside color. In this approved extension, the floating navigation island has **four** destinations: Favorites, Purchase, Pacotes e custos and History; use the short selected label `Pacotes` and preserve touch targets and safe areas.
+Desktop separates cost-by-product tables from package lists. Drawers place a clear base/fee/total preview before payment confirmation. Mobile uses compact rows and contextual detail, rather than squeezing all cost columns into the viewport. Distinguish financial pending/paid states from manual package stages, and use text alongside color. In this approved extension, the floating navigation island has **five** destinations: Favorites, Purchase, Pacotes e custos, Contas HubBuy and History; use the short selected labels `Pacotes` and `Contas` and preserve touch targets and safe areas.
 
-The earlier three-destination rule describes the original MVP; this extension explicitly adds the fourth. Sources/images and boundaries: [approved reference sheet](design/PACKAGES_AND_COSTS_REFERENCES.md). Concrete layout and visual QA: [implementation plan, section 7](21_PACKAGES_AND_COSTS_PLAN.md#7-experiência-de-uso).
+The earlier three-destination rule describes the original MVP; later approved extensions add Pacotes e custos and Contas HubBuy. Sources/images and boundaries: [approved reference sheet](design/PACKAGES_AND_COSTS_REFERENCES.md). Concrete layout and visual QA: [implementation plan, section 7](21_PACKAGES_AND_COSTS_PLAN.md#7-experiência-de-uso).
 
 ## Mobile surfaces
 

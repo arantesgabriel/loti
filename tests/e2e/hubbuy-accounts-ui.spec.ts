@@ -126,7 +126,7 @@ test("individual rights show remaining products, accessible expansion and full-w
   }
   await page.goto("/packages/accounts");
   await page.getByRole("navigation", { name: "Contas HubBuy cadastradas" }).getByRole("button").filter({ hasText: label }).click();
-  const rights = page.getByRole("region", { name: "Direitos individuais", exact: true });
+  const rights = page.getByRole("region", { name: "Saldo por pessoa", exact: true });
   const person = rights.getByRole("region", { name: `Direitos de ${memberName}`, exact: true });
   await expect(person).toContainText("¥ 75,92 · R$ 57,00");
   await expect(person.getByRole("listitem")).toHaveCount(3);

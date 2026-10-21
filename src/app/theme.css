@@ -1,0 +1,235 @@
+/* Semantic palette. Light values preserve the existing Loti surfaces. */
+:root {
+    color-scheme: light;
+    --background: #faf8f5;
+    --surface: #fff;
+    --surface-muted: #f5f2ee;
+    --foreground: #221d21;
+    --muted: #625b60;
+    --primary: #f77014;
+    --primary-hover: #d93807;
+    --primary-ink: #a63607;
+    --primary-soft: #fff0e6;
+    --primary-soft-hover: #ffe3d0;
+    --on-primary: #1c0113;
+    --on-primary-hover: #fff;
+    --on-primary-ink: #fff;
+    --brand: #1c0113;
+    --avatar-strong: #1c0113;
+    --on-avatar-strong: #fff;
+    --avatar-muted: #ece6e0;
+    --border: #e9e4df;
+    --border-subtle: #f0ece8;
+    --border-control: #998b80;
+    --border-hover: #c8b6ac;
+    --border-emphasis: #d8cec6;
+    --focus-ring: #a63607;
+    --field-focus: #91817a;
+    --checkbox-border: #95877d;
+    --danger: #a30006;
+    --danger-fill: #a30006;
+    --on-danger: #fff;
+    --danger-soft: #fcebed;
+    --danger-ink: #912032;
+    --success: #246449;
+    --success-soft: #eaf4ed;
+    --on-success: #fff;
+    --warning: #805d21;
+    --warning-soft: #fff7ed;
+    --info: #325775;
+    --info-soft: #eff6fc;
+    --sidebar-surface: #fcfaf7;
+    --surface-hover: #fdfbf8;
+    --surface-selected: #fff9f4;
+    --sharing-selected: #fffaf6;
+    --segmented-surface: #f2eeea;
+    --overlay: rgb(28 1 19 / .28);
+    --shadow-nav: rgb(28 1 19 / .12);
+    --shadow-menu: rgb(28 1 19 / .08);
+    --shadow-action: rgb(247 112 20 / .2);
+    --carousel-control-border: rgb(166 54 7 / .18);
+    --carousel-control-surface: rgb(255 255 255 / .6);
+    --carousel-dot: rgb(166 54 7 / .3);
+
+    /* Financial presentation retains its existing light hierarchy. */
+    --financial-foreground: #211d1b;
+    --financial-muted: #766f6a;
+    --financial-audit: #766f6a;
+    --financial-secondary: #625b57;
+    --financial-accent: #b24e18;
+    --financial-border: #e9e4e0;
+    --financial-surface-muted: #f7f5f3;
+    --financial-detail-surface: #fcf7f1;
+    --financial-background: #fbfaf9;
+    --financial-success: #367154;
+    --financial-success-soft: #eaf5ee;
+    --account-link: #966448;
+
+    /* Editorial illustrations remain original; only their surrounding UI changes. */
+    --story-tint: #fff7f1;
+    --story-shadow: 0 16px 40px rgb(89 48 23 / .09);
+    --story-dot: #d7d0cb;
+    --story-member-warm-surface: #ffdfca;
+    --story-member-warm-ink: #933a12;
+    --story-member-purple-surface: #e9dfff;
+    --story-member-purple-ink: #56348c;
+    --story-member-green-surface: #dfeedd;
+    --story-member-green-ink: #315d35;
+    --story-member-rose-surface: #ffe0e5;
+    --story-member-rose-ink: #963545;
+    --story-member-blue-surface: #dfe8ff;
+    --story-member-blue-ink: #345396;
+    --transfer-art-muted: #afc8b7;
+    --transfer-art-line: #dce8df;
+    --transfer-placeholder: #a7aea8;
+    --transfer-shadow: #24644910;
+    --transfer-badge-shadow: #24644920;
+}
+
+.theme-options {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.theme-option {
+    position: relative;
+    min-width: 0;
+    margin: 0;
+    cursor: pointer;
+}
+
+.theme-option input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    opacity: 0;
+}
+
+.theme-option > span {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 48px;
+    padding: 10px 6px;
+    border: 1px solid var(--border-control);
+    border-radius: 10px;
+    color: var(--muted);
+    background: var(--surface);
+    font-size: 13px;
+}
+
+.theme-option:hover > span { background: var(--surface-muted); }
+.theme-option input:checked + span { border-color: var(--primary-ink); background: var(--primary-soft); color: var(--primary-ink); }
+.theme-option input:focus-visible + span { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+
+/* Sonner has its own theme boundary; align its dark palette with the app. */
+:root [data-sonner-toaster][data-sonner-theme="dark"] {
+    --normal-bg: var(--surface);
+    --normal-text: var(--foreground);
+    --normal-border: var(--border);
+    --success-bg: var(--success-soft);
+    --success-text: var(--success);
+    --success-border: var(--success);
+    --error-bg: var(--danger-soft);
+    --error-text: var(--danger);
+    --error-border: var(--danger);
+    --warning-bg: var(--warning-soft);
+    --warning-text: var(--warning);
+    --warning-border: var(--warning);
+    --info-bg: var(--info-soft);
+    --info-text: var(--info);
+    --info-border: var(--info);
+}
+
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --background: #1b191a;
+    --surface: #242123;
+    --surface-muted: #2e292b;
+    --foreground: #f2ece8;
+    --muted: #bdb1b5;
+    --primary: #f77014;
+    --primary-hover: #ff9650;
+    --primary-ink: #ffac73;
+    --primary-soft: #3b291f;
+    --primary-soft-hover: #493123;
+    --on-primary: #1c0113;
+    --on-primary-hover: #1c0113;
+    --on-primary-ink: #24180f;
+    --brand: #f2ece8;
+    --avatar-strong: #e8dcd3;
+    --on-avatar-strong: #261c20;
+    --avatar-muted: #393034;
+    --border: #443b3e;
+    --border-subtle: #393235;
+    --border-control: #8e7d84;
+    --border-hover: #b49a90;
+    --border-emphasis: #8e7d84;
+    --focus-ring: #ffac73;
+    --field-focus: #ffac73;
+    --checkbox-border: #a08c94;
+    --danger: #ff9fa5;
+    --danger-fill: #a30006;
+    --on-danger: #fff;
+    --danger-soft: #44252d;
+    --danger-ink: #ffa6b5;
+    --success: #94d6af;
+    --success-soft: #23372c;
+    --on-success: #16251c;
+    --warning: #edc57b;
+    --warning-soft: #3b3020;
+    --info: #a9d0ef;
+    --info-soft: #24333f;
+    --sidebar-surface: #211e20;
+    --surface-hover: #302a2d;
+    --surface-selected: #34271f;
+    --sharing-selected: #34271f;
+    --segmented-surface: #2b2528;
+    --overlay: rgb(0 0 0 / .65);
+    --shadow-nav: rgb(0 0 0 / .35);
+    --shadow-menu: rgb(0 0 0 / .3);
+    --shadow-action: rgb(0 0 0 / .3);
+    --carousel-control-border: rgb(255 172 115 / .4);
+    --carousel-control-surface: rgb(36 33 35 / .85);
+    --carousel-dot: rgb(255 172 115 / .5);
+    --financial-foreground: var(--foreground);
+    --financial-muted: var(--muted);
+    --financial-audit: var(--muted);
+    --financial-secondary: var(--muted);
+    --financial-accent: var(--primary-ink);
+    --financial-border: var(--border);
+    --financial-surface-muted: var(--surface-muted);
+    --financial-detail-surface: #302722;
+    --financial-background: var(--background);
+    --financial-success: var(--success);
+    --financial-success-soft: var(--success-soft);
+    --account-link: var(--primary-ink);
+    --story-tint: #292021;
+    --story-shadow: 0 16px 40px rgb(0 0 0 / .24);
+    --story-dot: #a18e91;
+    --story-member-warm-surface: #513023;
+    --story-member-warm-ink: #ffc39d;
+    --story-member-purple-surface: #3e2e50;
+    --story-member-purple-ink: #d8baff;
+    --story-member-green-surface: #2e4030;
+    --story-member-green-ink: #b7dfb1;
+    --story-member-rose-surface: #4d2c36;
+    --story-member-rose-ink: #ffb8c8;
+    --story-member-blue-surface: #2b3850;
+    --story-member-blue-ink: #b6cdff;
+    --transfer-art-muted: #8bad99;
+    --transfer-art-line: #44604e;
+    --transfer-placeholder: #b1bdb5;
+    --transfer-shadow: rgb(0 0 0 / .15);
+    --transfer-badge-shadow: rgb(0 0 0 / .25);
+}
