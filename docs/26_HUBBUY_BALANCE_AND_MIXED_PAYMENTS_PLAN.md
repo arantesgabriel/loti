@@ -1,5 +1,7 @@
 # Plano faseado — saldo HubBuy, pagamentos mistos e pedidos adicionais
 
+Extensão de 21/10/2026: [créditos e ajustes manuais](37_HUBBUY_MANUAL_BALANCE_ADJUSTMENTS_PLAN.md) detalha entradas/saídas motivadas, bônus com base BRL zero, anulações auditáveis e solicitação nativa de refund para itens financiados com base zero. Preserva D1–D3, o ledger existente e a distinção entre conciliação legada e eventos novos.
+
 Data: 17/10/2026. Status: **implementação local concluída e validada; sem migração remota ou dados reais**.
 
 Base inspecionada: commit `3a0c5d4149dbaec801b4c656de11a20f01624844`, com trabalho local preexistente. Fundamentação: [investigação técnica e funcional](C:/Fontes/loti/docs/audits/2026-10-17_HUBBUY_BALANCE_AND_MIXED_PAYMENTS.md).

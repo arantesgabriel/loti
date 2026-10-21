@@ -40,6 +40,7 @@ Authentication email extension: [`31_AUTH_EMAIL_SECURITY_PLAN.md`](31_AUTH_EMAIL
 | `33_QC_VIEWER_PERFORMANCE_PLAN.md` | Implementation plan for private QC preview caching, conditional HTTP revalidation, batched presentation reads, visibility-based loading and performance validation |
 | `34_HUBBUY_INDIVIDUAL_RIGHTS_ORIGINS_PLAN.md` | Individual HubBuy rights broken down by remaining product credits, reconciled opening balances and restored credits |
 | `35_DARK_MODE.md` | Browser theme preference, semantic light/dark palettes, accessibility and local validation |
+| `37_HUBBUY_MANUAL_BALANCE_ADJUSTMENTS_PLAN.md` | Implementation handoff for manual CNY credits/debits, promotional bonuses, audited reversals, individual ownership and zero-BRL refund compatibility |
 | `audits/2026-10-17_HUBBUY_BALANCE_AND_MIXED_PAYMENTS.md` | Technical and functional investigation supporting the HubBuy balance and mixed-payment proposal |
 | `design/REFERENCES.md` | Figma and palette inspiration URLs |
 | `design/PACKAGES_AND_COSTS_REFERENCES.md` | Approved A/B/C/D visual references, images and acceptance for Pacotes e custos |

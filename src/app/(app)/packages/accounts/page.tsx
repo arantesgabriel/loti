@@ -18,6 +18,6 @@ export default async function HubBuyAccountsPage() {
   ]);
   return <>
     <div className="page-heading"><div><h1>Contas HubBuy</h1><p className="muted">Gerencie as contas do grupo e confira saldo, direitos e movimentações.</p></div></div>
-    <HubBuyAccountsPanel workspaceId={membership.workspaceId} members={members} initialAccounts={accounts} />
+    <HubBuyAccountsPanel workspaceId={membership.workspaceId} actorId={currentUser.id} members={members} initialAccounts={accounts} />
   </>;
 }

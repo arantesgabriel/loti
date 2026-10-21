@@ -26,6 +26,8 @@ type RefundItem = {
   display: DisplayItem;
   productTotalCents: number | null;
   chinaTotalCents: number | null;
+  nativeProductCnyMinor?: number;
+  nativeChinaCnyMinor?: number;
   legacyItem: Item | null;
 };
 type RefundGroup = Detail["financialDisplay"]["refundGroups"][number] & {
@@ -74,6 +76,8 @@ function fullAmounts(item: RefundItem, quantity: number) {
   return {
     product: item.productTotalCents === null ? 0 : refundUnitRangeCapacityCents(item.productTotalCents, item.original.quantity, start, quantity),
     china: item.chinaTotalCents === null ? 0 : refundUnitRangeCapacityCents(item.chinaTotalCents, item.original.quantity, start, quantity),
+    nativeProduct: refundUnitRangeCapacityCents(item.nativeProductCnyMinor ?? 0, item.original.quantity, start, quantity),
+    nativeChina: refundUnitRangeCapacityCents(item.nativeChinaCnyMinor ?? 0, item.original.quantity, start, quantity),
     fee: item.display.remaining.productFee.finalCents === null ? null : refundUnitRangeCapacityCents(item.display.remaining.productFee.finalCents + (item.display.cancelled?.productFeeCents ?? 0), item.original.quantity, start, quantity),
   };
 }
@@ -99,6 +103,7 @@ export function RefundsSection({ detail, locked, busy, requestItemId, onRequestC
       productTotalCents: totalBase(displayById.get(row.cost.id)!, "product"),
       chinaTotalCents: totalBase(displayById.get(row.cost.id)!, "china"),
       legacyItem: null,
+      nativeProductCnyMinor: row.cost.nativeProductCnyMinor ?? 0, nativeChinaCnyMinor: row.cost.nativeChinaCnyMinor ?? 0,
     }] : [])),
   ];
   const itemByCostId = new Map(refundItems.map(item => [item.id, item]));
@@ -115,6 +120,7 @@ export function RefundsSection({ detail, locked, busy, requestItemId, onRequestC
   const cancelledUnits = groups.reduce((sum, group) => sum + group.cancelledQuantity, 0);
   const retainedTotal = groups.reduce((sum, group) => sum + group.retainedCents, 0);
   const hubbuyReceipts = detail.refunds.filter(refund => refund.status === "received" && refund.refundDestination === "hubbuy");
+  const hubbuyReceivedCny = hubbuyReceipts.reduce((sum, refund) => sum + (refund.receivedProductCnyMinor ?? 0) + (refund.receivedChinaCnyMinor ?? 0), 0);
   const hubbuyReceivedCents = hubbuyReceipts.reduce((sum, refund) => sum + (refund.receivedProductCents ?? 0) + (refund.receivedChinaCents ?? 0), 0);
 
   function openRefund(refund: Refund, nextMode: typeof mode) { setActiveRefundId(refund.id); setMode(nextMode); }
@@ -125,7 +131,7 @@ export function RefundsSection({ detail, locked, busy, requestItemId, onRequestC
 
   return <>
     {detail.refunds.length > 0 && <div className="cost-section-content"><section className="refunds-section" aria-labelledby="refunds-title" data-cost-target="refunds-section" tabIndex={-1}>
-      {hubbuyReceipts.length > 0 && <aside className="cost-hubbuy-credit" aria-label="Crédito recebido na HubBuy"><span className="cost-hubbuy-credit-icon" aria-hidden="true">↗</span><div><strong>Crédito de reembolso na HubBuy</strong><p>Recebimento registrado em saldo CNY na conta HubBuy.</p><small>O saldo pode ser usado depois; não é abatido automaticamente do pacote.</small></div><span className="cost-payment-register-status paid">Recebimento registrado</span><strong>{formatMoney(hubbuyReceivedCents)}</strong></aside>}
+      {hubbuyReceipts.length > 0 && <aside className="cost-hubbuy-credit" aria-label="Crédito recebido na HubBuy"><span className="cost-hubbuy-credit-icon" aria-hidden="true">↗</span><div><strong>Crédito de reembolso na HubBuy</strong><p>Recebimento registrado em saldo CNY na conta HubBuy.</p><small>O saldo pode ser usado depois; não é abatido automaticamente do pacote.</small></div><span className="cost-payment-register-status paid">Recebimento registrado</span><strong>{formatCnyMinor(hubbuyReceivedCny)} · {formatMoney(hubbuyReceivedCents)}</strong></aside>}
       <header className="refunds-heading"><div><h2 id="refunds-title">Produtos reembolsados</h2><p>{groups.length > 0 ? `${groups.length} ${groups.length === 1 ? "produto" : "produtos"} · ${cancelledUnits} ${cancelledUnits === 1 ? "unidade cancelada" : "unidades canceladas"}` : "Nenhum reembolso ativo."}</p></div>
         <div className="refunds-total"><span>Total recebido</span><strong>{formatMoney(detail.refundsSummary.receivedCents)}</strong>{requested.length > 0 && <small>A receber: {formatMoney(detail.refundsSummary.requestedCents)}</small>}{groups.length > 0 && <small>{groups.some(group => group.awaitingReceipt) ? "Custos mantidos até agora" : "Custos mantidos"}: {formatMoney(retainedTotal)}</small>}</div>
       </header>
@@ -190,12 +196,14 @@ function RefundRow({ grouped, refund, detail, item, capacity, locked, busy, onDe
   const panelId = useId();
   const name = item ? itemLabel(item) : "Produto";
   const received = refund.status === "received";
+  const nativeRequested = !received && refund.requestedProductCnyMinor !== null ? (refund.requestedProductCnyMinor ?? 0) + (refund.requestedChinaCnyMinor ?? 0) : null;
+  const nativeReceived = (refund.receivedProductCnyMinor ?? 0) + (refund.receivedChinaCnyMinor ?? 0);
   const amount = received ? (refund.receivedProductCents ?? 0) + (refund.receivedChinaCents ?? 0) : refund.requestedProductCents + refund.requestedChinaCents;
   const date = new Date(refund.status === "voided" ? refund.voidedAt ?? refund.requestedAt : received ? refund.receivedAt ?? refund.requestedAt : refund.requestedAt);
   const StatusIcon = received ? CircleCheck : refund.status === "requested" ? Clock3 : CircleX;
   const paymentMethod = refund.originalPaymentMethod === "pix" ? "Pix" : refund.originalPaymentMethod === "card" ? "Cartão" : null;
   if (grouped) return <article className={`refund-row refund-record-flat status-${refund.status}`} id={`refund-${refund.id}`}>
-    <div className="refund-record-context"><span className="refund-status"><StatusIcon size={14} aria-hidden="true"/>{received ? "Recebimento registrado" : "Aguardando reembolso"}</span><time dateTime={date.toISOString()}>{date.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}</time>{paymentMethod && <span>Pagamento original · {paymentMethod}</span>}{grouped === "multiple" && <strong>{formatMoney(amount)}</strong>}</div>
+    <div className="refund-record-context"><span className="refund-status"><StatusIcon size={14} aria-hidden="true"/>{received ? "Recebimento registrado" : "Aguardando reembolso"}</span><time dateTime={date.toISOString()}>{date.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}</time>{paymentMethod && <span>Pagamento original · {paymentMethod}</span>}{grouped === "multiple" && <strong>{formatMoney(amount)}{nativeRequested !== null && <small>{formatCnyMinor(nativeRequested)} solicitado</small>}</strong>}</div>
     {refund.reason && <p className="refund-record-reason">{refund.reason}</p>}
     <RefundDetails refund={refund} detail={detail} capacity={capacity} compact={grouped}/>
     {!locked && <div className="refund-row-actions">
@@ -209,8 +217,8 @@ function RefundRow({ grouped, refund, detail, item, capacity, locked, busy, onDe
       <div className="refund-product">
         {item ? <RefundQcIdentity purchaseId={detail.purchase.id} itemId={`${item.origin}:${item.original.id}`} itemName={name} visualKey={item.original.visualKey} subtitle={refund.participants.map(person => person.name).join(" · ")}/> : <div><h3>{name}</h3><p>{refund.participants.map(person => person.name).join(" · ")}</p></div>}
       </div>
-      <div className="refund-context"><span className="refund-status"><StatusIcon size={14} aria-hidden="true"/>{received ? amount === 0 ? "Recebimento encerrado sem devolução" : "Recebimento registrado" : refund.status === "requested" ? "Aguardando reembolso" : "Anulado"}</span><p><time dateTime={date.toISOString()}>{date.toLocaleDateString("pt-BR", { day: "numeric", month: "short", year: "numeric", timeZone: "America/Sao_Paulo" }).replaceAll(" de ", " ")}</time><span aria-hidden="true"> · </span>{refund.status === "voided" ? refund.voidReason : refund.reason}</p></div>
-      <div className="refund-amount"><strong>{refund.status === "voided" ? "Sem crédito ativo" : formatMoney(amount)}</strong><small>{refund.status === "requested" ? "Valor solicitado" : paymentMethod ? `Pagamento original · ${paymentMethod}` : ""}</small></div>
+      <div className="refund-context"><span className="refund-status"><StatusIcon size={14} aria-hidden="true"/>{received ? amount === 0 && nativeReceived === 0 ? "Recebimento encerrado sem devolução" : "Recebimento registrado" : refund.status === "requested" ? "Aguardando reembolso" : "Anulado"}</span><p><time dateTime={date.toISOString()}>{date.toLocaleDateString("pt-BR", { day: "numeric", month: "short", year: "numeric", timeZone: "America/Sao_Paulo" }).replaceAll(" de ", " ")}</time><span aria-hidden="true"> · </span>{refund.status === "voided" ? refund.voidReason : refund.reason}</p></div>
+      <div className="refund-amount"><strong>{refund.status === "voided" ? "Sem crédito ativo" : nativeRequested !== null ? `${formatCnyMinor(nativeRequested)} · ${formatMoney(amount)}` : nativeReceived > 0 ? `${formatCnyMinor(nativeReceived)} · ${formatMoney(amount)}` : formatMoney(amount)}</strong><small>{refund.status === "requested" ? "Valor solicitado" : paymentMethod ? `Pagamento original · ${paymentMethod}` : ""}</small></div>
       <Button className="refund-details-toggle refund-record-toggle" size="sm" variant="outline" aria-expanded={expanded} aria-controls={panelId} aria-label={`${expanded ? "Recolher detalhes" : "Ver detalhes"} de ${name}`} onClick={() => setExpanded(value => !value)}>{expanded ? "Recolher detalhes" : "Ver detalhes"}<ChevronDown size={16} aria-hidden="true"/></Button>
     </div>
     <div className="refund-details-panel" id={panelId} inert={!expanded} aria-hidden={!expanded} data-expanded={expanded}><div>
@@ -232,6 +240,7 @@ function RefundDetails({ refund, capacity, detail, compact }: { refund: Refund; 
   const accountLabel = detail.hubbuyAccounts.find(account => account.id === refund.hubbuyAccountId)?.label ?? "Conta removida";
   return <div className="refund-details">
     <dl>
+      {refund.requestedProductCnyMinor !== null && <div><dt>Valor nativo solicitado</dt><dd>{formatCnyMinor((refund.requestedProductCnyMinor ?? 0) + (refund.requestedChinaCnyMinor ?? 0))} · base {formatMoney(refund.requestedProductCents + refund.requestedChinaCents)}</dd></div>}
       {compact !== "single" && <><div><dt>Unidades</dt><dd>{refund.quantity} {refund.quantity === 1 ? "unidade cancelada" : "unidades canceladas"}{refund.status === "voided" ? " · cancelamento anulado" : ""}</dd></div>
       <div><dt>Base original da faixa · produto</dt><dd>{capacity?.productCapacityCents == null ? "Não disponível no registro histórico" : formatMoney(capacity.productCapacityCents)}</dd></div>
       <div><dt>Base original da faixa · frete China</dt><dd>{capacity?.chinaCapacityCents == null ? "Não disponível no registro histórico" : formatMoney(capacity.chinaCapacityCents)}</dd></div>
@@ -259,6 +268,10 @@ function RefundRequestSurface({ item, detail, busy, onClose, onSubmit }: { item:
   const selectedAmounts = fullAmounts(item, selectedQuantity);
   const [requestedProduct, setRequestedProduct] = useState(formatInput(initialAmounts.product));
   const [requestedChina, setRequestedChina] = useState(formatInput(initialAmounts.china));
+  const [requestedProductCny, setRequestedProductCny] = useState(formatInput(initialAmounts.nativeProduct));
+  const [requestedChinaCny, setRequestedChinaCny] = useState(formatInput(initialAmounts.nativeChina));
+  const nativeOnly = item.origin === "additional" && selectedAmounts.product + selectedAmounts.china === 0 && selectedAmounts.nativeProduct + selectedAmounts.nativeChina > 0;
+  const requestedProductCnyMinor = parseCostCents(requestedProductCny), requestedChinaCnyMinor = parseCostCents(requestedChinaCny);
   const [manualProduct, setManualProduct] = useState(false), [manualChina, setManualChina] = useState(false);
   const [reason, setReason] = useState("");
   const paidAffected = eligiblePackages.filter(pkg => (packageQuantities[pkg.id] ?? 0) > 0).flatMap(pkg => [pkg.brazilFreightCharge, pkg.customsCharge]).filter(charge => charge?.paymentStatus === "paid");
@@ -269,13 +282,14 @@ function RefundRequestSurface({ item, detail, busy, onClose, onSubmit }: { item:
   });
   const productCents = parseCostCents(requestedProduct), chinaCents = parseCostCents(requestedChina);
   const removalTotal = Object.values(packageQuantities).reduce((sum, quantity) => sum + quantity, 0);
-  const valid = selectedQuantity > 0 && removalTotal + unassignedQuantity === selectedQuantity && productCents !== null && chinaCents !== null && productCents + chinaCents > 0 && reason.trim().length > 0 && !emptiedPaidPackage;
+  const valid = selectedQuantity > 0 && removalTotal + unassignedQuantity === selectedQuantity && productCents !== null && chinaCents !== null && (productCents + chinaCents > 0 || nativeOnly && requestedProductCnyMinor !== null && requestedChinaCnyMinor !== null && requestedProductCnyMinor + requestedChinaCnyMinor > 0) && reason.trim().length > 0 && !emptiedPaidPackage;
 
   function updateQuantity(packageId: string, next: number) {
     const safe = Math.max(0, Math.min(next, eligiblePackages.find(pkg => pkg.id === packageId)?.items.find(row => row.costItemId === item.id)?.quantity ?? 0));
     setPackageQuantities(current => ({ ...current, [packageId]: safe }));
     const selected = Object.entries({ ...packageQuantities, [packageId]: safe }).reduce((sum, [, quantity]) => sum + quantity, 0) + unassignedQuantity;
     const amounts = fullAmounts(item, selected);
+    setRequestedProductCny(formatInput(amounts.nativeProduct)); setRequestedChinaCny(formatInput(amounts.nativeChina));
     if (!manualProduct) setRequestedProduct(formatInput(amounts.product));
     if (!manualChina) setRequestedChina(formatInput(amounts.china));
   }
@@ -285,6 +299,7 @@ function RefundRequestSurface({ item, detail, busy, onClose, onSubmit }: { item:
     setUnassignedQuantity(safe);
     const selected = Object.values(packageQuantities).reduce((sum, quantity) => sum + quantity, 0) + safe;
     const amounts = fullAmounts(item, selected);
+    setRequestedProductCny(formatInput(amounts.nativeProduct)); setRequestedChinaCny(formatInput(amounts.nativeChina));
     if (!manualProduct) setRequestedProduct(formatInput(amounts.product));
     if (!manualChina) setRequestedChina(formatInput(amounts.china));
   }
@@ -292,7 +307,7 @@ function RefundRequestSurface({ item, detail, busy, onClose, onSubmit }: { item:
   function applyFullAmounts() { const amounts = fullAmounts(item, selectedQuantity); setManualProduct(false); setManualChina(false); setRequestedProduct(formatInput(amounts.product)); setRequestedChina(formatInput(amounts.china)); }
 
   return <Surface sheet open className="refund-request-sheet" title="Registrar reembolso" subtitle={item.original.name} description="Somente unidades ainda em preparação ou sem pacote podem ser canceladas. O status logístico é manual; confirme que as unidades não foram enviadas." onOpenChange={open => { if (!open && !busy) onClose(); }}>
-    <form onSubmit={event => { event.preventDefault(); if (!valid || productCents === null || chinaCents === null) return; void onSubmit({ expectedRevision: detail.tracking.revision, costItemId: item.id, quantity: selectedQuantity, requestedProductCents: productCents, requestedChinaCents: chinaCents, reason, packageRemovals: eligiblePackages.map(pkg => ({ packageId: pkg.id, quantity: packageQuantities[pkg.id] ?? 0 })).filter(row => row.quantity > 0), unassignedQuantity }); }}>
+    <form onSubmit={event => { event.preventDefault(); if (!valid || productCents === null || chinaCents === null) return; void onSubmit({ expectedRevision: detail.tracking.revision, costItemId: item.id, quantity: selectedQuantity, requestedProductCents: productCents, requestedChinaCents: chinaCents, ...(nativeOnly ? { requestedProductCnyMinor, requestedChinaCnyMinor } : {}), reason, packageRemovals: eligiblePackages.map(pkg => ({ packageId: pkg.id, quantity: packageQuantities[pkg.id] ?? 0 })).filter(row => row.quantity > 0), unassignedQuantity }); }}>
       <p className="refund-request-context"><Box size={20} aria-hidden="true"/><span>{item.original.variant || "Sem variação"} · {itemUnitsSummary(item)}</span></p>
       <fieldset className="refund-request-units"><legend>Selecionar unidades</legend>
         <p className="refund-request-help">Escolha quantas unidades deseja retirar do estoque.</p>
@@ -301,13 +316,14 @@ function RefundRequestSurface({ item, detail, busy, onClose, onSubmit }: { item:
         <p className="refund-request-help">Quantidade selecionada: {selectedQuantity}</p>
       </fieldset>
       <section className="refund-request-values" aria-labelledby="refund-values-title">
+        {nativeOnly && <><p className="muted">Estas unidades foram financiadas com base histórica R$0,00. Solicite o valor nativo sem criar custo em reais.</p><div className="refund-money-fields"><label>Produto solicitado (CNY)<input required inputMode="decimal" value={requestedProductCny} onChange={event => setRequestedProductCny(event.target.value)}/></label><label>Frete China solicitado (CNY)<input required inputMode="decimal" value={requestedChinaCny} onChange={event => setRequestedChinaCny(event.target.value)}/></label></div></>}
         <h3 id="refund-values-title">Valores</h3>
         <div className="refund-money-fields"><label>Valor do produto (R$)<input required inputMode="decimal" value={requestedProduct} onChange={event => { setManualProduct(true); setRequestedProduct(event.target.value); }} aria-invalid={productCents === null}/></label><label>Valor do frete China (R$)<input required inputMode="decimal" value={requestedChina} onChange={event => { setManualChina(true); setRequestedChina(event.target.value); }} aria-invalid={chinaCents === null}/></label></div>
         <div className="refund-request-full-amount"><button type="button" role="switch" aria-checked={!manualProduct && !manualChina} aria-label="Usar valor integral" aria-describedby="refund-full-amount-help" disabled={busy || selectedQuantity === 0} onClick={() => { if (manualProduct || manualChina) applyFullAmounts(); else { setManualProduct(true); setManualChina(true); } }}><span aria-hidden="true"/></button><span>Usar valor integral</span><Info size={16} aria-hidden="true"/></div>
         <p id="refund-full-amount-help" className="sr-only">Preenche os valores totais de produto e frete China das unidades selecionadas. Desative para manter valores manuais.</p>
       </section>
       <section className="refund-request-summary" aria-label="Resumo financeiro">
-        <div className="refund-request-receivable"><div><h3>A receber</h3><p>Valor que será reembolsado ao comprador.</p></div><strong aria-live="polite">{productCents === null || chinaCents === null ? "Confira os valores" : formatMoney(productCents + chinaCents)}</strong></div>
+        <div className="refund-request-receivable"><div><h3>A receber</h3><p>Valor que será reembolsado ao comprador.</p></div><strong aria-live="polite">{productCents === null || chinaCents === null ? "Confira os valores" : nativeOnly && requestedProductCnyMinor !== null && requestedChinaCnyMinor !== null ? `${formatCnyMinor(requestedProductCnyMinor + requestedChinaCnyMinor)} · base R$0,00` : formatMoney(productCents + chinaCents)}</strong></div>
         <div className="refund-request-fee"><span>Taxa histórica destas unidades</span><span>{selectedAmounts.fee === null ? "Não disponível" : `${formatMoney(selectedAmounts.fee)} preservada`}</span></div>
       </section>
       {paidAffected.length > 0 && <p className="muted">Os encargos de pacote já pagos continuam pagos. O rateio será recalculado com as unidades remanescentes.</p>}
@@ -332,12 +348,12 @@ function RefundActionSurface({ refund, item, mode, detail, locked, busy, onClose
   const activeAccounts = detail.hubbuyAccounts.filter(account => account.status === "active");
   const emptyLegacyAccounts = detail.hubbuyAccounts.filter(account => account.status === "reconciling" && account.canActivateWithZero);
   const [product, setProduct] = useState(formatInput(initialProduct)), [china, setChina] = useState(formatInput(initialChina));
-  const [destination, setDestination] = useState<"hubbuy" | "external">(refund.refundDestination ?? "external");
+  const [destination, setDestination] = useState<"hubbuy" | "external">(refund.refundDestination ?? (refund.requestedProductCnyMinor !== null ? "hubbuy" : "external"));
   const [accountId, setAccountId] = useState(refund.hubbuyAccountId ?? activeAccounts[0]?.id ?? "");
   const [newAccountLabel, setNewAccountLabel] = useState("");
   const [confirmedNoPriorBalance, setConfirmedNoPriorBalance] = useState(false);
-  const [productCny, setProductCny] = useState(formatInput(refund.receivedProductCnyMinor ?? 0));
-  const [chinaCny, setChinaCny] = useState(formatInput(refund.receivedChinaCnyMinor ?? 0));
+  const [productCny, setProductCny] = useState(formatInput(refund.receivedProductCnyMinor ?? refund.requestedProductCnyMinor ?? 0));
+  const [chinaCny, setChinaCny] = useState(formatInput(refund.receivedChinaCnyMinor ?? refund.requestedChinaCnyMinor ?? 0));
   const [nativeEvidence, setNativeEvidence] = useState(refund.nativeEvidence ?? "");
   const [reason, setReason] = useState(mode === "edit" ? refund.reason : ""), [confirmed, setConfirmed] = useState(false);
   const productCents = parseCostCents(product), chinaCents = parseCostCents(china), productCnyMinor = parseCostCents(productCny), chinaCnyMinor = parseCostCents(chinaCny);
@@ -354,18 +370,19 @@ function RefundActionSurface({ refund, item, mode, detail, locked, busy, onClose
   const positiveCnyCredit = productCnyMinor !== null && chinaCnyMinor !== null && productCnyMinor + chinaCnyMinor > 0;
   const zeroReceipt = productCents === 0 && chinaCents === 0 && productCnyMinor === 0 && chinaCnyMinor === 0;
   const selectedExistingIsEligible = activeAccounts.some(account => account.id === accountId) || emptyLegacyAccounts.some(account => account.id === accountId);
-  const hubbuyInputValid = destination === "external" || (productCnyMinor !== null && chinaCnyMinor !== null && nativeEvidence.trim().length >= 3 && (
+  const hubbuyInputValid = mode === "edit" || destination === "external" || (productCnyMinor !== null && chinaCnyMinor !== null && nativeEvidence.trim().length >= 3 && (
     createAccountInline ? newAccountLabel.trim().length > 0 && positiveCnyCredit
       : (mode === "receive" ? selectedExistingIsEligible : activeAccounts.some(account => account.id === accountId))
         && (positiveCnyCredit || zeroReceipt && !selectedAccount?.canActivateWithZero && confirmed)
         && (selectedAccount?.canActivateWithZero ? mode === "receive" && positiveCnyCredit && confirmedNoPriorBalance : true)
   ));
-  const canSave = !locked && (mode === "receive" || reason.trim().length > 0) && (mode === "void" ? confirmed : productCents !== null && chinaCents !== null && hubbuyInputValid && (productCents + chinaCents > 0 || (mode === "receive" || mode === "correct") && confirmed));
+  const canSave = !locked && (mode === "receive" || reason.trim().length > 0) && (mode === "void" ? confirmed : productCents !== null && chinaCents !== null && hubbuyInputValid && (productCents + chinaCents > 0 || (mode === "receive" || mode === "correct") && (destination === "hubbuy" && positiveCnyCredit || confirmed) || mode === "edit" && refund.requestedProductCnyMinor !== null && positiveCnyCredit));
 
   return <Surface sheet open title={title} subtitle={itemLabel(item)} description={description} onOpenChange={open => { if (!open && !busy) onClose(); }}>
     {mode === "void" ? <div className="refund-impact"><p>{refund.status === "received" ? `O crédito recebido de ${formatMoney((refund.receivedProductCents ?? 0) + (refund.receivedChinaCents ?? 0))} voltará ao custo.` : "O valor solicitado deixará de aparecer como A receber."}</p><p>{refund.quantity === 1 ? "A unidade ficará" : `${refund.quantity} unidades ficarão`} sem pacote e precisarão ser organizadas novamente. Pacotes enviados não serão restaurados.</p><label className="refund-confirm-reset"><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)}/><span>Confirmo este impacto.</span></label></div> : <>
       {(mode === "receive" || mode === "correct") && <div className="refund-money-fields"><label>{mode === "receive" ? "Produto recebido (R$)" : "Novo valor recebido do produto (R$)"}<input autoFocus required inputMode="decimal" value={product} onChange={event => setProduct(event.target.value)} aria-invalid={productCents === null}/></label><label>{mode === "receive" ? "Frete China recebido (R$)" : "Novo valor recebido do frete China (R$)"}<input required inputMode="decimal" value={china} onChange={event => setChina(event.target.value)} aria-invalid={chinaCents === null}/></label></div>}
       {(mode === "receive" || mode === "correct") && <section className="refund-request-values" aria-label="Destino e moeda do reembolso"><h3>Destino do valor</h3><label>Onde o reembolso foi recebido?<select value={destination} onChange={event => setDestination(event.target.value as "hubbuy" | "external")}><option value="external">Fora da HubBuy · sem crédito CNY</option><option value="hubbuy">Saldo na conta HubBuy</option></select></label>{destination === "hubbuy" && <><label>Conta HubBuy<select required value={accountId} onChange={event => { setAccountId(event.target.value); setConfirmedNoPriorBalance(false); }}><option value="">Escolher conta</option>{activeAccounts.map(account => <option key={account.id} value={account.id}>{account.label} · ativa · {formatCnyMinor(account.balanceCnyMinor)}</option>)}{mode === "receive" && emptyLegacyAccounts.map(account => <option key={account.id} value={account.id}>{account.label} · legado sem histórico</option>)}{mode === "receive" && <option value="__create__">Criar conta HubBuy</option>}</select></label>{createAccountInline && <><label>Nome da nova conta<input required maxLength={100} value={newAccountLabel} onChange={event => setNewAccountLabel(event.target.value)} placeholder="Ex.: Conta principal do grupo"/></label><p className="muted">A conta começa com saldo zero; este reembolso será o primeiro crédito.</p></>}{selectedAccount?.canActivateWithZero && mode === "receive" && <label className="refund-confirm-reset"><input type="checkbox" checked={confirmedNoPriorBalance} onChange={event => setConfirmedNoPriorBalance(event.target.checked)}/><span>Confirmo que não havia saldo nem movimentações anteriores.</span></label>}<div className="refund-money-fields"><label>Produto recebido (CNY)<input required inputMode="decimal" value={productCny} onChange={event => setProductCny(event.target.value)} aria-invalid={productCnyMinor === null}/></label><label>Frete China recebido (CNY)<input required inputMode="decimal" value={chinaCny} onChange={event => setChinaCny(event.target.value)} aria-invalid={chinaCnyMinor === null}/></label></div><label>Comprovante ou referência do crédito na HubBuy<textarea required minLength={3} maxLength={1000} rows={2} value={nativeEvidence} onChange={event => setNativeEvidence(event.target.value)} placeholder="Ex.: reembolso do pedido 123, crédito confirmado na carteira"/></label><p className="muted">Informe os valores efetivamente creditados. O sistema não converte valores BRL por uma cotação atual e não cobra taxa sobre o saldo.</p></>}</section>}
+      {mode === "edit" && refund.requestedProductCnyMinor !== null && <div className="refund-money-fields"><label>Produto solicitado (CNY)<input required inputMode="decimal" value={productCny} onChange={event => setProductCny(event.target.value)}/></label><label>Frete China solicitado (CNY)<input required inputMode="decimal" value={chinaCny} onChange={event => setChinaCny(event.target.value)}/></label></div>}
       {mode === "edit" && <div className="refund-money-fields"><label>Valor solicitado do produto (R$)<input autoFocus required inputMode="decimal" value={product} onChange={event => setProduct(event.target.value)} aria-invalid={productCents === null}/></label><label>Valor solicitado do frete China (R$)<input required inputMode="decimal" value={china} onChange={event => setChina(event.target.value)} aria-invalid={chinaCents === null}/></label></div>}
       {mode !== "edit" && <div className="refund-preview"><span>Solicitado <strong>{formatMoney(refund.requestedProductCents + refund.requestedChinaCents)}</strong></span><span>Recebido após a ação <strong>{productCents === null || chinaCents === null ? "Confira os valores" : formatMoney(productCents + chinaCents)}</strong></span><span>Taxa dos produtos <strong>Preservada</strong></span></div>}
       {(mode === "receive" || mode === "correct") && isZeroCredit && <label className="refund-confirm-reset"><input type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)}/><span>{mode === "receive" ? "Confirmo recebido zero: não haverá crédito e o custo permanecerá integral." : "Confirmo zerar o crédito recebido: ele será removido e o custo voltará a ficar integral."}</span></label>}
@@ -375,7 +392,7 @@ function RefundActionSurface({ refund, item, mode, detail, locked, busy, onClose
     <div className="form-actions"><Button type="button" variant="outline" onClick={onClose} disabled={busy}>Cancelar</Button><Button type="button" variant={mode === "void" ? "destructive" : "default"} disabled={busy || !canSave} onClick={() => {
       const base = { expectedRevision: detail.tracking.revision };
       if (mode === "void") void onSubmit("refund.void", { ...base, reason, confirmed: true });
-      else if (mode === "edit" && productCents !== null && chinaCents !== null) void onSubmit("refund.update", { ...base, requestedProductCents: productCents, requestedChinaCents: chinaCents, reason });
+      else if (mode === "edit" && productCents !== null && chinaCents !== null) void onSubmit("refund.update", { ...base, requestedProductCents: productCents, requestedChinaCents: chinaCents, ...(refund.requestedProductCnyMinor !== null ? { requestedProductCnyMinor: productCnyMinor, requestedChinaCnyMinor: chinaCnyMinor } : {}), reason });
       else if (mode === "correct" && productCents !== null && chinaCents !== null) void onSubmit("refund.correct", { ...base, receivedProductCents: productCents, receivedChinaCents: chinaCents, destination, ...(destination === "hubbuy" ? { accountId, receivedProductCnyMinor: productCnyMinor, receivedChinaCnyMinor: chinaCnyMinor, nativeEvidence } : { accountId: null, receivedProductCnyMinor: null, receivedChinaCnyMinor: null, nativeEvidence: null }), reason, confirmed: true });
       else if (mode === "receive" && productCents !== null && chinaCents !== null) {
         const accountFields = createAccountInline

@@ -80,7 +80,8 @@ test("account selection, search, creation focus and statement retries preserve t
   await expect(page.getByRole("textbox", { name: "Adicionar conta HubBuy", exact: true })).toHaveCount(1);
   for (const width of [1440, 1024, 768, 390, 320]) {
     await page.setViewportSize({ width, height: 900 });
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    // Viewport changes animate the shell's sidebar spacing before settling.
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
   await page.getByRole("combobox", { name: "Conta selecionada" }).selectOption(ids[1]);
   await expect(page.getByRole("heading", { name: names[1], exact: true })).toBeVisible();
@@ -143,7 +144,7 @@ test("individual rights show remaining products, accessible expansion and full-w
   await expect(person.getByText("Ver compra", { exact: true })).toHaveCount(0);
   for (const width of [1440, 1024, 768, 390, 320]) {
     await page.setViewportSize({ width, height: 1100 });
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     for (const row of await person.getByRole("listitem").all()) {
       const layout = await row.evaluate(element => {
         const name = element.querySelector(".hubbuy-right-origin-identity")!.getBoundingClientRect();
