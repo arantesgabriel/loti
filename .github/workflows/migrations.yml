@@ -1,46 +1,33 @@
 
-name: Loti - Database Migrations
+name: Loti - CI/CD
 
 on:
+  push:
+    branches:
+      - dev
+      - main
+
   workflow_dispatch:
-    inputs:
-      target:
-        description: "Banco de destino"
-        required: true
-        type: choice
-        options:
-          - dev
-          - prod
 
 permissions:
   contents: read
 
 concurrency:
-  group: loti-migrate-${{ inputs.target }}
+  group: loti-deploy-${{ github.ref_name }}
   cancel-in-progress: false
 
 jobs:
-  migrate:
+  validate:
+    name: Validar aplicação
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    environment: ${{ inputs.target }}
+    timeout-minutes: 15
 
     steps:
-      - name: Validar branch
-        env:
-          TARGET: ${{ inputs.target }}
-        run: |
-          case "$TARGET:$GITHUB_REF_NAME" in
-            dev:dev|prod:main) ;;
-            *)
-              echo "::error::Branch incompatível"
-              exit 1
-              ;;
-          esac
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: "24"
           cache: npm
@@ -48,11 +35,62 @@ jobs:
       - name: Instalar dependências
         run: npm ci
 
-      - name: Executar e verificar migrations
-        env:
-          TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
-          TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+      - name: Verificar TypeScript
+        run: npm run typecheck
+
+      - name: Verificar ESLint
+        run: npm run lint
+
+      - name: Executar testes unitários
+        run: npm run test:unit
+
+  deploy:
+    name: Migrations e Deploy
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    environment:
+      name: ${{ github.ref_name == 'main' && 'Production' || 'Development' }}
+
+    env:
+      TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
+      TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
+
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Validar configurações
         run: |
+          set -euo pipefail
+
+          for key in \
+            TURSO_DATABASE_URL \
+            TURSO_AUTH_TOKEN \
+            VERCEL_TOKEN \
+            VERCEL_ORG_ID \
+            VERCEL_PROJECT_ID
+          do
+            if [ -z "${!key:-}" ]; then
+              echo "::error::$key não configurado"
+              exit 1
+            fi
+          done
+
           case "$TURSO_DATABASE_URL" in
             libsql://*) ;;
             *)
@@ -61,7 +99,95 @@ jobs:
               ;;
           esac
 
-          test -n "$TURSO_AUTH_TOKEN" || exit 1
+          echo "Configurações validadas."
 
+      - name: Instalar Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Carregar ambiente da Vercel
+        run: |
+          if [ "$GITHUB_REF_NAME" = "main" ]; then
+            vercel pull \
+              --yes \
+              --environment=production \
+              --token="$VERCEL_TOKEN"
+          else
+            vercel pull \
+              --yes \
+              --environment=preview \
+              --git-branch=dev \
+              --token="$VERCEL_TOKEN"
+          fi
+
+      - name: Validar banco GitHub x Vercel
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync } from "node:fs";
+          import { parse } from "dotenv";
+
+          const environment =
+            process.env.GITHUB_REF_NAME === "main"
+              ? "production"
+              : "preview";
+
+          const path =
+            `.vercel/.env.${environment}.local`;
+
+          const vercelEnv = parse(readFileSync(path));
+
+          for (const key of [
+            "TURSO_DATABASE_URL",
+            "TURSO_AUTH_TOKEN"
+          ]) {
+            if (
+              !vercelEnv[key] ||
+              vercelEnv[key] !== process.env[key]
+            ) {
+              console.error(
+                `Divergência na configuração: ${key}`
+              );
+              process.exit(1);
+            }
+          }
+
+          console.log(
+            "GitHub e Vercel utilizam o mesmo banco."
+          );
+          NODE
+
+      - name: Gerar build
+        run: |
+          if [ "$GITHUB_REF_NAME" = "main" ]; then
+            vercel build \
+              --prod \
+              --token="$VERCEL_TOKEN"
+          else
+            vercel build \
+              --token="$VERCEL_TOKEN"
+          fi
+
+      - name: Executar migrations
+        run: |
+          echo "Executando migrations..."
           npm run db:migrate
+
+      - name: Verificar integridade do banco
+        run: |
+          echo "Verificando banco..."
           npm run db:verify
+
+      - name: Publicar na Vercel
+        run: |
+          if [ "$GITHUB_REF_NAME" = "main" ]; then
+            URL=$(vercel deploy \
+              --prebuilt \
+              --prod \
+              --token="$VERCEL_TOKEN")
+          else
+            URL=$(vercel deploy \
+              --prebuilt \
+              --token="$VERCEL_TOKEN")
+          fi
+
+          echo "Deploy concluído: $URL"
+          echo "Deploy: $URL" >> "$GITHUB_STEP_SUMMARY"
