@@ -1,18 +1,5 @@
 @import "tailwindcss";
-
-:root {
-    --background: #faf8f5;
-    --surface: #fff;
-    --foreground: #221d21;
-    --muted: #625b60;
-    --primary: #f77014;
-    --primary-hover: #e33c08;
-    --primary-ink: #a63607;
-    --primary-soft: #fff0e6;
-    --brand: #1c0113;
-    --border: #e9e4df;
-    --danger: #a30006;
-}
+@import "./theme.css";
 
 @theme inline {
     --color-background: var(--background);
@@ -37,6 +24,7 @@ input,
 select,
 textarea {
     font: inherit;
+    color: inherit;
 }
 
 button,
@@ -48,14 +36,14 @@ textarea {
 }
 
 :focus-visible {
-    outline: 2px solid var(--primary-ink);
+    outline: 2px solid var(--focus-ring);
 }
 
 input:focus,
 select:focus,
 textarea:focus {
     outline: none;
-    border-color: #91817a;
+    border-color: var(--field-focus);
     box-shadow: none;
 }
 
@@ -102,7 +90,7 @@ a {
 .qc-gallery-card figcaption { padding: 8px 10px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 .qc-cover-badge { display: inline-flex; margin: 6px 0 0; padding: 3px 7px; border-radius: 99px; color: var(--primary-ink); background: var(--primary-soft); font-size: 11px; font-weight: 600; }
 .qc-gallery-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; }
-.dialog.qc-viewer-surface { width: min(1440px, calc(100vw - 40px)); height: min(1000px, calc(100dvh - 40px)); max-height: calc(100dvh - 40px); display: flex; flex-direction: column; background: #18181b; color: #fafafa; border: 0; border-radius: 18px; }
+.dialog.qc-viewer-surface { --surface: #18181b; --surface-muted: #27272a; --foreground: #fafafa; --muted: #c4c4cc; --border: #ffffff40; --border-control: #a1a1aa; color-scheme: dark; width: min(1440px, calc(100vw - 40px)); height: min(1000px, calc(100dvh - 40px)); max-height: calc(100dvh - 40px); display: flex; flex-direction: column; background: var(--surface); color: var(--foreground); border: 0; border-radius: 18px; }
 .qc-viewer-surface .surface-head { flex: 0 0 auto; padding: 12px 18px; border: 0; gap: 12px; }
 .qc-viewer-surface .surface-head h2 { font-size: 14px; line-height: 1.4; font-weight: 500; }
 .qc-viewer-surface .surface-head .button { flex-shrink: 0; color: inherit; }
@@ -144,9 +132,6 @@ a {
 }
 
 :root {
-    --surface-muted: #f5f2ee;
-    --success: #246449;
-    --success-soft: #eaf4ed;
     --z-nav: 20;
     --z-overlay: 40;
     --z-modal: 50;
@@ -184,12 +169,12 @@ a {
 
 .button-primary {
     background: var(--primary);
-    color: var(--brand);
+    color: var(--on-primary);
 }
 
 .button-primary:hover {
     background: var(--primary-hover);
-    color: white;
+    color: var(--on-primary-hover);
 }
 
 .button-outline {
@@ -215,12 +200,12 @@ a {
 }
 
 .button-soft:hover {
-    background: #ffe3d0;
+    background: var(--primary-soft-hover);
 }
 
 .button-danger {
-    background: var(--danger);
-    color: white;
+    background: var(--danger-fill);
+    color: var(--on-danger);
 }
 
 .button-sm {
@@ -259,7 +244,7 @@ a {
     left: 8px;
     transform: translateY(-200%);
     z-index: var(--z-modal);
-    background: white;
+    background: var(--surface);
     padding: 12px;
 }
 
@@ -287,7 +272,7 @@ a {
     width: 240px;
     display: flex;
     flex-direction: column;
-    background: #fcfaf7;
+    background: var(--sidebar-surface);
     border-right: 1px solid var(--border);
     padding: 32px 20px 20px;
 }
@@ -397,8 +382,8 @@ a {
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    background: #ece6e0;
-    color: var(--text-secondary);
+    background: var(--avatar-muted);
+    color: inherit;
     font-size: 12px;
     font-weight: 650;
     flex-shrink: 0;
@@ -406,8 +391,8 @@ a {
 
 .profile-link .avatar,
 .sidebar-profile .avatar {
-    background: var(--brand);
-    color: white;
+    background: var(--avatar-strong);
+    color: var(--on-avatar-strong);
 }
 
 .app-content {
@@ -469,7 +454,7 @@ p {
 .modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgb(28 1 19 / .28);
+    background: var(--overlay);
     z-index: var(--z-overlay);
     animation: fade-in 180ms ease-out;
 }
@@ -545,11 +530,11 @@ input,
 select,
 textarea {
     width: 100%;
-    background: white;
+    background: var(--surface);
     color: var(--foreground);
     padding: 11px 12px;
     min-height: 44px;
-    border: 1px solid #d9d1ca;
+    border: 1px solid var(--border-control);
     border-radius: 10px;
     font-size: 14px;
     font-weight: 400;
@@ -652,7 +637,7 @@ details .details-fields {
 
 .profile-card {
     border: 1px solid var(--border);
-    background: white;
+    background: var(--surface);
     border-radius: 16px;
     padding: 32px;
     max-width: 450px;
@@ -706,8 +691,8 @@ details .details-fields {
 }
 
 .platform-weidian {
-    color: #912032;
-    background: #fcebed;
+    color: var(--danger-ink);
+    background: var(--danger-soft);
 }
 
 .qc-approved {
@@ -717,7 +702,7 @@ details .details-fields {
 
 .qc-rejected {
     color: var(--danger);
-    background: #fcebed;
+    background: var(--danger-soft);
 }
 
 @keyframes fade-in {
@@ -820,9 +805,9 @@ details .details-fields {
         gap: 2px;
         width: min(300px, calc(100% - 48px));
         height: 54px;
-        background: white;
+        background: var(--surface);
         border-radius: 30px;
-        box-shadow: 0 3px 16px rgb(28 1 19 / .12);
+        box-shadow: 0 3px 16px var(--shadow-nav);
         z-index: var(--z-nav);
     }
 
@@ -960,7 +945,7 @@ details .details-fields {
 
 .segmented {
     display: flex;
-    background: #f2eeea;
+    background: var(--segmented-surface);
     border-radius: 10px;
     padding: 3px;
     width: fit-content;
@@ -979,7 +964,7 @@ details .details-fields {
 }
 
 .segmented button.selected {
-    background: white;
+    background: var(--surface);
     color: var(--primary-ink);
     font-weight: 600;
 }
@@ -1082,14 +1067,14 @@ details .details-fields {
     padding: 8px 10px;
     text-align: left;
     color: var(--foreground);
-    background: white;
+    background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 12px;
     transition: border-color 180ms ease-out, color 180ms ease-out;
 }
 
 .favorite-person:hover {
-    border-color: #c8b6ac;
+    border-color: var(--border-hover);
 }
 
 .favorite-person:focus-visible {
@@ -1147,7 +1132,7 @@ details .details-fields {
     gap: 10px;
     align-items: center;
     border: 1px solid var(--border);
-    background: white;
+    background: var(--surface);
     border-radius: 10px;
     padding-left: 14px;
     flex: 1;
@@ -1156,7 +1141,7 @@ details .details-fields {
 }
 
 .search-input:focus-within {
-    border-color: #91817a;
+    border-color: var(--field-focus);
 }
 
 .search-input input {
@@ -1175,7 +1160,7 @@ details .details-fields {
 .view-toggle {
     display: flex;
     border: 1px solid var(--border);
-    background: white;
+    background: var(--surface);
     border-radius: 10px;
     padding: 2px;
 }
@@ -1194,7 +1179,7 @@ details .details-fields {
     font-size: 10px;
     border-radius: 50%;
     background: var(--primary-ink);
-    color: white;
+    color: var(--on-primary-ink);
     position: absolute;
     top: 3px;
     right: 3px;
@@ -1244,7 +1229,7 @@ details .details-fields {
 }
 
 .favorite {
-    background: white;
+    background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 14px;
     min-width: 0;
@@ -1864,10 +1849,10 @@ details .details-fields {
 .dropdown {
     min-width: 190px;
     padding: 5px;
-    background: white;
+    background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 10px;
-    box-shadow: 0 4px 12px rgb(28 1 19 / .08);
+    box-shadow: 0 4px 12px var(--shadow-menu);
     z-index: var(--z-modal);
 }
 
@@ -1960,7 +1945,7 @@ details .details-fields {
 }
 
 .progress-panel {
-    background: white;
+    background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 22px;
@@ -2034,14 +2019,14 @@ details .details-fields {
     height: 32px;
     min-width: 32px;
     padding: 0;
-    border: 1px solid rgb(166 54 7 / .18);
+    border: 1px solid var(--carousel-control-border);
     border-radius: 9px;
     color: var(--primary-ink);
-    background: rgb(255 255 255 / .6);
+    background: var(--carousel-control-surface);
 }
 
 .total-carousel-arrow:hover:not(:disabled) {
-    background: white;
+    background: var(--surface);
 }
 
 .total-carousel-arrow:disabled {
@@ -2144,7 +2129,7 @@ details .details-fields {
     width: 6px;
     height: 6px;
     border-radius: 8px;
-    background: rgb(166 54 7 / .3);
+    background: var(--carousel-dot);
     transition: width 180ms ease-out, background 180ms ease-out;
 }
 
@@ -2209,7 +2194,7 @@ details .details-fields {
     gap: 9px;
     padding: 10px 16px;
     color: var(--foreground);
-    background: white;
+    background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 12px;
     transition: border-color 180ms ease-out, color 180ms ease-out;
@@ -2217,7 +2202,7 @@ details .details-fields {
 }
 
 .purchase-filter-option:hover {
-    border-color: #c8b6ac;
+    border-color: var(--border-hover);
 }
 
 .purchase-filter-option:focus-visible {
@@ -2256,7 +2241,7 @@ details .details-fields {
     gap: 11px;
     min-width: 172px;
     flex: 1;
-    background: white;
+    background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 16px;
@@ -2266,7 +2251,7 @@ details .details-fields {
 
 .person-summary.selected {
     border-color: var(--primary);
-    background: #fff9f4;
+    background: var(--surface-selected);
 }
 
 .person-summary>span:last-child {
@@ -2306,7 +2291,7 @@ details .details-fields {
 .purchase-group {
     border: 1px solid var(--border);
     border-radius: 14px;
-    background: white;
+    background: var(--surface);
     overflow: hidden;
     margin-bottom: 24px;
 }
@@ -2413,9 +2398,9 @@ details .details-fields {
     justify-content: center;
     width: 26px;
     height: 26px;
-    border: 1.5px solid #a59e98;
+    border: 1.5px solid var(--checkbox-border);
     border-radius: 7px;
-    background: white;
+    background: var(--surface);
     color: var(--primary-ink);
     position: relative;
 }
@@ -2429,7 +2414,7 @@ details .details-fields {
 .cart-toggle.added,
 .cart-readonly.added {
     background: var(--primary);
-    color: var(--brand);
+    color: var(--on-primary);
     border-color: var(--primary);
 }
 
@@ -2575,7 +2560,7 @@ details .details-fields {
 .favorite-picker>button {
     border: 1px solid var(--border);
     border-radius: 12px;
-    background: white;
+    background: var(--surface);
     display: flex;
     padding: 12px;
     align-items: center;
@@ -2703,7 +2688,7 @@ details .details-fields {
         height: 52px;
         padding: 14px;
         border-radius: 50%;
-        box-shadow: 0 3px 12px rgb(247 112 20 / .2);
+        box-shadow: 0 3px 12px var(--shadow-action);
     }
 }
 
@@ -2771,7 +2756,7 @@ details .details-fields {
     }
 
     .total-carousel-arrow {
-        background: white;
+        background: var(--surface);
     }
 
     .progress-panel {
@@ -2826,7 +2811,7 @@ details .details-fields {
         height: 52px;
         padding: 14px;
         border-radius: 50%;
-        box-shadow: 0 3px 12px rgb(247 112 20 / .2);
+        box-shadow: 0 3px 12px var(--shadow-action);
     }
 
     .purchase-floating-add svg {
@@ -3009,14 +2994,14 @@ details .details-fields {
     align-items: center;
     gap: 24px;
 
-    background: #fff;
+    background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 16px;
     padding: 14px 17px;
 }
 
 .history-row:hover {
-    background: #fdfbf8;
+    background: var(--surface-hover);
 }
 
 .history-row>div:nth-child(2) {
@@ -3237,7 +3222,7 @@ details .details-fields {
         height: 52px;
         padding: 14px;
         border-radius: 50%;
-        box-shadow: 0 3px 12px rgb(247 112 20 / .2);
+        box-shadow: 0 3px 12px var(--shadow-action);
     }
 
     .favorites-mobile-add svg {
@@ -3286,7 +3271,7 @@ details .details-fields {
     padding: 4px;
     margin-bottom: 18px;
     border-radius: 12px;
-    background: #f2eeea;
+    background: var(--segmented-surface);
 }
 
 .cost-filter button {
@@ -3304,10 +3289,10 @@ details .details-fields {
 }
 
 .cost-filter button.selected {
-    background: #fff;
+    background: var(--surface);
     color: var(--primary-ink);
     font-weight: 600;
-    box-shadow: 0 1px 3px rgb(28 1 19 / .08);
+    box-shadow: 0 1px 3px var(--shadow-menu);
 }
 
 .cost-filter button span {
@@ -3330,15 +3315,15 @@ details .details-fields {
     gap: 16px;
     min-width: 0;
     padding: 18px 20px;
-    background: #fff;
+    background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 13px;
     transition: background 160ms ease-out, border-color 160ms ease-out;
 }
 
 .cost-tracking-row:hover {
-    background: #fdfbf8;
-    border-color: #d8cec6;
+    background: var(--surface-hover);
+    border-color: var(--border-emphasis);
 }
 
 .cost-tracking-icon,
@@ -4343,7 +4328,7 @@ details .details-fields {
     overflow: hidden;
     border: 1px solid var(--border);
     border-radius: 12px;
-    background: white;
+    background: var(--surface);
 }
 
 .cost-package-toggle {
@@ -4353,12 +4338,12 @@ details .details-fields {
     gap: 13px;
     padding: 14px 16px;
     border: 0;
-    background: white;
+    background: var(--surface);
     text-align: left;
 }
 
 .cost-package-toggle:hover {
-    background: #fdfbf8;
+    background: var(--surface-hover);
 }
 
 .cost-package-toggle>.cost-package-icon {
@@ -4446,7 +4431,7 @@ details .details-fields {
     display: grid;
     margin: 0;
     padding: 0;
-    border-top: 1px solid #f0ece8;
+    border-top: 1px solid var(--border-subtle);
     list-style: none;
 }
 
@@ -4456,7 +4441,7 @@ details .details-fields {
     justify-content: space-between;
     gap: 14px;
     padding: 11px 0;
-    border-bottom: 1px solid #f0ece8;
+    border-bottom: 1px solid var(--border-subtle);
 }
 
 .cost-package-items li>span {
@@ -4534,7 +4519,7 @@ details .details-fields {
 
 .cost-allocation-list {
     display: grid;
-    border-top: 1px solid #f0ece8;
+    border-top: 1px solid var(--border-subtle);
 }
 
 .cost-allocation-row {
@@ -4543,7 +4528,7 @@ details .details-fields {
     justify-content: space-between;
     gap: 15px;
     padding: 9px 1px;
-    border-bottom: 1px solid #f0ece8;
+    border-bottom: 1px solid var(--border-subtle);
 }
 
 .cost-allocation-row>span {
@@ -4736,7 +4721,7 @@ details .details-fields {
     align-items: center;
     gap: 11px;
     padding: 11px 0;
-    border-top: 1px solid #f0ece8;
+    border-top: 1px solid var(--border-subtle);
 }
 
 .cost-people-list li>span:nth-child(2) {
@@ -6483,7 +6468,7 @@ details .details-fields {
 
 .sharing-person.selected {
     border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
-    background: #fffaf6;
+    background: var(--sharing-selected);
 }
 
 .sharing-person-select {
@@ -6545,7 +6530,7 @@ details .details-fields {
 }
 
 .sharing-composition-total.closed {
-    color: var(--success, #25734d);
+    color: var(--success);
 }
 
 .sharing-composition-total span {
@@ -6611,7 +6596,7 @@ details .details-fields {
     margin: 0 0 14px;
     padding: 10px 12px;
     border-radius: 10px;
-    background: #fff7ed;
+    background: var(--warning-soft);
 }
 
 .sharing-review p {
@@ -6764,12 +6749,12 @@ details .details-fields {
   .refunds-list[data-expanded="false"] { display: none; }
   .refunds-financial-note { display: block; margin: 8px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
 }
-.refund-events { margin-top: 10px; border-top: 1px solid var(--border, #e9e3df); }
-.refund-events p { margin: 6px 0; color: var(--text-secondary, #625b57); font-size: 13px; }
+.refund-events { margin-top: 10px; border-top: 1px solid var(--border); }
+.refund-events p { margin: 6px 0; color: var(--financial-secondary); font-size: 13px; }
 .refund-financial-summary { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
-.refund-financial-summary > div, .refund-preview > span { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 11px 12px; border-radius: 10px; background: var(--background, #faf8f6); }
-.refund-financial-summary span, .refund-preview > span { color: var(--text-secondary, #625b57); font-size: 13px; }
-.refund-financial-summary strong, .refund-preview strong { color: var(--text-primary, #221d21); text-align: right; }
+.refund-financial-summary > div, .refund-preview > span { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 11px 12px; border-radius: 10px; background: var(--background); }
+.refund-financial-summary span, .refund-preview > span { color: var(--financial-secondary); font-size: 13px; }
+.refund-financial-summary strong, .refund-preview strong { color: var(--foreground); text-align: right; }
 .refund-request-sheet { display: flex; flex-direction: column; width: min(600px, 100%); height: 100dvh; max-height: 100dvh; overflow: hidden; }
 .refund-request-sheet .surface-head { flex: 0 0 auto; padding: 24px 24px 0; border: 0; }
 .refund-request-sheet .surface-head > div { min-width: 0; }
@@ -6945,11 +6930,11 @@ details .details-fields {
 .refund-money-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .refund-money-fields input { width: 100%; }
 .refund-preview { display: grid; gap: 6px; margin: 12px 0; }
-.refund-confirm-reset { display: flex !important; align-items: start; gap: 10px; margin: 10px 0; padding: 12px; border: 1px solid var(--border, #e9e3df); border-radius: 10px; }
+.refund-confirm-reset { display: flex !important; align-items: start; gap: 10px; margin: 10px 0; padding: 12px; border: 1px solid var(--border); border-radius: 10px; }
 .refund-confirm-reset input { flex: 0 0 auto; margin-top: 4px; }
-.refund-impact { padding: 12px; border-radius: 10px; background: var(--background, #faf8f6); }
+.refund-impact { padding: 12px; border-radius: 10px; background: var(--background); }
 .refund-impact p { margin: 4px 0 10px; }
-.cost-cell-pending { display: block; color: var(--text-secondary, #625b57); font-size: 12px; }
+.cost-cell-pending { display: block; color: var(--financial-secondary); font-size: 12px; }
 @media (max-width: 720px) {
   .refund-financial-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .refund-financial-summary > div { align-items: flex-start; flex-direction: column; gap: 3px; }
@@ -6966,85 +6951,85 @@ details .details-fields {
 @media (prefers-reduced-motion: reduce) {
   .refunds-section *, .refunds-section *::before, .refunds-section *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
 }
-.cost-additional-orders { display: grid; min-width: 0; gap: 14px; margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border, #e9e3df); }
+.cost-additional-orders { display: grid; min-width: 0; gap: 14px; margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border); }
 .cost-additional-orders h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 18px; }
 .cost-hubbuy-accounts, .cost-additional-order-list { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; gap: 10px; }
-.cost-hubbuy-account, .cost-additional-order-card { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; min-width: 0; padding: 16px; border: 1px solid var(--border, #e9e3df); border-radius: 14px; background: var(--surface, #fff); }
+.cost-hubbuy-account, .cost-additional-order-card { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; min-width: 0; padding: 16px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
 .cost-hubbuy-account-head, .cost-additional-order-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .cost-hubbuy-account-head > div, .cost-additional-order-heading > div { display: grid; gap: 4px; min-width: 0; }
-.cost-hubbuy-account-head small, .cost-additional-order-heading small, .cost-additional-order-card li small, .cost-additional-order-payment small { display: block; color: var(--text-secondary, #625b57); font-size: 12px; line-height: 1.45; }
+.cost-hubbuy-account-head small, .cost-additional-order-heading small, .cost-additional-order-card li small, .cost-additional-order-payment small { display: block; color: var(--financial-secondary); font-size: 12px; line-height: 1.45; }
 .cost-hubbuy-account-head > span { flex: 0 0 auto; font-weight: 700; }
-.cost-account-active { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary, #625b57); }
+.cost-account-active { display: inline-flex; align-items: center; gap: 6px; color: var(--financial-secondary); }
 .cost-account-create { display: flex; align-items: end; gap: 10px; max-width: 640px; }
-.cost-account-create label, .cost-account-reconcile label, .cost-additional-order-create label, .cost-additional-order-payment > label, .cost-order-advance label { display: grid; gap: 5px; min-width: 0; color: var(--text-secondary, #625b57); font-size: 13px; }
+.cost-account-create label, .cost-account-reconcile label, .cost-additional-order-create label, .cost-additional-order-payment > label, .cost-order-advance label { display: grid; gap: 5px; min-width: 0; color: var(--financial-secondary); font-size: 13px; }
 .cost-account-create label { flex: 1; }
 .cost-account-create input, .cost-account-reconcile input, .cost-account-reconcile textarea, .cost-additional-order-create input, .cost-additional-order-create select, .cost-additional-order-payment input, .cost-additional-order-payment select { width: 100%; min-width: 0; }
-.cost-account-reconcile { display: grid; gap: 12px; padding: 14px; border-radius: 12px; background: var(--background, #faf8f6); }
+.cost-account-reconcile { display: grid; gap: 12px; padding: 14px; border-radius: 12px; background: var(--background); }
 .cost-account-reconcile > p { margin: 0; font-size: 13px; }
-.cost-account-reconcile-guide, .cost-account-reconcile-check, .cost-account-statement { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--border, #e9e3df); border-radius: 10px; background: var(--surface, #fff); }
+.cost-account-reconcile-guide, .cost-account-reconcile-check, .cost-account-statement { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
 .cost-account-reconcile-guide p, .cost-account-reconcile-check p { margin: 0; font-size: 13px; }
 .cost-account-event, .cost-account-reconcile-finalize { display: grid; gap: 10px; }
 .cost-account-event-values { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .cost-account-event input, .cost-account-event select, .cost-account-reconcile select, .cost-account-reconcile-finalize input, .cost-account-reconcile-finalize textarea { width: 100%; min-width: 0; }
 .cost-account-reconcile-check ol, .cost-account-statement ol { display: grid; gap: 8px; margin: 0; padding-left: 20px; }
-.cost-account-statement li { display: grid; gap: 4px; padding: 8px 0; border-bottom: 1px solid var(--border, #e9e3df); }
-.cost-account-statement li small { color: var(--text-secondary, #625b57); font-size: 12px; line-height: 1.45; }
-.cost-account-rights { margin: 0; color: var(--text-secondary, #625b57); font-size: 13px; line-height: 1.5; }
+.cost-account-statement li { display: grid; gap: 4px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.cost-account-statement li small { color: var(--financial-secondary); font-size: 12px; line-height: 1.45; }
+.cost-account-rights { margin: 0; color: var(--financial-secondary); font-size: 13px; line-height: 1.5; }
 .cost-account-share { display: grid; grid-template-columns: minmax(100px, 1fr) repeat(2, minmax(100px, .8fr)); align-items: end; gap: 10px; }
-.cost-additional-order-create { display: grid; gap: 14px; padding: 16px; border: 1px solid var(--border, #e9e3df); border-radius: 14px; background: var(--surface, #fff); }
+.cost-additional-order-create { display: grid; gap: 14px; padding: 16px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
 .cost-additional-order-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .cost-order-free { display: flex !important; align-items: center; gap: 8px !important; min-height: 40px; }
 .cost-order-free input { width: 16px !important; flex: 0 0 auto; }
-.cost-order-participants { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0; padding: 12px; border: 1px solid var(--border, #e9e3df); border-radius: 10px; }
-.cost-order-participants legend { padding: 0 5px; color: var(--text-secondary, #625b57); font-size: 13px; }
+.cost-order-participants { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0; padding: 12px; border: 1px solid var(--border); border-radius: 10px; }
+.cost-order-participants legend { padding: 0 5px; color: var(--financial-secondary); font-size: 13px; }
 .cost-order-participants label { display: inline-flex; align-items: center; gap: 7px; }
 .cost-order-participants input { width: 16px; }
 .cost-additional-order-heading > span { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; font-size: 13px; font-weight: 650; }
-.cost-additional-order-heading > span.paid { color: var(--success, #317451); }
-.cost-additional-order-heading > span.pending { color: var(--text-secondary, #625b57); }
+.cost-additional-order-heading > span.paid { color: var(--success); }
+.cost-additional-order-heading > span.pending { color: var(--financial-secondary); }
 .cost-additional-order-card ul { display: grid; min-width: 0; gap: 8px; margin: 0; padding: 0; list-style: none; }
-.cost-additional-order-card li { display: flex; align-items: center; justify-content: space-between; min-width: 0; gap: 12px; padding: 10px 0; border-top: 1px solid var(--border, #e9e3df); }
+.cost-additional-order-card li { display: flex; align-items: center; justify-content: space-between; min-width: 0; gap: 12px; padding: 10px 0; border-top: 1px solid var(--border); }
 .cost-additional-order-card li > span:first-child { min-width: 0; }
 .cost-additional-order-item-actions { display: flex; flex: 0 0 auto; flex-direction: column; align-items: flex-end; gap: 7px; }
 .cost-additional-order-card li small { margin-top: 3px; }
-.cost-order-payment-note { margin: 0; color: var(--text-secondary, #625b57); font-size: 13px; }
-.cost-order-financing-position { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--border, #e9e3df); border-radius: 10px; background: var(--background, #faf8f6); }
+.cost-order-payment-note { margin: 0; color: var(--financial-secondary); font-size: 13px; }
+.cost-order-financing-position { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--background); }
 .cost-order-financing-position > span { display: grid; gap: 3px; }
-.cost-order-financing-position small { color: var(--text-secondary, #625b57); font-size: 12px; }
+.cost-order-financing-position small { color: var(--financial-secondary); font-size: 12px; }
 .cost-order-settlement-amount { display: grid; grid-template-columns: minmax(100px, .55fr) minmax(0, 1fr); gap: 10px; }
-.cost-order-settlement-amount label { display: grid; gap: 5px; min-width: 0; color: var(--text-secondary, #625b57); font-size: 13px; }
+.cost-order-settlement-amount label { display: grid; gap: 5px; min-width: 0; color: var(--financial-secondary); font-size: 13px; }
 .cost-order-settlement-amount input, .cost-order-settlement-amount select { width: 100%; min-width: 0; }
-.cost-additional-order-payment { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; gap: 12px; padding-top: 12px; border-top: 1px solid var(--border, #e9e3df); }
+.cost-additional-order-payment { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: end; gap: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
 .cost-additional-order-payment > div:first-child { display: grid; gap: 4px; }
 .cost-additional-order-payment > .cost-order-free, .cost-additional-order-payment > button, .cost-additional-order-payment > .error { grid-column: 1 / -1; }
 .cost-order-advance { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-column: 1 / -1; gap: 10px; }
 .cost-order-advance-list { display: grid; grid-column: 1 / -1; gap: 10px; }
 .cost-order-advance > button { grid-column: 1 / -1; justify-self: start; }
-.cost-account-manage-link:focus-visible, .nav-item:focus-visible { outline: 2px solid var(--accent, #9f6e54); outline-offset: 2px; }
-.cost-account-manage-link { color: var(--accent, #9f6e54); font-size: 12px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.cost-account-manage-link:focus-visible, .nav-item:focus-visible { outline: 2px solid var(--account-link); outline-offset: 2px; }
+.cost-account-manage-link { color: var(--account-link); font-size: 12px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
 .cost-hubbuy-account-head { flex-wrap: wrap; }
 .cost-hubbuy-account-head > div { flex: 1 1 180px; overflow-wrap: anywhere; }
-.cost-account-create small { color: var(--text-secondary, #625b57); font-size: 12px; line-height: 1.45; }
+.cost-account-create small { color: var(--financial-secondary); font-size: 12px; line-height: 1.45; }
 .cost-products-heading { align-items: end; }
 .cost-products-heading-actions { display: flex; align-items: center; gap: 18px; }
 .cost-additional-order-trigger { flex: 0 0 auto; gap: 8px; }
-.cost-draft-count { padding: 2px 7px; border-radius: 999px; background: var(--surface-muted, #f5f1ee); color: var(--text-secondary, #625b57); font-size: 11px; }
-.cost-additional-origin-flag { display: inline-flex; width: fit-content; padding: 2px 7px; border: 1px solid var(--border, #e9e3df); border-radius: 999px; color: var(--text-secondary, #625b57); font-size: 10px; font-weight: 600; line-height: 1.35; }
+.cost-draft-count { padding: 2px 7px; border-radius: 999px; background: var(--surface-muted); color: var(--financial-secondary); font-size: 11px; }
+.cost-additional-origin-flag { display: inline-flex; width: fit-content; padding: 2px 7px; border: 1px solid var(--border); border-radius: 999px; color: var(--financial-secondary); font-size: 10px; font-weight: 600; line-height: 1.35; }
 .cost-unit-note { display: block; margin-top: 3px; color: var(--muted); font-size: 10px; }
 .cost-product-mobile-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .cost-order-step-title { display: grid; gap: 4px; margin: 0; }
-.cost-order-step-title strong { color: var(--text-primary, #221d21); font-size: 15px; }
-.cost-order-step-title span { color: var(--text-secondary, #625b57); font-size: 12px; line-height: 1.45; }
-.cost-order-existing-drafts { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--border, #e9e3df); border-radius: 12px; }
-.cost-order-existing-drafts summary { cursor: pointer; color: var(--text-secondary, #625b57); font-size: 13px; font-weight: 600; }
+.cost-order-step-title strong { color: var(--foreground); font-size: 15px; }
+.cost-order-step-title span { color: var(--financial-secondary); font-size: 12px; line-height: 1.45; }
+.cost-order-existing-drafts { display: grid; gap: 8px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; }
+.cost-order-existing-drafts summary { cursor: pointer; color: var(--financial-secondary); font-size: 13px; font-weight: 600; }
 .cost-order-existing-drafts > div { display: grid; gap: 6px; }
-.cost-order-existing-drafts button { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border: 0; border-top: 1px solid var(--border, #e9e3df); background: transparent; color: var(--text-primary, #221d21); text-align: left; cursor: pointer; }
+.cost-order-existing-drafts button { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border: 0; border-top: 1px solid var(--border); background: transparent; color: var(--foreground); text-align: left; cursor: pointer; }
 .cost-order-existing-drafts button span { display: grid; gap: 3px; }
-.cost-order-existing-drafts button small { color: var(--text-secondary, #625b57); font-size: 12px; }
-.cost-package-association-note { margin: 0; color: var(--text-secondary, #625b57); font-size: 13px; }
+.cost-order-existing-drafts button small { color: var(--financial-secondary); font-size: 12px; }
+.cost-package-association-note { margin: 0; color: var(--financial-secondary); font-size: 13px; }
 .cost-additional-order-flow { display: grid; gap: 14px; }
-.cost-additional-order-surface .cost-order-payment-note { padding: 12px; border-radius: 10px; background: var(--background, #faf8f6); line-height: 1.5; }
-.cost-additional-order-surface > .surface-body > label { display: grid; gap: 5px; color: var(--text-secondary, #625b57); font-size: 13px; }
+.cost-additional-order-surface .cost-order-payment-note { padding: 12px; border-radius: 10px; background: var(--background); line-height: 1.5; }
+.cost-additional-order-surface > .surface-body > label { display: grid; gap: 5px; color: var(--financial-secondary); font-size: 13px; }
 @media (max-width: 680px) {
   .cost-account-create { align-items: stretch; flex-direction: column; }
   .cost-account-event-values { grid-template-columns: 1fr; }

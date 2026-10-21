@@ -1,5 +1,11 @@
 # Design System
 
+## Themes — approved 20 October 2026
+
+Loti supports Claro, Escuro and Sistema from Profile → Aparência. Light remains the default when no valid browser preference exists. The theme is stored per browser, not per account or workspace. Existing layouts, Geist, operational category markers, restrained orange accents and reduced-motion behavior remain unchanged.
+
+Use semantic properties from `src/app/theme.css` in every new visual surface. Its dark palette uses warm neutral surfaces, readable secondary text and distinct financial/status colors; do not invert photos or duplicate component styles with theme conditionals. Brand text, text on orange controls, avatar backgrounds, destructive fills and destructive text have separate roles. The QC viewer keeps a locally dark image stage in both themes. Original editorial and QC image contents are unchanged. See [theme implementation](35_DARK_MODE.md).
+
 ## Direction
 
 The visual direction is intentionally a combination of:

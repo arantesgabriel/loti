@@ -1,5 +1,13 @@
 # Test Plan
 
+## Themes
+
+`tests/unit/theme.test.ts` verifies pre-paint initialization, invalid/blocked storage, System changes, explicit overrides, cross-tab storage/removal and listener cleanup. `theme-contrast.test.ts` checks text/action/status/financial pairs at 4.5:1 and control/focus pairs at 3:1 in both palettes.
+
+`tests/e2e/theme.spec.ts` verifies the bootstrap with React bundles blocked, hydration, radio keyboard use, live OS changes, reload/navigation/logout, another account, blocked storage and cross-tab changes while a drawer retains its draft/focus. It inspects public/authenticated routes at 320/390/768/1024/1440 px and compares financial DTOs and finalized snapshots before/after theme changes. Financial theme fixtures use a dedicated synthetic member/workspace to avoid password changes in the profile suite.
+
+Set `LOTI_E2E_THEME=light|dark|system` to run existing browser journeys with an initial browser preference. `LOTI_CAPTURE_THEME_QA=1` writes optional captures to `artifacts/qa/dark-mode/verified/`. Continue using an explicit new `LOTI_E2E_DATABASE_URL=file:./data/e2e-refunds-<unique>.sqlite`; never target a real database. Profile password tests and older suites sharing `profile-qa` should run in separate disposable-server runs. Details and actual validation results: [35 — Dark Mode](35_DARK_MODE.md).
+
 Email security extension: `auth-email.test.ts`, `auth-email-limits.test.ts`, updated invitation/concurrency suites and `email-templates.test.ts` cover native token lifecycles, rollback, pending membership, compatibility and shared quotas. Playwright `password-recovery` and `invitations` use a localhost provider stub, never bulk real email. See `31_AUTH_EMAIL_SECURITY_PLAN.md`. Separate production counts, authorized real deliveries and publication from local tests.
 
 ## Unit tests

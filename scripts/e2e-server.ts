@@ -76,6 +76,12 @@ try {
   const workspaceId = "profile-qa-workspace", createdAt = new Date();
   await invitationFixture.db.insert(workspaces).values({ id: workspaceId, name: "Perfil QA", createdAt }).run();
   await invitationFixture.db.insert(workspaceMembers).values([{ workspaceId, userId: qa.id, createdAt }, { workspaceId, userId: reader.id, createdAt }]).run();
+  // Theme assertions must not share credentials changed by the profile journey.
+  await createAuth(invitationFixture.db, true).api.signUpEmail({ body: { name: "Theme QA", email: "theme-qa@loti.test", password: "Theme-QA-Only-2026!" } });
+  const themeUser = await invitationFixture.db.select({ id: user.id }).from(user).where(eq(user.email, "theme-qa@loti.test")).get();
+  if (!themeUser) throw new Error("The isolated theme E2E member could not be provisioned.");
+  await invitationFixture.db.insert(workspaces).values({ id: "theme-qa-workspace", name: "Temas QA", createdAt }).run();
+  await invitationFixture.db.insert(workspaceMembers).values({ workspaceId: "theme-qa-workspace", userId: themeUser.id, createdAt }).run();
 } finally { invitationFixture.client.close(); }
 
 const closeQcFixture = process.env.LOTI_E2E_QC_VIEWER === "1" ? await (await import("./qc-viewer-fixture")).startQcViewerFixture() : null;

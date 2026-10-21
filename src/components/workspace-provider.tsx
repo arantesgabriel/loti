@@ -2,6 +2,7 @@
 import { useRouter } from "next/navigation";
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
 import { toast, Toaster } from "sonner";
+import { useTheme } from "@/components/theme-provider";
 import type { ClientData } from "@/lib/domain/services";
 import { qcScope, resetQcClient, setQcClientScope } from "@/components/qc/qc-client-state";
 export type Operation = "favorite.save" | "favorite.delete" | "collection.save" | "collection.delete" | "preference.view" | "purchase.save" | "purchase.finalize" | "item.favorite" | "item.save" | "item.delete" | "item.status" | "item.status.person";
@@ -9,6 +10,7 @@ type RefreshResult = "success" | "unauthenticated" | "unavailable";
 type Workspace = { data: ClientData; busy: boolean; mutate: (operation: Operation, input?: unknown, id?: string, message?: string) => Promise<boolean>; refresh: () => Promise<RefreshResult>; updateProfileName: (name: string) => Promise<RefreshResult> };
 const Context = createContext<Workspace | null>(null);
 export function WorkspaceProvider({ initialData, children }: { initialData: ClientData; children: React.ReactNode }) {
+  const { resolvedTheme } = useTheme();
   const router = useRouter();
   const [data, setData] = useState(initialData), [busy, setBusy] = useState(false);
   const dataVersion = useRef(0);
@@ -46,6 +48,6 @@ export function WorkspaceProvider({ initialData, children }: { initialData: Clie
       dataVersion.current += 1; setData(result.data); toast.success(message); return true;
     } catch { toast.error("Não foi possível conectar. Tente novamente."); return false; } finally { setBusy(false); }
   }
-  return <Context.Provider value={{ data, busy, mutate, refresh, updateProfileName }}>{children}<Toaster richColors position="top-right" closeButton /></Context.Provider>;
+  return <Context.Provider value={{ data, busy, mutate, refresh, updateProfileName }}>{children}<Toaster theme={resolvedTheme} richColors position="top-right" closeButton /></Context.Provider>;
 }
 export function useWorkspace() { const context = useContext(Context); if (!context) throw new Error("Workspace context missing"); return context; }

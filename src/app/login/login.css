@@ -1,6 +1,4 @@
 .login-page {
-    --story-tint: #fff7f1;
-    --story-shadow: 0 16px 40px rgb(89 48 23 / .09);
     --story-ease: cubic-bezier(.22, 1, .36, 1);
     min-height: 100dvh;
     background: var(--surface);
@@ -163,12 +161,12 @@
     border-radius: 11px;
     font-size: 16px;
     font-weight: 600;
-    color: var(--brand);
+    color: var(--on-primary);
     margin-top: 0;
 }
 
 .login-auth-content .button-primary:hover:not(:disabled) {
-    color: var(--brand);
+    color: var(--on-primary-hover);
 }
 
 .login-recovery-help {
@@ -462,7 +460,7 @@
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    background: #d7d0cb;
+    background: var(--story-dot);
     transition: background 180ms ease-out;
 }
 
@@ -725,32 +723,32 @@
 }
 
 .member-0 {
-    background: #ffdfca;
-    color: #933a12;
+    background: var(--story-member-warm-surface);
+    color: var(--story-member-warm-ink);
     animation-delay: 120ms;
 }
 
 .member-1 {
-    background: #e9dfff;
-    color: #56348c;
+    background: var(--story-member-purple-surface);
+    color: var(--story-member-purple-ink);
     animation-delay: 175ms;
 }
 
 .member-2 {
-    background: #dfeedd;
-    color: #315d35;
+    background: var(--story-member-green-surface);
+    color: var(--story-member-green-ink);
     animation-delay: 230ms;
 }
 
 .member-3 {
-    background: #ffe0e5;
-    color: #963545;
+    background: var(--story-member-rose-surface);
+    color: var(--story-member-rose-ink);
     animation-delay: 285ms;
 }
 
 .member-4 {
-    background: #dfe8ff;
-    color: #345396;
+    background: var(--story-member-blue-surface);
+    color: var(--story-member-blue-ink);
     animation-delay: 340ms;
 }
 
