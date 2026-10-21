@@ -22,6 +22,10 @@ export async function POST(request: Request, { params }: Context) {
     requirePackageCostOrigin(request);
     const user = await requireUser(), { accountId } = await params;
     const body = z.discriminatedUnion("operation", [
+      z.object({ operation: z.literal("adjustment.preview") }).passthrough(),
+      z.object({ operation: z.literal("adjustment.record") }).passthrough(),
+      z.object({ operation: z.literal("adjustment.reversal.preview") }).passthrough(),
+      z.object({ operation: z.literal("adjustment.reverse") }).passthrough(),
       z.object({ operation: z.literal("reconcile") }).passthrough(),
       z.object({ operation: z.literal("reconcile.start") }).passthrough(),
       z.object({ operation: z.literal("reconcile.event") }).passthrough(),
@@ -32,7 +36,11 @@ export async function POST(request: Request, { params }: Context) {
     ]).parse(await request.json());
     const service = hubbuyBalanceServices(db, user.id);
     const { operation: operationType, ...payload } = body;
-    const result = operationType === "reconcile" ? await service.reconcileAccount(accountId, payload)
+    const result = operationType === "adjustment.preview" ? await service.previewManualAdjustment(accountId, payload)
+      : operationType === "adjustment.record" ? await service.recordManualAdjustment(accountId, payload)
+      : operationType === "adjustment.reversal.preview" ? await service.previewManualAdjustmentReversal(accountId, payload)
+      : operationType === "adjustment.reverse" ? await service.reverseManualAdjustment(accountId, payload)
+      : operationType === "reconcile" ? await service.reconcileAccount(accountId, payload)
       : operationType === "reconcile.start" ? await service.startReconciliation(accountId, payload)
       : operationType === "reconcile.event" ? await service.recordReconciliationEvent(accountId, payload)
       : operationType === "activate.zero" ? await service.activateEmptyAccountAtZero(accountId, payload)

@@ -338,6 +338,8 @@ export const purchaseCostRefunds = sqliteTable("purchase_cost_refunds", {
   quantity: integer("quantity").notNull(),
   requestedProductCents: integer("requested_product_cents").notNull(),
   requestedChinaCents: integer("requested_china_cents").notNull(),
+  requestedProductCnyMinor: integer("requested_product_cny_minor"),
+  requestedChinaCnyMinor: integer("requested_china_cny_minor"),
   receivedProductCents: integer("received_product_cents"),
   receivedChinaCents: integer("received_china_cents"),
   refundDestination: text("refund_destination", { enum: ["hubbuy", "external"] }),
@@ -376,7 +378,7 @@ export const purchaseCostRefunds = sqliteTable("purchase_cost_refunds", {
   check("cost_refund_status", sql`${t.status} IN ('requested','received','voided')`),
   check("cost_refund_destination", sql`(${t.refundDestination} IS NULL AND ${t.hubbuyAccountId} IS NULL AND ${t.receivedProductCnyMinor} IS NULL AND ${t.receivedChinaCnyMinor} IS NULL AND ${t.nativeEvidence} IS NULL AND ${t.creditOperationId} IS NULL) OR (${t.refundDestination} = 'external' AND ${t.hubbuyAccountId} IS NULL AND ${t.receivedProductCnyMinor} IS NULL AND ${t.receivedChinaCnyMinor} IS NULL AND ${t.nativeEvidence} IS NULL AND ${t.creditOperationId} IS NULL) OR (${t.refundDestination} = 'hubbuy' AND ${t.hubbuyAccountId} IS NOT NULL AND typeof(${t.receivedProductCnyMinor}) = 'integer' AND ${t.receivedProductCnyMinor} BETWEEN 0 AND 1000000000000 AND typeof(${t.receivedChinaCnyMinor}) = 'integer' AND ${t.receivedChinaCnyMinor} BETWEEN 0 AND 1000000000000 AND length(trim(${t.nativeEvidence})) BETWEEN 3 AND 1000 AND ((${t.receivedProductCnyMinor} + ${t.receivedChinaCnyMinor} = 0 AND ${t.creditOperationId} IS NULL) OR (${t.receivedProductCnyMinor} + ${t.receivedChinaCnyMinor} > 0 AND ${t.creditOperationId} IS NOT NULL)))`),
   check("cost_refund_quantity", sql`typeof(${t.quantity}) = 'integer' AND ${t.quantity} BETWEEN 1 AND 10000`),
-  check("cost_refund_requested_amounts", sql`typeof(${t.requestedProductCents}) = 'integer' AND ${t.requestedProductCents} BETWEEN 0 AND 1000000000000 AND typeof(${t.requestedChinaCents}) = 'integer' AND ${t.requestedChinaCents} BETWEEN 0 AND 1000000000000 AND ${t.requestedProductCents} + ${t.requestedChinaCents} > 0`),
+  check("cost_refund_requested_amounts", sql`typeof(${t.requestedProductCents}) = 'integer' AND ${t.requestedProductCents} BETWEEN 0 AND 1000000000000 AND typeof(${t.requestedChinaCents}) = 'integer' AND ${t.requestedChinaCents} BETWEEN 0 AND 1000000000000 AND ((${t.requestedProductCnyMinor} IS NULL AND ${t.requestedChinaCnyMinor} IS NULL AND ${t.requestedProductCents} + ${t.requestedChinaCents} > 0) OR (typeof(${t.requestedProductCnyMinor}) = 'integer' AND ${t.requestedProductCnyMinor} BETWEEN 0 AND 1000000000000 AND typeof(${t.requestedChinaCnyMinor}) = 'integer' AND ${t.requestedChinaCnyMinor} BETWEEN 0 AND 1000000000000 AND ${t.requestedProductCnyMinor} + ${t.requestedChinaCnyMinor} BETWEEN 1 AND 1000000000000))`),
   check("cost_refund_received_state", sql`(${t.status} = 'requested' AND ${t.receivedProductCents} IS NULL AND ${t.receivedChinaCents} IS NULL AND ${t.receivedAt} IS NULL AND ${t.receivedBy} IS NULL) OR (${t.status} IN ('received','voided') AND ((${t.receivedProductCents} IS NULL AND ${t.receivedChinaCents} IS NULL AND ${t.receivedAt} IS NULL AND ${t.receivedBy} IS NULL) OR (typeof(${t.receivedProductCents}) = 'integer' AND ${t.receivedProductCents} BETWEEN 0 AND 1000000000000 AND typeof(${t.receivedChinaCents}) = 'integer' AND ${t.receivedChinaCents} BETWEEN 0 AND 1000000000000 AND ${t.receivedAt} IS NOT NULL AND ${t.receivedBy} IS NOT NULL)))`),
   check("cost_refund_void_state", sql`(${t.status} = 'voided' AND ${t.voidedAt} IS NOT NULL AND ${t.voidedBy} IS NOT NULL AND length(trim(${t.voidReason})) > 0) OR (${t.status} != 'voided' AND ${t.voidedAt} IS NULL AND ${t.voidedBy} IS NULL AND ${t.voidReason} IS NULL)`),
   check("cost_refund_original_values", sql`typeof(${t.originalItemQuantity}) = 'integer' AND ${t.originalItemQuantity} BETWEEN 1 AND 10000 AND typeof(${t.originalProductUnitCents}) = 'integer' AND ${t.originalProductUnitCents} BETWEEN 0 AND 1000000000000 AND typeof(${t.originalChinaUnitCents}) = 'integer' AND ${t.originalChinaUnitCents} BETWEEN 0 AND 1000000000000`),
@@ -576,6 +578,24 @@ export const hubbuyBalanceEntries = sqliteTable("hubbuy_balance_entries", {
   check("hubbuy_balance_entry_amount", sql`typeof(${t.amountCnyMinor}) = 'integer' AND ${t.amountCnyMinor} BETWEEN 1 AND 1000000000000`),
   check("hubbuy_balance_entry_basis", sql`${t.historicalBrlCents} IS NULL OR (typeof(${t.historicalBrlCents}) = 'integer' AND ${t.historicalBrlCents} BETWEEN 0 AND 1000000000000)`),
   check("hubbuy_balance_entry_source", sql`${t.sourceType} IN ('refund_received','manual_adjustment','opening_balance','purchase_payment','refund_offset','reversal') AND length(trim(${t.sourceId})) BETWEEN 1 AND 200`),
+]);
+
+export const hubbuyBalanceAdjustments = sqliteTable("hubbuy_balance_adjustments", {
+  id: text("id").primaryKey(),
+  accountId: text("account_id").notNull().references(() => hubbuyAccounts.id),
+  operationId: text("operation_id").notNull().references(() => financialOperations.id),
+  balanceEntryId: text("balance_entry_id").notNull().references(() => hubbuyBalanceEntries.id),
+  kind: text("kind", { enum: ["promotional_bonus", "documented_credit", "documented_debit", "reversal"] }).notNull(),
+  externalReference: text("external_reference"),
+  reversesAdjustmentId: text("reverses_adjustment_id").references((): AnySQLiteColumn => hubbuyBalanceAdjustments.id),
+}, t => [
+  uniqueIndex("hubbuy_adjustment_operation_idx").on(t.operationId),
+  uniqueIndex("hubbuy_adjustment_entry_idx").on(t.balanceEntryId),
+  uniqueIndex("hubbuy_adjustment_reversal_idx").on(t.reversesAdjustmentId),
+  index("hubbuy_adjustment_reference_idx").on(t.accountId, t.externalReference),
+  check("hubbuy_adjustment_kind", sql`${t.kind} IN ('promotional_bonus','documented_credit','documented_debit','reversal')`),
+  check("hubbuy_adjustment_reference", sql`${t.externalReference} IS NULL OR length(trim(${t.externalReference})) BETWEEN 1 AND 200`),
+  check("hubbuy_adjustment_reversal", sql`(${t.kind} = 'reversal' AND ${t.reversesAdjustmentId} IS NOT NULL AND ${t.externalReference} IS NULL) OR (${t.kind} != 'reversal' AND ${t.reversesAdjustmentId} IS NULL)`),
 ]);
 
 export const hubbuyReconciliationEvents = sqliteTable("hubbuy_reconciliation_events", {

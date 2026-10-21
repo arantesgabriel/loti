@@ -73,11 +73,13 @@ const refundRequestSchema = z.object({
   quantity: z.number().int().min(1).max(10_000),
   requestedProductCents: centsSchema,
   requestedChinaCents: centsSchema,
+  requestedProductCnyMinor: centsSchema.optional(),
+  requestedChinaCnyMinor: centsSchema.optional(),
   reason: reasonSchema,
   packageRemovals: z.array(z.object({ packageId: z.string().min(1), quantity: z.number().int().min(1).max(10_000) }).strict()).max(100),
   unassignedQuantity: z.number().int().min(0).max(10_000),
 }).strict();
-const refundValueSchema = z.object({ expectedRevision: revisionSchema, requestedProductCents: centsSchema, requestedChinaCents: centsSchema, reason: reasonSchema }).strict();
+const refundValueSchema = z.object({ expectedRevision: revisionSchema, requestedProductCents: centsSchema, requestedChinaCents: centsSchema, requestedProductCnyMinor: centsSchema.optional(), requestedChinaCnyMinor: centsSchema.optional(), reason: reasonSchema }).strict();
 const refundReceiptSchema = z.object({
   expectedRevision: revisionSchema, receivedProductCents: centsSchema, receivedChinaCents: centsSchema,
   destination: z.enum(["hubbuy", "external"]).default("external"), accountId: z.string().min(1).nullable().optional(),
@@ -426,10 +428,22 @@ export function packageCostServices(db: AppDatabase, userId: string) {
     return operationIds.length ? tx.select().from(purchaseRefundPaymentAllocations).where(inArray(purchaseRefundPaymentAllocations.operationId, operationIds)).all() : [];
   }
 
+  function validateNativeRequest(value: { requestedProductCents: number; requestedChinaCents: number; requestedProductCnyMinor?: number; requestedChinaCnyMinor?: number }, context: Awaited<ReturnType<typeof getAdditionalRefundContext>> | null, totalQuantity: number, start: number, quantity: number) {
+    const product = value.requestedProductCnyMinor, china = value.requestedChinaCnyMinor;
+    if (product === undefined && china === undefined) return null;
+    if (product === undefined || china === undefined || !context || BigInt(product) + BigInt(china) <= 0n || BigInt(product) + BigInt(china) > BigInt(maxCost)) throw new DomainError("A solicitação CNY exige valores nativos positivos e um pagamento por componentes confirmado.", 400, "REFUND_NATIVE_REQUEST_INVALID");
+    assertRefundRangeAmounts(product, china, refundQuantityCapacity(context.productCnyMinor, totalQuantity, start, quantity), refundQuantityCapacity(context.chinaCnyMinor, totalQuantity, start, quantity));
+    if (value.requestedProductCents + value.requestedChinaCents === 0 && refundQuantityCapacity(context.productBrlCents, totalQuantity, start, quantity) + refundQuantityCapacity(context.chinaBrlCents, totalQuantity, start, quantity) !== 0) throw new DomainError("BRL zero só é permitido quando a base histórica das unidades é zero.", 400, "REFUND_NATIVE_REQUEST_INVALID");
+    return { requestedProductCnyMinor: product, requestedChinaCnyMinor: china };
+  }
+
   async function recordAdditionalRefundOperation(tx: CostTransaction, tracking: typeof purchaseCostTrackings.$inferSelect, refund: typeof purchaseCostRefunds.$inferSelect, context: Awaited<ReturnType<typeof getAdditionalRefundContext>>, input: {
     destination: "hubbuy" | "external"; accountId: string | null; productCnyMinor: number; chinaCnyMinor: number;
     productBrlCents: number; chinaBrlCents: number; nativeEvidence: string | null; idempotencyKey: string; operationType: string; reason: string | null; excludeRefundId?: string;
   }) {
+    if (input.destination === "hubbuy") assertRefundRangeAmounts(input.productCnyMinor, input.chinaCnyMinor,
+      refundQuantityCapacity(context.productCnyMinor, refund.originalItemQuantity, refund.unitStart, refund.quantity),
+      refundQuantityCapacity(context.chinaCnyMinor, refund.originalItemQuantity, refund.unitStart, refund.quantity));
     const priorRows = await getAdditionalRefundReceiptAllocations(tx, refund.costItemId, input.excludeRefundId);
     const priorByAllocation = new Map<string, { cny: number; principal: number; historical: number }>();
     const priorByConsumption = new Map<string, { cny: number; principal: number; historical: number }>();
@@ -631,7 +645,8 @@ export function packageCostServices(db: AppDatabase, userId: string) {
       const chinaTotalCents = additional ? additional.chinaBrlCents : (item.chinaFreightState === "no_charge" ? 0 : item.chinaFreightUnitCents!) * quantity;
       const productCapacity = refundQuantityCapacity(productTotalCents, quantity, unitStart, value.quantity);
       const chinaCapacity = refundQuantityCapacity(chinaTotalCents, quantity, unitStart, value.quantity);
-      assertRefundRangeAmounts(value.requestedProductCents, value.requestedChinaCents, productCapacity, chinaCapacity, true);
+      const nativeRequest = validateNativeRequest(value, additional, quantity, unitStart, value.quantity);
+      assertRefundRangeAmounts(value.requestedProductCents, value.requestedChinaCents, productCapacity, chinaCapacity, !nativeRequest);
       const duplicatePackages = new Set(value.packageRemovals.map(row => row.packageId));
       if (duplicatePackages.size !== value.packageRemovals.length || value.packageRemovals.some(row => row.quantity <= 0) || value.packageRemovals.reduce((sum, row) => sum + row.quantity, 0) + value.unassignedQuantity !== value.quantity) throw new DomainError("Informe de quais pacotes e unidades sem pacote sairá exatamente a quantidade cancelada.", 400, "REFUND_REMOVALS_INVALID");
       const packageById = new Map(packages.map(pkg => [pkg.id, pkg]));
@@ -676,6 +691,7 @@ export function packageCostServices(db: AppDatabase, userId: string) {
       await tx.insert(purchaseCostRefunds).values({
         id: refundId, trackingId, costItemId: item.id, status: "requested", quantity: value.quantity,
         requestedProductCents: value.requestedProductCents, requestedChinaCents: value.requestedChinaCents,
+        requestedProductCnyMinor: nativeRequest?.requestedProductCnyMinor ?? null, requestedChinaCnyMinor: nativeRequest?.requestedChinaCnyMinor ?? null,
         receivedProductCents: null, receivedChinaCents: null, reason: value.reason,
         unitStart,
         originalItemQuantity: quantity, originalProductUnitCents: productUnitCents, originalChinaUnitCents: chinaUnitCents,
@@ -700,6 +716,7 @@ export function packageCostServices(db: AppDatabase, userId: string) {
         await appendPackageEvent(tx, trackingId, packageId, "content_changed", contentRevision);
       }
       await appendRefundEvent(tx, refundId, userId, "requested", value.reason, {
+        requestedProductCnyMinor: nativeRequest?.requestedProductCnyMinor ?? null, requestedChinaCnyMinor: nativeRequest?.requestedChinaCnyMinor ?? null,
         quantity: value.quantity, requestedProductCents: value.requestedProductCents, requestedChinaCents: value.requestedChinaCents,
         packageRemovals: affectedPackages, unassignedQuantity: value.unassignedQuantity,
         originalCharge: { baseCents: chargeBaseCents, feeCents: chargeFeeCents, paymentMethod: originalPaymentMethod, feeBps: originalFeeBps },
@@ -719,9 +736,10 @@ export function packageCostServices(db: AppDatabase, userId: string) {
       const capacity = await refundCapacityForPosition(tx, refund,
         additional?.productBrlCents ?? refund.originalProductUnitCents * refund.originalItemQuantity,
         additional?.chinaBrlCents ?? refund.originalChinaUnitCents * refund.originalItemQuantity);
-      assertRefundRangeAmounts(value.requestedProductCents, value.requestedChinaCents, capacity.product, capacity.china, true);
-      await tx.update(purchaseCostRefunds).set({ requestedProductCents: value.requestedProductCents, requestedChinaCents: value.requestedChinaCents, reason: value.reason, updatedBy: userId, updatedAt: new Date() }).where(eq(purchaseCostRefunds.id, refundId)).run();
-      await appendRefundEvent(tx, refundId, userId, "request_updated", value.reason, { before: { productCents: refund.requestedProductCents, chinaCents: refund.requestedChinaCents }, after: { productCents: value.requestedProductCents, chinaCents: value.requestedChinaCents } });
+      const nativeRequest = validateNativeRequest(value, additional, refund.originalItemQuantity, refund.unitStart, refund.quantity);
+      assertRefundRangeAmounts(value.requestedProductCents, value.requestedChinaCents, capacity.product, capacity.china, !nativeRequest);
+      await tx.update(purchaseCostRefunds).set({ requestedProductCents: value.requestedProductCents, requestedChinaCents: value.requestedChinaCents, requestedProductCnyMinor: nativeRequest?.requestedProductCnyMinor ?? null, requestedChinaCnyMinor: nativeRequest?.requestedChinaCnyMinor ?? null, reason: value.reason, updatedBy: userId, updatedAt: new Date() }).where(eq(purchaseCostRefunds.id, refundId)).run();
+      await appendRefundEvent(tx, refundId, userId, "request_updated", value.reason, { before: { productCents: refund.requestedProductCents, chinaCents: refund.requestedChinaCents, productCnyMinor: refund.requestedProductCnyMinor, chinaCnyMinor: refund.requestedChinaCnyMinor }, after: { productCents: value.requestedProductCents, chinaCents: value.requestedChinaCents, ...nativeRequest } });
       return undefined;
     });
   }

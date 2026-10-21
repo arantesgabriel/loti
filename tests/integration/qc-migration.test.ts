@@ -2,7 +2,7 @@ import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { sql } from "drizzle-orm";
+import { getTableColumns, sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import { openDatabase } from "@/lib/db/connection";
 import { hubbuyExternalItems, purchaseCostCharges, purchaseCostRefundEvents, purchaseCostRefundParticipants, purchaseCostRefunds, purchaseCostTrackings, purchaseItemCosts, purchaseItems, purchases, qcEvents, qcImagePreviews, qcImageSources, qcImages, qcImports, qcPresentations, user, workspaceMembers, workspaces } from "@/lib/db/schema";
@@ -13,6 +13,8 @@ describe("QC migration from the refund baseline", () => {
     const migrations = join(tmpdir(), `loti-qc-migrations-${crypto.randomUUID()}`);
     const fixtureConnection = openDatabase(":memory:"), legacy = openDatabase(":memory:");
     let { db, client } = fixtureConnection;
+    // Compare only historical columns against the pre-migration database.
+    const legacyRefundColumns = Object.fromEntries(Object.entries(getTableColumns(purchaseCostRefunds)).filter(([key]) => !["requestedProductCnyMinor", "requestedChinaCnyMinor"].includes(key)));
     try {
       mkdirSync(join(migrations, "meta"), { recursive: true });
       const journal = JSON.parse(readFileSync(resolve("drizzle/meta/_journal.json"), "utf8")) as { entries: { tag: string }[] };
@@ -67,7 +69,7 @@ describe("QC migration from the refund baseline", () => {
         items: await db.select().from(purchaseItems).orderBy(purchaseItems.id).all(),
         costs: await db.select().from(purchaseItemCosts).orderBy(purchaseItemCosts.id).all(),
         charges: await db.select().from(purchaseCostCharges).orderBy(purchaseCostCharges.id).all(),
-        refunds: await db.select().from(purchaseCostRefunds).orderBy(purchaseCostRefunds.id).all(),
+        refunds: await db.select(legacyRefundColumns).from(purchaseCostRefunds).orderBy(purchaseCostRefunds.id).all(),
         participants: await db.select().from(purchaseCostRefundParticipants).all(),
         events: await db.select().from(purchaseCostRefundEvents).orderBy(purchaseCostRefundEvents.eventOrder).all(),
         qcImages: await db.select().from(qcImages).all(),
@@ -85,13 +87,15 @@ describe("QC migration from the refund baseline", () => {
         items: await db.select().from(purchaseItems).orderBy(purchaseItems.id).all(),
         costs: await db.select().from(purchaseItemCosts).orderBy(purchaseItemCosts.id).all(),
         charges: await db.select().from(purchaseCostCharges).orderBy(purchaseCostCharges.id).all(),
-        refunds: await db.select().from(purchaseCostRefunds).orderBy(purchaseCostRefunds.id).all(),
+        refunds: await db.select(legacyRefundColumns).from(purchaseCostRefunds).orderBy(purchaseCostRefunds.id).all(),
         participants: await db.select().from(purchaseCostRefundParticipants).all(),
         events: await db.select().from(purchaseCostRefundEvents).orderBy(purchaseCostRefundEvents.eventOrder).all(),
         qcImages: await db.select().from(qcImages).all(),
         qcSources: await db.select().from(qcImageSources).all(),
         qcEvents: await db.select().from(qcEvents).all(),
       }).toEqual(before);
+      expect(await db.select({ product: purchaseCostRefunds.requestedProductCnyMinor, china: purchaseCostRefunds.requestedChinaCnyMinor }).from(purchaseCostRefunds)).toEqual([{ product: null, china: null }]);
+      expect((await client.execute("PRAGMA foreign_key_check")).rows).toHaveLength(0);
       expect(await db.select().from(qcImports).all()).toEqual([]);
       expect(await db.select().from(qcPresentations).all()).toEqual([]);
       expect(await db.select().from(qcImagePreviews).all()).toEqual([]);

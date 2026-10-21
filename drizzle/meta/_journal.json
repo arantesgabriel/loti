@@ -155,6 +155,13 @@
       "when": 1792499899558,
       "tag": "0021_fine_puppet_master",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1792557724467,
+      "tag": "0022_hubbuy_manual_adjustments",
+      "breakpoints": true
     }
   ]
 }
