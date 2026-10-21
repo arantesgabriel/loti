@@ -8,8 +8,10 @@ import {
   hubbuyBalanceConsumptions,
   hubbuyBalanceCreditShares,
   hubbuyBalanceEntries,
+  hubbuyBalanceAdjustments,
   hubbuyReconciliationEvents,
   hubbuyReconciliationRuns,
+  user,
 } from "../db/schema";
 import { authorization } from "./authorization";
 import { DomainError } from "./errors";
@@ -19,6 +21,7 @@ import { previewFifoConsumption } from "./hubbuy-balance-calculations";
 import { accountDeletionBlockCode, accountDeletionBlockMessage, accountDiscardEligible } from "./hubbuy-account-lifecycle";
 import { presentIndividualRights, type AvailableCreditShare } from "./hubbuy-rights-presentation";
 import { readRefundProductOrigins } from "./hubbuy-rights-reading";
+import { manualBalanceAdjustmentServices } from "./hubbuy-balance-adjustments";
 
 const MAX_MINOR = 1_000_000_000_000;
 const minorSchema = z.number().int().min(0).max(MAX_MINOR);
@@ -544,13 +547,14 @@ export function hubbuyBalanceServices(db: AppDatabase, userId: string) {
       const state = await calculateLedgerState(tx, account);
       const remainingCreditIds = new Set(state.availableShares.filter(share => share.availableCnyMinor !== 0 || share.availableHistoricalBrlCents !== 0).map(share => share.creditEntryId));
       const products = await readRefundProductOrigins(tx, account, state.entries.filter(entry => entry.sourceType === "refund_received" && remainingCreditIds.has(entry.id)).map(entry => entry.sourceId));
+      const adjustments = await tx.select({ entryId: hubbuyBalanceAdjustments.balanceEntryId, kind: hubbuyBalanceAdjustments.kind, reason: financialOperations.reason }).from(hubbuyBalanceAdjustments).innerJoin(financialOperations, eq(financialOperations.id, hubbuyBalanceAdjustments.operationId)).where(eq(hubbuyBalanceAdjustments.accountId, accountId)).all();
       const reconciliation = await tx.select().from(hubbuyReconciliationRuns).where(eq(hubbuyReconciliationRuns.accountId, accountId)).get();
       const reconciliationEvents = await tx.select().from(hubbuyReconciliationEvents).where(eq(hubbuyReconciliationEvents.accountId, accountId)).orderBy(asc(hubbuyReconciliationEvents.occurredAt), asc(hubbuyReconciliationEvents.recordedAt)).all();
       return {
         account,
         ledgerBalanceCnyMinor: state.ledgerBalanceCnyMinor,
         reconciled: state.reconciled && state.ledgerBalanceCnyMinor === account.balanceCnyMinor,
-        rights: presentIndividualRights(state.rights, state.availableShares, state.entries, products),
+        rights: presentIndividualRights(state.rights, state.availableShares, state.entries, products, adjustments),
         reconciliation: reconciliation ? { ...reconciliation, events: reconciliationEvents } : null,
       };
     });
@@ -571,16 +575,24 @@ export function hubbuyBalanceServices(db: AppDatabase, userId: string) {
         .orderBy(asc(hubbuyBalanceEntries.sequence)).limit(limit + 1).all();
       const hasMore = selected.length > limit;
       const page = hasMore ? selected.slice(0, limit) : selected;
+      const adjustments = await tx.select().from(hubbuyBalanceAdjustments).where(eq(hubbuyBalanceAdjustments.accountId, accountId)).all();
+      const actors = page.length ? await tx.select({ id: user.id, name: user.name }).from(user).where(inArray(user.id, page.flatMap(row => row.operation ? [row.operation.actorId] : []))).all() : [];
+      const uses = await tx.select({ creditEntryId: hubbuyBalanceCreditShares.creditEntryId }).from(hubbuyBalanceConsumptions).innerJoin(hubbuyBalanceCreditShares, eq(hubbuyBalanceCreditShares.id, hubbuyBalanceConsumptions.creditShareId)).innerJoin(hubbuyBalanceEntries, eq(hubbuyBalanceEntries.id, hubbuyBalanceCreditShares.creditEntryId)).where(eq(hubbuyBalanceEntries.accountId, accountId)).all();
       const previous = afterSequence < 0 ? [] : await tx.select().from(hubbuyBalanceEntries).where(and(eq(hubbuyBalanceEntries.accountId, account.id), lte(hubbuyBalanceEntries.sequence, afterSequence))).all();
       let balance = previous.reduce((sum, row) => sum + (row.direction === "credit" ? row.amountCnyMinor : -row.amountCnyMinor), 0);
       const entries = page.map(({ entry, operation }) => {
         balance += entry.direction === "credit" ? entry.amountCnyMinor : -entry.amountCnyMinor;
-        return { ...entry, occurredAt: operation?.occurredAt ?? null, operationRecordedAt: operation?.recordedAt ?? null, operationType: operation?.operationType ?? null, reason: operation?.reason ?? null, balanceAfterCnyMinor: balance };
+        const adjustment = adjustments.find(row => row.balanceEntryId === entry.id);
+        const reversedBy = adjustment ? adjustments.find(row => row.reversesAdjustmentId === adjustment.id) : undefined;
+        const context = adjustment && operation ? JSON.parse(operation.contextJson) as { result?: { shares?: { personId: string; amountCnyMinor: number; historicalBrlCents: number }[] } } : null;
+        return { ...entry, occurredAt: operation?.occurredAt ?? null, operationRecordedAt: operation?.recordedAt ?? null, operationType: operation?.operationType ?? null, reason: operation?.reason ?? null, balanceAfterCnyMinor: balance,
+          actorName: actors.find(row => row.id === operation?.actorId)?.name ?? null,
+          adjustment: adjustment ? { ...adjustment, reversedById: reversedBy?.id ?? null, canReverse: adjustment.kind !== "reversal" && !reversedBy && account.status === "active" && (entry.direction === "debit" || !uses.some(row => row.creditEntryId === entry.id)), shares: context?.result?.shares ?? [] } : null };
       });
       return { accountId, entries, nextAfterSequence: hasMore ? page.at(-1)!.entry.sequence : null };
     });
   }
 
   const discardIncorrectAccount = (accountId: string, input: unknown) => deleteAccount(accountId, input, true);
-  return { createAccount, activateEmptyAccountAtZero, startReconciliation, recordReconciliationEvent, reconcileAccount, archiveAccount, deleteAccount, discardIncorrectAccount, listAccounts, getAccountBalance, readStatement };
+  return { createAccount, activateEmptyAccountAtZero, startReconciliation, recordReconciliationEvent, reconcileAccount, archiveAccount, deleteAccount, discardIncorrectAccount, listAccounts, getAccountBalance, readStatement, ...manualBalanceAdjustmentServices(db, userId, transact, calculateHubBuyBalanceState) };
 }

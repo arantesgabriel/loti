@@ -1,5 +1,7 @@
 # Direitos individuais — composição do saldo por produto
 
+Complemento de 21/10/2026: a [extensão de ajustes manuais](37_HUBBUY_MANUAL_BALANCE_ADJUSTMENTS_PLAN.md) identifica bônus promocionais, créditos manuais e saldo restaurado por anulação como origens próprias, sem produto fictício ou alteração das origens legadas de conciliação. Valores CNY positivos com base BRL zero permanecem visíveis.
+
 Data: **20/10/2026**. Status: **implementado e validado localmente; suíte global com uma falha preexistente de concorrência**.
 
 Base inspecionada: commit `5074159`, schema, serviços financeiros, endpoint da conta, painel, CSS e testes existentes. Não houve consulta ao banco de produção. A captura fornecida é referência de interface e valores; ela não permite identificar qual produto gerou o saldo real de uma pessoa.
