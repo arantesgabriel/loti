@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
@@ -190,6 +190,16 @@ describe("paid additional order corrections", () => {
     expect(replacement.items[0].financingPositions).toMatchObject([{ lenderId: "alice", beneficiaryId: "bob", openCnyMinor: 2_000, openHistoricalBrlCents: 1_542 }]);
     expect(detail.productOrders.flatMap(order => order.items.flatMap(item => item.financingPositions))).toHaveLength(1);
     expect((await s.accounts.getAccountBalance(s.accountId)).rights).toMatchObject([{ personId: "alice", availableCnyMinor: 500 }]);
+  });
+
+  it("retries contention while reading the authorized receipt before the write transaction", async () => {
+    const s = await setup();
+    const read = vi.spyOn(f.db, "select").mockImplementationOnce(() => { throw Object.assign(new Error("database is locked"), { code: "SQLITE_BUSY" }); });
+    try {
+      expect(await s.service.correctAdditionalOrder(s.trackingId, s.orderId, s.input)).toMatchObject({ replayed: false, balanceAfterCnyMinor: 500 });
+      expect(await s.service.correctAdditionalOrder(s.trackingId, s.orderId, s.input)).toMatchObject({ replayed: true, balanceAfterCnyMinor: 500 });
+      expect(await f.db.select().from(purchaseOrderCorrections)).toHaveLength(1);
+    } finally { read.mockRestore(); }
   });
 
   it("serializes identical confirmations from independent processes without duplicate credit", async () => {

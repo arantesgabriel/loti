@@ -41,15 +41,15 @@ export function purchaseOrderCorrectionServices(db: AppDatabase, actorId: string
     // A lost response may be retried after closure, or after another writer has
     // committed. Authenticate before returning its persisted receipt, without
     // starting a second write transaction just to acknowledge that receipt.
-    const replayTracking = await db.select().from(purchaseCostTrackings).where(eq(purchaseCostTrackings.id, trackingId)).get();
-    if (!replayTracking) throw new DomainError("Acompanhamento não encontrado.", 404);
-    await authorization(db, actorId).requireWorkspaceMember(replayTracking.workspaceId);
-    const receipt = await db.select().from(financialOperations).where(and(eq(financialOperations.workspaceId, replayTracking.workspaceId), eq(financialOperations.idempotencyKey, value.idempotencyKey))).get();
-    if (receipt) {
-      if (receipt.operationType !== "additional_order_corrected" || receipt.payloadHash !== payloadHash) throw new DomainError("Esta chave já foi usada com outros dados.", 409, "IDEMPOTENCY_CONFLICT");
-      return { ...JSON.parse(receipt.contextJson) as Result, replayed: true };
-    }
     try {
+      const replayTracking = await db.select().from(purchaseCostTrackings).where(eq(purchaseCostTrackings.id, trackingId)).get();
+      if (!replayTracking) throw new DomainError("Acompanhamento não encontrado.", 404);
+      await authorization(db, actorId).requireWorkspaceMember(replayTracking.workspaceId);
+      const receipt = await db.select().from(financialOperations).where(and(eq(financialOperations.workspaceId, replayTracking.workspaceId), eq(financialOperations.idempotencyKey, value.idempotencyKey))).get();
+      if (receipt) {
+        if (receipt.operationType !== "additional_order_corrected" || receipt.payloadHash !== payloadHash) throw new DomainError("Esta chave já foi usada com outros dados.", 409, "IDEMPOTENCY_CONFLICT");
+        return { ...JSON.parse(receipt.contextJson) as Result, replayed: true };
+      }
       return await serializeDomainTransaction(() => db.transaction(async tx => {
         const tracking = await tx.select().from(purchaseCostTrackings).where(eq(purchaseCostTrackings.id, trackingId)).get();
         if (!tracking) throw new DomainError("Acompanhamento não encontrado.", 404);
@@ -159,8 +159,8 @@ export function purchaseOrderCorrectionServices(db: AppDatabase, actorId: string
       }));
     } catch (error) {
       if (preview && error instanceof PreviewRollback) return error.result;
-      if (databaseBusy(error) && attempt < 8) {
-        await new Promise(resolve => setTimeout(resolve, Math.min(1_000, 25 * 2 ** attempt)));
+      if (databaseBusy(error) && attempt < 12) {
+        await new Promise(resolve => setTimeout(resolve, Math.min(2_000, 25 * 2 ** attempt)));
         return correct(trackingId, orderId, input, preview, attempt + 1);
       }
       throw error;
