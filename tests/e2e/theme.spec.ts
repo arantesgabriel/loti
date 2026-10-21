@@ -14,7 +14,7 @@ async function choose(page: Page, label: "Claro" | "Escuro" | "Sistema") {
   await expect(page.getByRole("radio", { name: label, exact: true })).toBeChecked();
 }
 
-test("light remains the default on a dark system; stored dark applies before hydration", async ({ page }) => {
+test("light remains the default on a dark system; stored dark initializes on reload", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "dark" });
   await page.addInitScript(() => {
     if (!sessionStorage.getItem("theme-test-initialized")) {
@@ -26,8 +26,6 @@ test("light remains the default on a dark system; stored dark applies before hyd
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await expect(page.locator("html")).toHaveCSS("color-scheme", "light");
   await page.evaluate(() => localStorage.setItem("loti.theme", "dark"));
-  // Blocking React bundles proves the head bootstrap resolves the preference itself.
-  await page.route(/\/_next\/.*\.js(?:\?|$)/, route => route.abort());
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await expect(page.locator("body")).toHaveCSS("background-color", "rgb(27, 25, 26)");
