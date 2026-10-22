@@ -33,6 +33,7 @@ export type RefundProductOrigin = {
   trackingId: string;
   name: string;
   variant: string | null;
+  purchaseName?: string;
 };
 
 type OriginEntry = { id: string; sequence: number; sourceType: string; sourceId: string };
@@ -45,8 +46,8 @@ function checkedMinor(value: bigint): number {
   return Number(value);
 }
 
-type ManualOrigin = { entryId: string; kind: string; reason: string | null };
-function describeOrigin(entry: OriginEntry | undefined, creditEntryId: string, products: Map<string, RefundProductOrigin>, adjustments: ManualOrigin[]): Omit<RightOrigin, "availableCnyMinor" | "availableHistoricalBrlCents"> {
+export type ManualOrigin = { entryId: string; kind: string; reason: string | null };
+export function describeOrigin(entry: OriginEntry | undefined, creditEntryId: string, products: Map<string, RefundProductOrigin>, adjustments: ManualOrigin[]): Omit<RightOrigin, "availableCnyMinor" | "availableHistoricalBrlCents"> {
   const manual = adjustments.find(row => row.entryId === creditEntryId);
   if (manual) return { id: `entry:${creditEntryId}`, kind: manual.kind === "promotional_bonus" ? "promotional_bonus" : manual.kind === "reversal" ? "manual_reversal" : "manual_credit", label: `${manual.kind === "promotional_bonus" ? "Bônus promocional" : manual.kind === "reversal" ? "Saldo restaurado por anulação" : "Crédito manual"}${manual.reason ? ` · ${manual.reason}` : ""}`, variant: null, trackingId: null, costItemId: null };
   const product = entry?.sourceType === "refund_received" ? products.get(entry.sourceId) : undefined;

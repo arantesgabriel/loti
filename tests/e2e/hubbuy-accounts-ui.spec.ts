@@ -87,7 +87,7 @@ test("account selection, search, creation focus and statement retries preserve t
   await expect(page.getByRole("heading", { name: names[1], exact: true })).toBeVisible();
 });
 
-test("individual rights show remaining products, accessible expansion and full-width responsive composition", async ({ page }) => {
+test("balance history retains exhausted origins, destinations, filters and responsive details", async ({ page }) => {
   test.setTimeout(180_000);
   await login(page, "profile-qa", "Profile-QA-Old-2026!");
   const origin = test.info().project.use.baseURL ?? "http://localhost:3100";
@@ -100,7 +100,7 @@ test("individual rights show remaining products, accessible expansion and full-w
   const purchaseData = await appPost({ operation: "purchase.save", input: { name: `Composição QA ${suffix}` } });
   const memberId = purchaseData.data.currentUser.id as string;
   const memberName = purchaseData.data.currentUser.name as string;
-  const names = ["Produto X com nome longo e variação histórica", "Produto Y", "Produto Z", "Produto W"];
+  const names = ["RAM 5200 MHz com nome longo e variação histórica", ...Array.from({ length: 11 }, (_, index) => `Produto histórico ${index + 1}`)];
   for (const name of names) await appPost({ operation: "item.save", input: { name, variant: "Modelo sintético", url: `https://example.test/origins-${suffix}`, personId: memberId, quantity: 1, unitPriceCents: 1425 } });
   await appPost({ operation: "purchase.finalize", id: purchaseData.result.id, input: true });
   const trackings = (await (await page.request.get("/api/packages")).json()).data as { tracking: { id: string }; purchase: { id: string } }[];
@@ -125,57 +125,70 @@ test("individual rights show remaining products, accessible expansion and full-w
     const refundId = detail.refunds.find((refund: { costItemId: string }) => refund.costItemId === costItemId).id;
     detail = await costPost("refund.receive", { expectedRevision: detail.tracking.revision, receivedProductCents: 1425, receivedChinaCents: 0, destination: "hubbuy", accountId, receivedProductCnyMinor: 1898, receivedChinaCnyMinor: 0, nativeEvidence: "Crédito sintético confirmado", confirmed: true }, { refundId });
   }
+  detail = await costPost("order.additional.create", { expectedRevision: detail.tracking.revision, idempotencyKey: crypto.randomUUID(), accountId, items: [{ name: "Encordoamento de destino", url: "https://example.test/strings", platform: "Taobao", visualKey: "generic", quantity: 1, itemOrder: 0, nativeProductState: "known", nativeProductCnyMinor: 1898, nativeChinaState: "no_charge", nativeChinaCnyMinor: null, participants: [{ personId: memberId, weightMode: "equal", weight: 1 }] }] });
+  const orderId = detail.productOrders.find((row: { kind: string; state: string }) => row.kind === "additional" && row.state === "draft").id;
+  detail = await costPost("order.additional.pay_mixed", { expectedRevision: detail.tracking.revision, idempotencyKey: crypto.randomUUID(), useOwnBalance: true }, { orderId });
   await page.goto("/packages/accounts");
   await page.getByRole("navigation", { name: "Contas HubBuy cadastradas" }).getByRole("button").filter({ hasText: label }).click();
-  const rights = page.getByRole("region", { name: "Saldo por pessoa", exact: true });
-  const person = rights.getByRole("region", { name: `Direitos de ${memberName}`, exact: true });
-  await expect(person).toContainText("¥ 75,92 · R$ 57,00");
-  await expect(person.getByRole("listitem")).toHaveCount(3);
-  await expect(person.getByRole("listitem").first()).toContainText("¥ 18,98 · R$ 14,25");
+  const rights = page.getByRole("region", { name: "Histórico do saldo por pessoa", exact: true });
+  const person = rights.getByRole("region", { name: `Histórico de ${memberName}`, exact: true });
+  await expect(person).toContainText("Disponível ¥ 208,78 · R$ 156,75");
+  await expect(person.getByRole("row")).toHaveCount(11);
+  const ram = person.getByRole("row").filter({ hasText: names[0] });
+  await expect(ram).toContainText("Esgotado");
+  await expect(ram).toContainText("¥ 0,00");
+  await ram.getByRole("button", { name: /Detalhes de/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Detalhes da origem", exact: true });
+  await expect(dialog).toContainText("Encordoamento de destino");
+  await expect(dialog).toContainText("Dinheiro novo");
+  await expect(dialog).toContainText("Data do registro");
+  await page.keyboard.press("Escape");
+  await expect(ram.getByRole("button")).toBeFocused();
+  await rights.getByLabel("Mostrar origens").selectOption("available");
+  await expect(ram).toHaveCount(0);
+  await rights.getByLabel("Mostrar origens").selectOption("exhausted");
+  await expect(person.getByRole("row")).toHaveCount(2);
+  await expect(person).toContainText("Disponível ¥ 208,78");
+  await rights.getByLabel("Buscar produto ou origem").fill("inexistente");
+  await expect(rights.getByRole("status")).toContainText("Nenhuma origem encontrada");
+  await rights.getByLabel("Buscar produto ou origem").fill("");
+  await rights.getByLabel("Mostrar origens").selectOption("all");
   await expect(page.getByRole("heading", { name: "Última revisão" })).toHaveCount(0);
-  const expand = person.getByRole("button", { name: /Ver todas as origens \(4\)/ });
+  const expand = person.getByRole("button", { name: /Mostrar mais \(2\)/ });
   await expand.focus();
   await page.keyboard.press("Enter");
   const collapse = person.getByRole("button", { name: /Recolher/ });
   await expect(collapse).toHaveAttribute("aria-expanded", "true");
-  await expect(person.getByRole("listitem")).toHaveCount(4);
+  await expect(person.getByRole("row")).toHaveCount(13);
   for (const name of names) await expect(person).toContainText(name);
   await expect(person.getByRole("link")).toHaveCount(0);
   await expect(person.getByText("Ver compra", { exact: true })).toHaveCount(0);
   for (const width of [1440, 1024, 768, 390, 320]) {
     await page.setViewportSize({ width, height: 1100 });
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    for (const row of await person.getByRole("listitem").all()) {
-      const layout = await row.evaluate(element => {
-        const name = element.querySelector(".hubbuy-right-origin-identity")!.getBoundingClientRect();
-        const amount = element.querySelector(".hubbuy-right-origin-balance")!.getBoundingClientRect();
-        return { height: element.getBoundingClientRect().height, centerDifference: Math.abs((name.top + name.bottom) / 2 - (amount.top + amount.bottom) / 2) };
-      });
-      expect(layout.height).toBeLessThanOrEqual(44);
-      expect(layout.centerDifference).toBeLessThan(2);
-      for (const marker of await row.locator(".category-marker, .hubbuy-right-origin-marker").all()) {
-        const style = await marker.evaluate(element => {
-          const computed = getComputedStyle(element);
-          return { border: computed.borderTopWidth, background: computed.backgroundColor, shadow: computed.boxShadow };
-        });
-        expect(style).toEqual({ border: "0px", background: "rgba(0, 0, 0, 0)", shadow: "none" });
-      }
-    }
-    const sectionBox = await rights.boundingBox();
-    const balanceBox = await page.locator(".hubbuy-balance-card").boundingBox();
-    expect(Math.abs(sectionBox!.width - balanceBox!.width)).toBeLessThan(2);
+    await expect(person.getByRole("img")).toHaveCount(0);
+    await expect.poll(async () => {
+      const sectionBox = await rights.boundingBox();
+      const balanceBox = await page.locator(".hubbuy-balance-card").boundingBox();
+      return Math.abs(sectionBox!.width - balanceBox!.width);
+    }).toBeLessThan(2);
     if (process.env.LOTI_CAPTURE_HUBBUY_QA === "1" && [1440, 390, 320].includes(width)) {
       mkdirSync(resolve("artifacts/qa/hubbuy-rights"), { recursive: true });
-      await page.screenshot({ path: resolve(`artifacts/qa/hubbuy-rights/origins-${width}.png`), fullPage: true });
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.screenshot({ path: resolve(`artifacts/qa/hubbuy-rights/history-${process.env.LOTI_E2E_THEME ?? "light"}-${width}.png`) });
+      if (width < 600) {
+        await person.evaluate(element => window.scrollTo({ top: window.scrollY + element.getBoundingClientRect().top - 100 }));
+        await page.screenshot({ path: resolve(`artifacts/qa/hubbuy-rights/history-${process.env.LOTI_E2E_THEME ?? "light"}-data-${width}.png`) });
+      }
     }
   }
   await collapse.focus();
   await page.keyboard.press("Enter");
-  await expect(person.getByRole("listitem")).toHaveCount(3);
+  await expect(person.getByRole("row")).toHaveCount(11);
   await expect(expand).toHaveAttribute("aria-expanded", "false");
   await page.reload();
   await page.getByRole("combobox", { name: "Conta selecionada" }).selectOption(accountId);
-  await expect(person.getByRole("listitem")).toHaveCount(3);
+  await expect(person.getByRole("row")).toHaveCount(11);
   // A divergent read must be identified before displaying its breakdown as confirmed.
   await page.route(`**/api/hubbuy/accounts/${accountId}`, async route => {
     const response = await route.fetch();

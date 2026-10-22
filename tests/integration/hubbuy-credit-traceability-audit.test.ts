@@ -70,6 +70,7 @@ async function scenario(corrections: boolean) {
       rights: final.rights.map(row => [row.personId, row.availableCnyMinor]).sort(),
       brl: final.rights.map(row => [row.personId, row.availableHistoricalBrlCents]).sort(),
       origins: final.rights.flatMap(row => row.origins.map(origin => ({ person: row.personId, label: origin.label, kind: origin.kind, cny: origin.availableCnyMinor }))),
+      traceability: final.traceability,
     };
   } finally { f.client.close(); }
 }
@@ -86,6 +87,13 @@ describe("investigation: credit origin after repeated corrections", () => {
     expect(corrected.origins.some(row => row.label === "RAM alpha")).toBe(false);
     expect(corrected.origins.filter(row => row.kind === "restored_balance").reduce((sum, row) => sum + row.cny, 0)).toBe(14126);
     expect(corrected.origins).not.toEqual(direct.origins);
+    for (const person of corrected.traceability) {
+      const ram = person.origins.find(origin => origin.label === "RAM alpha")!;
+      expect(ram.availableCnyMinor).toBe(0);
+      expect(ram.receipts.some(receipt => receipt.uses.some(use => use.restored.length > 0))).toBe(true);
+      expect(person.origins.some(origin => origin.kind === "restored_balance" && origin.receipts.some(receipt => receipt.restoredFrom.length > 0))).toBe(true);
+      expect(person.origins.reduce((sum, origin) => sum + origin.availableCnyMinor, 0)).toBe(person.availableCnyMinor);
+    }
     // A correction must not silently be treated as equivalence of BRL bases.
     // These assertions characterize the current defect without fixing services.
     expect(direct.brl).toEqual([["alice", 10700], ["bob", 10701], ["carol", 10701]]);

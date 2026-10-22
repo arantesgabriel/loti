@@ -4,6 +4,49 @@
   align-items: start;
   gap: 24px;
 }
+.hubbuy-history { container-type: inline-size; }
+.hubbuy-history-filters { display: flex; flex-wrap: wrap; gap: 12px; }
+.hubbuy-history-filters label { display: grid; flex: 1 1 110px; gap: 6px; min-width: 0; color: var(--muted); font-size: 12px; }
+.hubbuy-history-filters input, .hubbuy-history-filters select { width: 100%; min-width: 0; min-height: 44px; font-size: 13px; }
+.hubbuy-history-table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 12px; }
+.hubbuy-history-table th, .hubbuy-history-table td { padding: 12px 6px; border-bottom: 1px solid var(--border); text-align: right; vertical-align: top; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.hubbuy-history-table th { color: var(--muted); font-size: 11px; font-weight: 500; }
+.hubbuy-history-table th:first-child { width: 27%; text-align: left; }
+.hubbuy-history-table td:first-child { text-align: left; }
+.hubbuy-history-table th:last-child { width: 62px; }
+.hubbuy-history-table small { display: block; margin-top: 4px; color: var(--muted); font-size: 10px; line-height: 1.5; font-weight: 400; }
+.hubbuy-history-identity { display: flex; align-items: start; gap: 8px; min-width: 0; }
+.hubbuy-history-identity > svg, .hubbuy-history-identity .category-marker { flex: 0 0 20px; width: 20px; height: 20px; padding: 0; border: 0; background: transparent; box-shadow: none; color: var(--muted); }
+.hubbuy-history-identity > span { min-width: 0; overflow-wrap: anywhere; }
+.hubbuy-history-identity strong { font-size: 12px; font-weight: 500; line-height: 1.5; }
+.hubbuy-history-identity small { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
+.hubbuy-history-details { display: inline-block; border: 0; background: transparent; color: var(--primary-ink); padding: 4px 0; font-size: 12px; text-align: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.hubbuy-history-details:focus-visible { outline: 2px solid var(--primary-ink); outline-offset: 3px; border-radius: 3px; }
+.hubbuy-history-detail { display: grid; gap: 24px; padding-bottom: 24px; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.hubbuy-history-detail section { display: grid; gap: 10px; }
+.hubbuy-history-detail h3, .hubbuy-history-detail h4, .hubbuy-history-detail p { margin: 0; }
+.hubbuy-history-detail h3 { font-size: 14px; }
+.hubbuy-history-detail h4 { font-size: 13px; }
+.hubbuy-history-detail p, .hubbuy-history-detail small { color: var(--muted); }
+.hubbuy-history-detail small { display: block; font-size: 11px; }
+.hubbuy-history-detail dl { display: grid; gap: 8px; margin: 0; }
+.hubbuy-history-detail dl > div { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.hubbuy-history-detail dd { margin: 0; font-variant-numeric: tabular-nums; }
+.hubbuy-history-detail ul, .hubbuy-history-uses { display: grid; gap: 12px; padding-left: 18px; margin: 0; }
+.hubbuy-history-event { border-top: 1px solid var(--border); padding-top: 20px; }
+.hubbuy-history-uses > li { border-left: 2px solid var(--border); padding: 8px 0 8px 12px; }
+.hubbuy-history-reference { font-size: 11px; }
+.hubbuy-history-detail .hubbuy-history-equation { color: var(--foreground); font-variant-numeric: tabular-nums; }
+@container (max-width: 620px) {
+  .hubbuy-history-filters label:last-child { flex-basis: 100%; }
+  .hubbuy-history-table, .hubbuy-history-table tbody { display: block; }
+  .hubbuy-history-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .hubbuy-history-table tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px 16px; padding: 16px 0; border-bottom: 1px solid var(--border); }
+  .hubbuy-history-table td { border: 0; padding: 0; text-align: left; }
+  .hubbuy-history-table td:first-child, .hubbuy-history-table td:last-child { grid-column: 1 / -1; }
+  .hubbuy-history-table td[data-label]:not(:first-child)::before { content: attr(data-label); display: block; margin-bottom: 4px; color: var(--muted); font-size: 11px; }
+  .hubbuy-history-details { min-height: 44px; padding: 10px 0; }
+}
 .hubbuy-account-picker, .hubbuy-account-overview, .hubbuy-statement, .hubbuy-create-section, .hubbuy-no-accounts {
   min-width: 0;
   padding: 20px;

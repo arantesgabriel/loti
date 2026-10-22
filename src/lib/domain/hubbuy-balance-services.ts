@@ -21,6 +21,8 @@ import { previewFifoConsumption } from "./hubbuy-balance-calculations";
 import { accountDeletionBlockCode, accountDeletionBlockMessage, accountDiscardEligible } from "./hubbuy-account-lifecycle";
 import { presentIndividualRights, type AvailableCreditShare } from "./hubbuy-rights-presentation";
 import { readRefundProductOrigins } from "./hubbuy-rights-reading";
+import { presentBalanceTraceability } from "./hubbuy-balance-traceability";
+import { readBalanceTraceContext } from "./hubbuy-balance-traceability-reading";
 import { manualBalanceAdjustmentServices } from "./hubbuy-balance-adjustments";
 
 const MAX_MINOR = 1_000_000_000_000;
@@ -545,8 +547,7 @@ export function hubbuyBalanceServices(db: AppDatabase, userId: string) {
     return db.transaction(async tx => {
       const account = await requireAccount(tx, userId, accountId);
       const state = await calculateLedgerState(tx, account);
-      const remainingCreditIds = new Set(state.availableShares.filter(share => share.availableCnyMinor !== 0 || share.availableHistoricalBrlCents !== 0).map(share => share.creditEntryId));
-      const products = await readRefundProductOrigins(tx, account, state.entries.filter(entry => entry.sourceType === "refund_received" && remainingCreditIds.has(entry.id)).map(entry => entry.sourceId));
+      const products = await readRefundProductOrigins(tx, account, state.entries.filter(entry => entry.sourceType === "refund_received").map(entry => entry.sourceId));
       const adjustments = await tx.select({ entryId: hubbuyBalanceAdjustments.balanceEntryId, kind: hubbuyBalanceAdjustments.kind, reason: financialOperations.reason }).from(hubbuyBalanceAdjustments).innerJoin(financialOperations, eq(financialOperations.id, hubbuyBalanceAdjustments.operationId)).where(eq(hubbuyBalanceAdjustments.accountId, accountId)).all();
       const reconciliation = await tx.select().from(hubbuyReconciliationRuns).where(eq(hubbuyReconciliationRuns.accountId, accountId)).get();
       const reconciliationEvents = await tx.select().from(hubbuyReconciliationEvents).where(eq(hubbuyReconciliationEvents.accountId, accountId)).orderBy(asc(hubbuyReconciliationEvents.occurredAt), asc(hubbuyReconciliationEvents.recordedAt)).all();
@@ -555,6 +556,7 @@ export function hubbuyBalanceServices(db: AppDatabase, userId: string) {
         ledgerBalanceCnyMinor: state.ledgerBalanceCnyMinor,
         reconciled: state.reconciled && state.ledgerBalanceCnyMinor === account.balanceCnyMinor,
         rights: presentIndividualRights(state.rights, state.availableShares, state.entries, products, adjustments),
+        traceability: presentBalanceTraceability(state, await readBalanceTraceContext(tx, account, products, adjustments)),
         reconciliation: reconciliation ? { ...reconciliation, events: reconciliationEvents } : null,
       };
     });
