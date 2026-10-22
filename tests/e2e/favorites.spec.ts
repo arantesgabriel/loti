@@ -20,7 +20,7 @@ test("another member sees the favorite and cannot mutate it", async ({ page }) =
 });
 test("view preference survives reload and a new login", async ({ page }) => {
   await login(page); await page.getByRole("button", { name: "Cards", exact: true }).click(); await expect(page.getByTestId("favorites-content")).toHaveClass(/cards/); await page.reload(); await expect(page.getByRole("button", { name: "Cards", exact: true })).toHaveAttribute("aria-pressed", "true");
-  await page.getByRole("button", { name: "Lista", exact: true }).click(); await page.getByRole("link", { name: "Perfil", exact: true }).click(); await page.getByRole("button", { name: "Sair da conta", exact: true }).click(); await expect(page).toHaveURL(/\/login/); await login(page); await expect(page.getByTestId("favorites-content")).toHaveClass(/list/);
+  await page.getByRole("button", { name: "Lista", exact: true }).click(); await page.getByRole("link", { name: /^Perfil(?: e configurações)?$/ }).click(); await page.getByRole("button", { name: "Sair da conta", exact: true }).click(); await expect(page).toHaveURL(/\/login/); await login(page); await expect(page.getByTestId("favorites-content")).toHaveClass(/list/);
 });
 test("collections preserve favorites on deletion", async ({ page }) => {
   await login(page); await page.getByRole("link", { name: "Nova coleção", exact: true }).click(); await page.getByLabel("Nome da coleção").fill("Coleção E2E"); await page.getByRole("button", { name: "Salvar coleção" }).click(); await expect(page.getByRole("dialog")).toHaveCount(0);

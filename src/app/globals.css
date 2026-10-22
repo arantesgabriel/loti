@@ -314,7 +314,10 @@ a {
     padding-top: 24px;
     border-top: 1px solid var(--border);
     overflow-y: auto;
+    scrollbar-width: none;
 }
+
+.sidebar-collections::-webkit-scrollbar { display: none; }
 
 .section-label {
     display: block;

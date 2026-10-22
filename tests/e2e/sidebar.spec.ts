@@ -9,6 +9,7 @@ test("sidebar theme and collapsed navigation persist and remain keyboard accessi
   page.on("console", message => { if (message.type() === "error") errors.push(message.text()); });
   await login(page);
   const sidebar = page.getByRole("complementary", { name: "Barra lateral" });
+  await expect(sidebar.locator('a[href="/profile"]')).toHaveCount(1);
   const theme = sidebar.getByRole("switch", { name: "Tema escuro" });
   await theme.focus();
   await page.keyboard.press("Space");
@@ -22,10 +23,10 @@ test("sidebar theme and collapsed navigation persist and remain keyboard accessi
   await page.reload();
   await expect(sidebar.getByRole("button", { name: "Expandir sidebar" })).toBeVisible();
   await expect(theme).toBeChecked();
-  await sidebar.getByRole("link", { name: "Configurações" }).click();
+  await sidebar.getByRole("link", { name: "Perfil e configurações" }).click();
   await expect(page).toHaveURL(/\/profile$/);
   await sidebar.getByRole("button", { name: "Expandir sidebar" }).click();
-  await expect(sidebar.getByText("Configurações", { exact: true })).toBeVisible();
+  await expect(sidebar.getByText("Conta e configurações", { exact: true })).toBeVisible();
   await expect(sidebar).toHaveCSS("width", "240px");
   await page.screenshot({ path: "artifacts/qa/sidebar/expanded-dark.png" });
   await page.emulateMedia({ reducedMotion: "reduce" });

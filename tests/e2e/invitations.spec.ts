@@ -9,7 +9,7 @@ async function issue(page: Page, email: string) {
 }
 test("member generates a link and a new mobile user joins the group", async ({ page, browser }) => {
   await login(page);
-  await page.getByRole("link", { name: "Perfil", exact: true }).click();
+  await page.getByRole("link", { name: /^Perfil(?: e configurações)?$/ }).click();
   await page.getByRole("link", { name: "Meu grupo", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Meu grupo", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Convidar pessoa", exact: true }).click();

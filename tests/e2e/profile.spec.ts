@@ -3,7 +3,7 @@ import { login } from "./helpers";
 
 test("profile name and password can be updated without losing the current session", async ({ page, browser }) => {
   await login(page, "profile-qa", "Profile-QA-Old-2026!");
-  await page.getByRole("link", { name: "Perfil", exact: true }).click();
+  await page.getByRole("link", { name: /^Perfil(?: e configurações)?$/ }).click();
   const nameInput = page.getByLabel("Nome completo");
   await nameInput.fill("Ana Júlia D'Ávila-Santos");
   let failProfileRead = false;
@@ -17,7 +17,7 @@ test("profile name and password can be updated without losing the current sessio
   failProfileRead = true;
   await page.getByRole("button", { name: "Salvar nome", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Ana Júlia D'Ávila-Santos", exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Perfil", exact: true })).toContainText("Ana Júlia D'Ávila-Santos");
+  await expect(page.getByRole("link", { name: /^Perfil(?: e configurações)?$/ })).toContainText("Ana Júlia D'Ávila-Santos");
   await expect(page.getByRole("status").filter({ hasText: "Nome salvo. Não foi possível atualizar todos os dados" })).toBeVisible();
   await page.unroute("**/api/app");
   await nameInput.fill("   ");
@@ -102,7 +102,7 @@ test("profile name and password can be updated without losing the current sessio
   await page.getByLabel("Senha", { exact: true }).fill("Profile-QA-New-2026!");
   await page.getByRole("button", { name: "Entrar", exact: true }).click();
   await page.waitForURL("**/favorites");
-  await page.getByRole("link", { name: "Perfil", exact: true }).click();
+  await page.getByRole("link", { name: /^Perfil(?: e configurações)?$/ }).click();
   await expect(page.getByRole("heading", { name: "Ana Júlia D'Ávila-Santos", exact: true })).toBeVisible();
 
   for (const width of [320, 390, 768, 1024, 1440]) {
