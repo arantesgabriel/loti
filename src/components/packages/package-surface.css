@@ -1,0 +1,76 @@
+/* Same form rhythm as Registrar crédito/ajuste, scoped to financial drawers. */
+.sheet.package-surface {
+  display: flex;
+  flex-direction: column;
+  width: min(520px, 100%);
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+}
+.package-surface.sheet .surface-head { flex: 0 0 auto; align-items: flex-start; padding: 24px 24px 20px; gap: 16px; border-bottom: 1px solid var(--border); }
+.package-surface.sheet .surface-head > div { min-width: 0; }
+.package-surface.sheet .surface-head > .button { flex-shrink: 0; }
+.package-surface.sheet .surface-head h2 { margin: 0; font-size: 21px; font-weight: 600; line-height: 1.3; }
+.package-surface.sheet .surface-head .surface-subtitle { margin: 5px 0 0; font-size: 14px; font-weight: 550; line-height: 1.4; }
+.package-surface.sheet .surface-head .muted { margin: 8px 0 0; font-size: 13px; line-height: 1.6; }
+.package-surface.sheet .surface-body { display: flex; flex: 1; flex-direction: column; gap: 24px; min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 24px 24px 0; }
+.package-surface .surface-body > form,
+.package-surface .refund-action-form { display: flex; flex-direction: column; flex: 1 0 auto; gap: 24px; width: 100%; min-width: 0; min-height: 100%; margin: 0; font-size: 13px; line-height: 1.6; }
+.package-surface .surface-body fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.package-surface.sheet label { min-width: 0; gap: 7px; font-size: 13px; font-weight: 500; line-height: 1.45; color: var(--foreground); }
+.package-surface.sheet input:not([type="checkbox"]):not([type="radio"]),
+.package-surface.sheet select,
+.package-surface.sheet textarea { min-width: 0; min-height: 44px; border-color: var(--border); font-size: 14px; font-weight: 400; }
+.package-surface.sheet textarea { resize: vertical; }
+.package-surface.sheet input[type="checkbox"], .package-surface.sheet input[type="radio"] { flex: 0 0 18px; width: 18px; height: 18px; min-height: 18px; margin: 2px 0 0; padding: 0; accent-color: var(--primary); }
+.package-surface.sheet h3, .package-surface.sheet legend { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.5; }
+.package-surface.sheet p { margin-top: 0; overflow-wrap: anywhere; }
+.package-surface.sheet .muted, .package-surface.sheet .refund-request-help { font-size: 12px; line-height: 1.6; }
+.package-surface.sheet .form-row { align-items: end; }
+.package-surface.sheet .form-actions,
+.package-surface.sheet .cost-order-footer { position: sticky; bottom: 0; z-index: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); gap: 12px; margin-top: auto; padding: 16px 0 max(16px, env(safe-area-inset-bottom)); border-top: 1px solid var(--border); background: var(--surface); }
+.package-surface.sheet .form-actions .button { width: 100%; min-width: 0; min-height: 44px; white-space: normal; }
+.package-surface .refund-money-fields { align-items: end; }
+.package-surface .cost-order-footer > .button:only-child { grid-column: 1 / -1; }
+/* Refund sections share a quiet hierarchy instead of competing large cards. */
+.package-surface .refund-request-context { padding: 12px 14px; gap: 10px; font-size: 12px; line-height: 1.6; }
+.package-surface .refund-request-units { gap: 12px; }
+.package-surface .refund-request-unit-row { gap: 12px; padding: 12px 14px; background: var(--surface); border-radius: 10px; }
+.package-surface .refund-request-unit-row > span { font-size: 13px; font-weight: 500; }
+.package-surface .refund-request-stepper input { width: 44px; }
+.package-surface .refund-request-values { gap: 16px; }
+.package-surface .refund-request-summary { gap: 0; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-muted); }
+.package-surface .refund-request-receivable { padding: 0 0 14px; gap: 8px; border-radius: 0; background: transparent; color: var(--foreground); }
+.package-surface .refund-request-receivable > div { flex-basis: 180px; }
+.package-surface .refund-request-receivable p { margin: 4px 0 0; font-size: 12px; }
+.package-surface .refund-request-receivable > strong { max-width: 100%; font-size: 20px; white-space: normal; overflow-wrap: anywhere; }
+.package-surface .refund-request-fee { align-items: baseline; padding: 12px 0 0; border-top: 1px solid var(--border); border-radius: 0; background: transparent; font-size: 12px; }
+.package-surface .refund-request-reason > span { font-size: 11px; }
+.package-surface .refund-request-full-amount { font-size: 12px; }
+.package-surface .refund-request-full-amount button > span { width: 40px; height: 24px; padding: 3px; }
+.package-surface .refund-request-full-amount button > span::after { width: 18px; height: 18px; }
+.package-surface .refund-request-full-amount button[aria-checked="true"] > span::after { transform: translateX(16px); }
+.package-surface .refund-preview { gap: 0; margin: 0; padding: 4px 14px; border: 1px solid var(--border); border-radius: 12px; }
+.package-surface .refund-preview > span { padding: 10px 0; border-radius: 0; background: transparent; font-size: 12px; }
+.package-surface .refund-preview > span + span { border-top: 1px solid var(--border); }
+.package-surface .refund-events { margin-top: 0; font-size: 12px; }
+/* Additional products and correction forms use the same section and label scale. */
+.package-surface .cost-order-section { gap: 16px; padding: 0; border: 0; border-radius: 0; }
+.package-surface .cost-order-section + .cost-order-section { padding-top: 24px; border-top: 1px solid var(--border); }
+.package-surface .cost-order-section-title { font-size: 14px; }
+.package-surface .cost-order-account-section select { background-color: var(--surface); }
+.package-surface .cost-correction-form fieldset { display: grid; gap: 16px; }
+.package-surface .cost-correction-form fieldset > h3 { margin-top: 8px; padding-top: 24px; border-top: 1px solid var(--border); }
+@media (max-width: 600px) {
+  .package-surface.sheet .surface-head { padding: max(16px, env(safe-area-inset-top)) 16px 16px; }
+  .package-surface.sheet .surface-body { padding: 20px 16px 0; }
+  .package-surface.sheet .surface-head h2 { font-size: 20px; }
+}
+@media (max-width: 359px) {
+  .package-surface.sheet .form-actions { grid-template-columns: minmax(0, 1fr); }
+}
+/* Content allocation already has a scrolling list and a fixed action area. */
+.package-surface.sheet.cost-package-content-editor > .surface-body { overflow: hidden; padding-top: 0; gap: 0; }
+.package-surface.sheet.cost-package-content-editor .surface-body > form { flex: 1 1 auto; min-height: 0; gap: 0; }
+.package-surface.sheet.cost-package-content-editor .form-actions { position: static; margin: 0; padding: 0; border: 0; }
+.package-surface .cost-order-footer > .button[type="submit"] { order: 1; }

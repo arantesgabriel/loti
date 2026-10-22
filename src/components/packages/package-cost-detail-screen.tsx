@@ -20,7 +20,8 @@ import {
 import { toast } from "sonner";
 import { Avatar, EmptyState } from "@/components/shared";
 import { Button } from "@/components/ui/button";
-import { Confirm, Surface } from "@/components/ui/surface";
+import { Confirm } from "@/components/ui/surface";
+import { PackageSurface as Surface } from "./package-surface";
 import type { CostTrackingView } from "@/lib/domain/package-cost-reading";
 import {
   packageCostPresentation,
