@@ -8,12 +8,17 @@ import { useWorkspace } from "@/components/workspace-provider";
 import { Button } from "@/components/ui/button";
 
 type Fields = { name: string };
-export function ProfileNameForm({ pending, onPendingChange }: { pending: boolean; onPendingChange: (value: boolean) => void }) {
+export function ProfileNameForm({ pending, onPendingChange, onDirtyChange }: { pending: boolean; onPendingChange: (value: boolean) => void; onDirtyChange: (value: boolean) => void }) {
   const { data, updateProfileName } = useWorkspace();
   const router = useRouter();
   const { register, handleSubmit, reset, control, formState: { errors, isDirty, isSubmitting } } = useForm<Fields>({ mode: "onChange", defaultValues: { name: data.currentUser.name } });
   const currentName = useWatch({ control, name: "name" });
   const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    onDirtyChange(isDirty);
+    return () => onDirtyChange(false);
+  }, [isDirty, onDirtyChange]);
 
   useEffect(() => { if (!isDirty) reset({ name: data.currentUser.name }); }, [data.currentUser.name, isDirty, reset]);
 
@@ -38,17 +43,14 @@ export function ProfileNameForm({ pending, onPendingChange }: { pending: boolean
     } finally { onPendingChange(false); }
   }
 
-  return <section className="profile-section" aria-labelledby="profile-name-heading">
-    <div className="profile-section-heading"><div><h2 id="profile-name-heading">Dados pessoais</h2><p className="muted">Seu nome aparece para as pessoas do grupo.</p></div></div>
-    <form className="profile-form" onSubmit={handleSubmit(submit)} aria-busy={isSubmitting} noValidate>
+  return <form className="profile-form settings-profile-form" onSubmit={handleSubmit(submit)} aria-busy={isSubmitting} noValidate>
       <label htmlFor="profile-full-name">Nome completo</label>
       <input id="profile-full-name" type="text" autoComplete="name" aria-invalid={!!errors.name} aria-describedby={errors.name ? "profile-full-name-error" : undefined}
         {...register("name", { validate: value => profileNameSchema.safeParse({ name: value }).success || "Informe de 1 a 200 caracteres." })} />
       {errors.name && <p className="error" id="profile-full-name-error" role="alert">{errors.name.message}</p>}
       {message && <p className={message.startsWith("Não foi") || message.startsWith("Muitas") ? "error" : "profile-success"} role={message.startsWith("Não foi") || message.startsWith("Muitas") ? "alert" : "status"}>{message}</p>}
-      <Button type="submit" disabled={pending || isSubmitting || !isDirty || !profileNameSchema.safeParse({ name: currentName }).success}>
-        {isSubmitting ? "Salvando…" : "Salvar nome"}
+      <Button type="submit" disabled={pending || isSubmitting || !profileNameSchema.safeParse({ name: currentName }).success}>
+        {isSubmitting ? "Salvando…" : "Salvar alterações"}
       </Button>
-    </form>
-  </section>;
+  </form>;
 }
