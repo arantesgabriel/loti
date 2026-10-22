@@ -9,7 +9,7 @@ export async function readRefundProductOrigins(tx: CostTransaction, account: { i
   const result: RefundProductOrigin[] = [];
   for (let offset = 0; offset < ids.length; offset += 400) {
     const rows = await tx.select({
-      refundId: purchaseCostRefunds.id, costItemId: purchaseItemCosts.id, trackingId: purchaseCostTrackings.id,
+      refundId: purchaseCostRefunds.id, costItemId: purchaseItemCosts.id, trackingId: purchaseCostTrackings.id, purchaseName: purchases.name,
       originalName: purchaseItems.name, originalVariant: purchaseItems.variant,
       additionalName: purchaseAdditionalOrderItems.name, additionalVariant: purchaseAdditionalOrderItems.variant,
     }).from(purchaseCostRefunds)
@@ -22,7 +22,7 @@ export async function readRefundProductOrigins(tx: CostTransaction, account: { i
       .where(and(inArray(purchaseCostRefunds.id, ids.slice(offset, offset + 400)), eq(purchaseCostRefunds.hubbuyAccountId, account.id))).all();
     for (const row of rows) {
       const name = row.originalName ?? row.additionalName;
-      if (name) result.push({ refundId: row.refundId, costItemId: row.costItemId, trackingId: row.trackingId, name, variant: row.originalName !== null ? row.originalVariant : row.additionalVariant });
+      if (name) result.push({ refundId: row.refundId, costItemId: row.costItemId, trackingId: row.trackingId, purchaseName: row.purchaseName, name, variant: row.originalName !== null ? row.originalVariant : row.additionalVariant });
     }
   }
   return result;

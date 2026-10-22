@@ -20,10 +20,10 @@ export type QcOccurrenceInput = {
 export type ParsedQcImport = { occurrences: QcOccurrenceInput[]; orderCount: number; photoCount: number; partial: boolean; reportedCount: number | null };
 
 const record = (value: unknown): Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-function optionalText(value: unknown, max: number, name: string): string | null {
+function optionalText(value: unknown, max: number, name: string, trimEdges = false): string | null {
   if (value === undefined || value === null || value === "") return null;
-  if (typeof value !== "string" || value.length > max || value.trim() !== value || /[\u0000-\u001f\u007f]/.test(value)) throw new DomainError(`Campo HubBuy inválido: ${name}.`, 400, "QC_IMPORT_INVALID");
-  return value;
+  if (typeof value !== "string" || value.length > max || !trimEdges && value.trim() !== value || /[\u0000-\u001f\u007f]/.test(value)) throw new DomainError(`Campo HubBuy inválido: ${name}.`, 400, "QC_IMPORT_INVALID");
+  return (trimEdges ? value.trim() : value) || null;
 }
 function optionalChannel(value: unknown): string | null {
   if (typeof value === "number" && Number.isSafeInteger(value) && value >= 0) value = String(value);
@@ -81,7 +81,7 @@ export function parseHubBuyImport(input: unknown): ParsedQcImport {
         channel: optionalChannel(goods.channel),
         offerUrl: optionalText(goods.offerUrl, QC_LIMITS.urlChars, "offerUrl"),
         skuInfo: optionalText(goods.skuInfo, QC_LIMITS.skuChars, "skuInfo"),
-        title: optionalText(goods.goodsName ?? goods.title, QC_LIMITS.titleChars, "goodsName/title"),
+        title: optionalText(goods.goodsName ?? goods.title, QC_LIMITS.titleChars, "goodsName/title", true),
         quantity: optionalCount(goods.quantity), photos,
       });
     }

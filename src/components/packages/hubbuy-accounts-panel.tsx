@@ -11,13 +11,14 @@ import { formatBrlMinor, formatCnyMinor, parseFinancialMinor } from "@/lib/domai
 import { costRequest } from "./package-cost-client";
 import type { IndividualRight } from "@/lib/domain/hubbuy-rights-presentation";
 import { HubBuyIndividualRights } from "./hubbuy-individual-rights";
+import type { PersonBalanceHistory } from "@/lib/domain/hubbuy-balance-traceability";
 import { HubBuyBalanceAdjustmentSurface } from "./hubbuy-balance-adjustment-surface";
 import type { hubbuyBalanceServices } from "@/lib/domain/hubbuy-balance-services";
 import "./hubbuy-accounts.css";
 
 type Detail = CostTrackingView;
 type Account = Detail["hubbuyAccounts"][number] & { canActivateWithZero?: boolean; canDelete?: boolean; canDiscardIncorrectRegistration?: boolean; deletionBlockReason?: string | null };
-type AccountBalance = { account: Account; ledgerBalanceCnyMinor: number; reconciled: boolean; rights: IndividualRight[]; reconciliation: null | { mode: "chronological" | "remainder"; priorActivityDescription: string | null; priorActivityOccurredAt: Date | null; events: { id: string; eventType: "legacy_receipt" | "synthetic_use"; description: string; sourceReference: string | null; amountCnyMinor: number; historicalBrlCents: number; occurredAt: Date; recordedAt: Date | null }[] } };
+type AccountBalance = { account: Account; ledgerBalanceCnyMinor: number; reconciled: boolean; rights: IndividualRight[]; traceability: PersonBalanceHistory[]; reconciliation: null | { mode: "chronological" | "remainder"; priorActivityDescription: string | null; priorActivityOccurredAt: Date | null; events: { id: string; eventType: "legacy_receipt" | "synthetic_use"; description: string; sourceReference: string | null; amountCnyMinor: number; historicalBrlCents: number; occurredAt: Date; recordedAt: Date | null }[] } };
 type Statement = Awaited<ReturnType<ReturnType<typeof hubbuyBalanceServices>["readStatement"]>>;
 const localDateTime = () => { const date = new Date(Date.now() - new Date().getTimezoneOffset() * 60_000); return date.toISOString().slice(0, 16); };
 const formatBrlCents = formatBrlMinor;
@@ -312,7 +313,7 @@ export function HubBuyAccountsPanel({ workspaceId, actorId, members, initialAcco
               <span className="hubbuy-balance-brl">{historicalBrl === undefined ? balanceErrors[account.id] ? "Base histórica indisponível" : "Carregando base histórica…" : formatBrlCents(historicalBrl)} <small>· base histórica</small></span>
               <span className="hubbuy-balance-symbol" aria-hidden="true"><Coins size={32} strokeWidth={1.5}/></span>
             </div>
-            <HubBuyIndividualRights rights={balance?.rights} members={members} loading={!!balanceLoading[account.id]} failed={!!balanceErrors[account.id]} reconciled={!!balance?.reconciled && account.status !== "reconciling"}/>
+            <HubBuyIndividualRights key={account.id} traceability={balance?.traceability} members={members} loading={!!balanceLoading[account.id]} failed={!!balanceErrors[account.id]} reconciled={!!balance?.reconciled && account.status !== "reconciling"}/>
             {balanceErrors[account.id] && <div className="hubbuy-load-error" role="alert"><p>{balanceErrors[account.id]}</p><Button size="sm" variant="outline" disabled={balanceLoading[account.id]} onClick={() => void loadBalance(account.id)}>Tentar novamente</Button></div>}
             {!account.canDelete && account.deletionBlockReason && <div className="hubbuy-account-notice"><Info size={19} aria-hidden="true"/><p>{account.deletionBlockReason}</p></div>}
             {account.status === "reconciling" && reconcilingId === account.id && <div className="cost-account-reconcile">

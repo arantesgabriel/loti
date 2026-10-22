@@ -17,7 +17,7 @@ type QcImage = { id: string; previewUrl: string | null; previewVersion?: string 
 type QcPendingMatch = { externalItemId: string; revision: number; orderNo: string | null; orderGoodsId: string | null; orderGoodsNo: string | null; skuInfo: string | null; title: string | null; quantity: number | null; photoCount: number; candidates: { itemId: string; name: string; reasons: string[] }[] };
 type QcSummary = { canManage: boolean; counts: { itemId: string; count: number }[]; pendingMatching?: number; pendingRows?: QcPendingMatch[]; pendingTransfers?: number; pendingDeletes?: number; pendingPreviews?: number };
 type QcPreview = { externalKey: string; orderNo: string | null; orderGoodsId: string | null; orderGoodsNo: string | null; offerId: string | null; skuInfo: string | null; title: string | null; quantity: number | null; photoCount: number; match: { status: string; targetItemId: string | null; candidates: { itemId: string; name: string; reasons: string[] }[] }; existingItemId: string | null; conflict: string | null };
-type QcPrepared = { importId: string; revision: number; partial: boolean; orderCount: number; photoCount: number; rows: QcPreview[] };
+type QcPrepared = { importId: string; revision: number; partial: boolean; orderCount: number; photoCount: number; rows: QcPreview[]; skippedOccurrenceCount?: number; eligibleTargetKeys?: string[] };
 type QcTarget = { id: string; origin: "purchase" | "additional"; name: string; variant: string | null; quantity: number };
 type QcStatusTone = "success" | "warning" | "neutral" | "error";
 type QcRun = { id: number; scope: string; controller: AbortController };
@@ -132,6 +132,7 @@ export function QcImportPanel({ purchaseId, targets, compact = false }: { purcha
   const [selections, setSelections] = useState<Record<string, string>>({}), [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({}), [busy, setBusy] = useState(false), [error, setError] = useState(""), [confirmed, setConfirmed] = useState(false), [transferComplete, setTransferComplete] = useState(false), [revision, setRevision] = useState(0), [pendingMatchingCount, setPendingMatchingCount] = useState(0), [batchInfo, setBatchInfo] = useState("");
   const [pendingSelections, setPendingSelections] = useState<Record<string, string>>({}), [confirmCorrections, setConfirmCorrections] = useState(false), [confirmReconcile, setConfirmReconcile] = useState(false);
   const [transfer, setTransfer] = useState<QcTransferSnapshot | null>(null), [activeSourceId, setActiveSourceId] = useState<string | null>(null), [importedIds, setImportedIds] = useState<Set<string>>(new Set());
+  const [transferTotal, setTransferTotal] = useState(0);
   const activeRun = useRef<QcRun | null>(null), runSequence = useRef(0);
   const currentUserId = workspace.currentUser.id;
   const scope = `${currentUserId}:${purchaseId}`;
@@ -185,7 +186,7 @@ export function QcImportPanel({ purchaseId, targets, compact = false }: { purcha
       });
       const result = await qcRequest<{ revision: number; linked: number; ignored: number; pendingMatching: number; sources: number; eligibleSources: number }>(`/api/qc/imports/${encodeURIComponent(prepared.importId)}`, { operation: "confirm", expectedRevision: prepared.revision, choices }, "POST", run.controller.signal);
       if (!isRunCurrent(run)) return;
-      setRevision(result.revision); setConfirmed(true); setPendingMatchingCount(result.pendingMatching); setTransfer(null); setImportedIds(new Set()); invalidateSummary(purchaseId);
+      setRevision(result.revision); setTransferTotal(result.eligibleSources); setConfirmed(true); setPendingMatchingCount(result.pendingMatching); setTransfer(null); setImportedIds(new Set()); invalidateSummary(purchaseId);
       const matchingNote = result.pendingMatching ? ` ${result.pendingMatching} ocorrência(s) aguardam vínculo manual.` : "";
       if (result.eligibleSources > 0) { setBatchInfo("Importando as fotos associadas…"); await drainBatches(run, { importId: prepared.importId, revision: result.revision, matchingNote }); }
       else { setTransferComplete(true); await refreshTransfer(prepared.importId, run); if (isRunCurrent(run)) setBatchInfo(`${result.linked} ocorrência(s) associada(s), ${result.ignored} ignorada(s), ${result.sources} foto(s) registrada(s).${matchingNote}`); }
@@ -344,6 +345,8 @@ export function QcImportPanel({ purchaseId, targets, compact = false }: { purcha
   const openPanel = () => { setOpen(true); setPrepared(null); setConfirmed(false); setTransferComplete(false); setError(""); setBatchInfo(""); setTransfer(null); setActiveSourceId(null); setImportedIds(new Set()); };
   const pendingMatches = summary.pendingMatching ?? 0;
   const pendingOperations = (summary.pendingTransfers ?? 0) + (summary.pendingDeletes ?? 0) + (summary.pendingPreviews ?? 0);
+  const targetsWithoutQc = targets.filter(target => !summary.counts.some(count => count.itemId === target.id && count.count > 0));
+  const importTargets = prepared?.eligibleTargetKeys ? targets.filter(target => prepared.eligibleTargetKeys!.includes(target.id)) : targetsWithoutQc;
   return <>
     <div className={`qc-manager-actions${compact ? " qc-manager-actions-compact" : ""}`}><Button className="qc-import-primary" variant="outline" size={compact ? "icon" : "sm"} aria-label="Importar QC" title={compact ? "Importar QC" : undefined} onClick={openPanel}>{compact ? <>
       {/* Local icon from the approved Figma header. */}
@@ -366,8 +369,9 @@ export function QcImportPanel({ purchaseId, targets, compact = false }: { purcha
           <span><strong>{prepared.photoCount}</strong> foto(s)</span>
         </div>
         {prepared.partial && <p className="qc-import-partial" role="status">O HubBuy indica mais pedidos. Esta prévia cobre apenas o JSON colado.</p>}
+        {!!prepared.skippedOccurrenceCount && <p className="qc-import-partial" role="status">{prepared.skippedOccurrenceCount} ocorrência(s) com QC já vinculado ou sem fotos foram desconsideradas. As opções incluem apenas produtos sem fotos QC.</p>}
         <div className="qc-preview-list" aria-label="Ocorrências importadas">
-          {prepared.rows.length === 0 && <div className="qc-preview-empty"><Info size={20} aria-hidden="true"/><p>Nenhuma ocorrência encontrada neste JSON.</p></div>}
+          {prepared.rows.length === 0 && <div className="qc-preview-empty"><Info size={20} aria-hidden="true"/><p>Nenhum QC novo para vincular neste JSON.</p></div>}
           {prepared.rows.map((row, index) => {
             const productName = row.title || row.skuInfo || row.orderGoodsId || row.orderGoodsNo || "Produto sem título";
             const expanded = expandedRows[row.externalKey] ?? index === 0;
@@ -393,7 +397,7 @@ export function QcImportPanel({ purchaseId, targets, compact = false }: { purcha
                 {status.detail && <p className={`qc-match-detail${status.tone === "error" ? " is-error" : ""}`}>{status.detail}</p>}
                 <label className="qc-product-select">Produto correspondente<select aria-label={`Associar ${productName}`} value={selections[row.externalKey] ?? ""} onChange={event => setSelections(current => ({ ...current, [row.externalKey]: event.target.value }))}>
                   <option value="">{row.match.status === "PENDING" ? "Manter pendente" : row.conflict ? "Descartar ocorrência conflitante" : "Ignorar ocorrência"}</option>
-                  {(row.conflict ? [] : targets).map(target => <option key={target.id} value={target.id}>{target.origin === "additional" ? "Pedido adicional · " : "Produto · "}{target.name}{target.variant ? ` · ${target.variant}` : ""}</option>)}
+                  {(row.conflict ? [] : importTargets).map(target => <option key={target.id} value={target.id}>{target.origin === "additional" ? "Pedido adicional · " : "Produto · "}{target.name}{target.variant ? ` · ${target.variant}` : ""}</option>)}
                 </select></label>
                 {manualSelection && <p className="qc-match-detail" role="status">Associação manual selecionada. Confira o produto e a variação antes de confirmar os vínculos.</p>}
               </div>}
@@ -401,11 +405,11 @@ export function QcImportPanel({ purchaseId, targets, compact = false }: { purcha
           })}
         </div>
         {error && <p className="error" role="alert">{error}</p>}
-        <footer className="qc-import-footer"><Button variant="outline" disabled={busy} onClick={() => setPrepared(null)}>Voltar</Button><Button disabled={busy} onClick={() => hasCorrections ? setConfirmCorrections(true) : void confirmLinks()}>{busy ? "Salvando…" : "Confirmar vínculos"}</Button></footer>
+        <footer className="qc-import-footer"><Button variant="outline" disabled={busy} onClick={() => setPrepared(null)}>Voltar</Button>{prepared.rows.length > 0 ? <Button disabled={busy} onClick={() => hasCorrections ? setConfirmCorrections(true) : void confirmLinks()}>{busy ? "Salvando…" : "Confirmar vínculos"}</Button> : <Button onClick={() => setOpen(false)}>Concluir</Button>}</footer>
       </div>}
       {prepared && confirmed && <div className="qc-import-stage">
         <div className="qc-import-main qc-import-confirmed-main">
-          <QcImportProgress photos={transfer?.photos ?? null} activeSourceId={activeSourceId} importedIds={importedIds} busy={busy} complete={transferComplete} error={error} total={prepared.rows.reduce((count, row) => count + (selections[row.externalKey] ? row.photoCount : 0), 0)} renderPreview={photo => <QcPreviewImage image={{ id: photo.imageId!, previewUrl: photo.previewUrl, width: null, height: null, occurrence: photo.occurrence ?? "" }} userId={workspace.currentUser.id} workspaceId={workspace.workspaceId} purchaseId={purchaseId} alt=""/>}/>
+          <QcImportProgress photos={transfer?.photos ?? null} activeSourceId={activeSourceId} importedIds={importedIds} busy={busy} complete={transferComplete} error={error} total={transferTotal} renderPreview={photo => <QcPreviewImage image={{ id: photo.imageId!, previewUrl: photo.previewUrl, width: null, height: null, occurrence: photo.occurrence ?? "" }} userId={workspace.currentUser.id} workspaceId={workspace.workspaceId} purchaseId={purchaseId} alt=""/>}/>
         </div>
         {error && <p className="error" role="alert">{error}</p>}
         <footer className="qc-import-footer"><Button variant="outline" disabled={busy} onClick={() => { setPrepared(null); setConfirmed(false); setTransferComplete(false); }}>Nova importação</Button><Button disabled={busy} onClick={() => transferComplete ? setOpen(false) : void runBatch()}>{busy ? "Processando…" : transferComplete ? "Concluir" : "Continuar / tentar novamente"}</Button></footer>
@@ -417,7 +421,7 @@ export function QcImportPanel({ purchaseId, targets, compact = false }: { purcha
         <span><strong>{row.title || row.skuInfo || row.orderGoodsId || row.orderGoodsNo || row.externalItemId}</strong><small>{row.skuInfo || "Sem variação"} · {row.photoCount} foto(s) aguardando vínculo{row.quantity === null ? "" : ` · quantidade HubBuy ${row.quantity}`}</small></span>
         <div className="qc-pending-match-controls"><select aria-label={`Produto Loti para ${row.title || row.skuInfo || row.externalItemId}`} value={pendingSelections[row.externalItemId] ?? ""} onChange={event => setPendingSelections(current => ({ ...current, [row.externalItemId]: event.target.value }))}>
           <option value="">Selecione um produto</option>
-          {targets.map(target => { const candidate = row.candidates.find(value => value.itemId === target.id); return <option key={target.id} value={target.id}>{target.origin === "additional" ? "Pedido adicional · " : "Produto · "}{target.name}{target.variant ? ` · ${target.variant}` : ""}{candidate ? ` · Sugestão: ${candidate.reasons.join(" · ")}` : " · Associação manual"}</option>; })}
+          {targetsWithoutQc.map(target => { const candidate = row.candidates.find(value => value.itemId === target.id); return <option key={target.id} value={target.id}>{target.origin === "additional" ? "Pedido adicional · " : "Produto · "}{target.name}{target.variant ? ` · ${target.variant}` : ""}{candidate ? ` · Sugestão: ${candidate.reasons.join(" · ")}` : " · Associação manual"}</option>; })}
         </select><Button disabled={busy || !pendingSelections[row.externalItemId]} onClick={() => void resolvePending(row)}>{busy ? "Salvando…" : "Associar e processar fotos"}</Button></div>
       </div>)}</div>}
       {batchInfo && <p className="qc-status-note" role="status">{batchInfo}</p>}
