@@ -56,6 +56,23 @@ test("QC preview offers only products without photos and explains when nothing n
   await page.goto(`/packages/${purchase.trackingId}`);
   await page.getByRole("button", { name: "Importar QC", exact: true }).click();
   const dialog = page.getByRole("dialog");
+  const entryScreenshots = join(process.cwd(), "artifacts", "qa", "qc-drawer-compact");
+  mkdirSync(entryScreenshots, { recursive: true });
+  for (const width of [1440, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    const entry = await dialog.evaluate(element => {
+      const input = element.querySelector("textarea")!.getBoundingClientRect();
+      const main = element.querySelector(".qc-import-input-main")!.getBoundingClientRect();
+      const footer = element.querySelector("footer")!.getBoundingClientRect();
+      return { width: element.clientWidth, scroll: element.scrollWidth, unused: main.bottom - input.bottom, height: input.height, footer: footer.bottom, viewport: innerHeight };
+    });
+    expect(entry.scroll).toBeLessThanOrEqual(entry.width);
+    expect(entry.unused).toBeLessThanOrEqual(8);
+    expect(entry.height).toBeGreaterThan(160);
+    expect(entry.footer).toBeLessThanOrEqual(entry.viewport);
+    await page.screenshot({ path: join(entryScreenshots, `entry-${width}.png`) });
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
   await dialog.getByLabel("JSON HubBuy").fill('{"code":0}');
   await dialog.getByRole("button", { name: "Analisar JSON" }).click();
   await expect(dialog.locator(".qc-occurrence-card")).toHaveCount(1);
