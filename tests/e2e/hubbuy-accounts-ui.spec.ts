@@ -32,7 +32,9 @@ test("account selection, search, creation focus and statement retries preserve t
     } else await route.continue();
   });
   await page.route(`**/api/hubbuy/accounts/${ids[1]}/statement?*`, async route => {
-    const isMore = new URL(route.request().url()).searchParams.has("afterSequence");
+    const params = new URL(route.request().url()).searchParams;
+    expect(["asc", "desc"]).toContain(params.get("order"));
+    const isMore = params.has("afterSequence");
     if (failStatement) {
       failStatement = false;
       await heldStatement;
@@ -64,6 +66,10 @@ test("account selection, search, creation focus and statement retries preserve t
   await page.getByRole("button", { name: "Tentar carregar extrato" }).click();
   await expect(page.getByRole("table").getByRole("row")).toHaveCount(13);
   await expect(page.getByRole("button", { name: "Carregar mais", exact: true })).toHaveCount(0);
+
+  await expect(page.getByLabel("Ordenar por")).toHaveValue("desc");
+  await page.getByLabel("Ordenar por").selectOption("asc");
+  await expect(page.getByRole("table").getByRole("row")).toHaveCount(11);
 
   await search.fill("conta inexistente");
   await expect(page.getByText("Nenhuma conta encontrada.")).toBeVisible();
@@ -133,7 +139,7 @@ test("balance history retains exhausted origins, destinations, filters and respo
   const rights = page.getByRole("region", { name: "Histórico do saldo por pessoa", exact: true });
   const person = rights.getByRole("region", { name: `Histórico de ${memberName}`, exact: true });
   await expect(person).toContainText("Disponível ¥ 208,78 · R$ 156,75");
-  await expect(person.getByRole("row")).toHaveCount(11);
+  await expect(person.getByRole("row")).toHaveCount(4);
   const ram = person.getByRole("row").filter({ hasText: names[0] });
   await expect(ram).toContainText("Esgotado");
   await expect(ram).toContainText("¥ 0,00");
@@ -154,7 +160,7 @@ test("balance history retains exhausted origins, destinations, filters and respo
   await rights.getByLabel("Buscar produto ou origem").fill("");
   await rights.getByLabel("Mostrar origens").selectOption("all");
   await expect(page.getByRole("heading", { name: "Última revisão" })).toHaveCount(0);
-  const expand = person.getByRole("button", { name: /Mostrar mais \(2\)/ });
+  const expand = person.getByRole("button", { name: /Mostrar mais \(9\)/ });
   await expand.focus();
   await page.keyboard.press("Enter");
   const collapse = person.getByRole("button", { name: /Recolher/ });
@@ -184,11 +190,11 @@ test("balance history retains exhausted origins, destinations, filters and respo
   }
   await collapse.focus();
   await page.keyboard.press("Enter");
-  await expect(person.getByRole("row")).toHaveCount(11);
+  await expect(person.getByRole("row")).toHaveCount(4);
   await expect(expand).toHaveAttribute("aria-expanded", "false");
   await page.reload();
   await page.getByRole("combobox", { name: "Conta selecionada" }).selectOption(accountId);
-  await expect(person.getByRole("row")).toHaveCount(11);
+  await expect(person.getByRole("row")).toHaveCount(4);
   // A divergent read must be identified before displaying its breakdown as confirmed.
   await page.route(`**/api/hubbuy/accounts/${accountId}`, async route => {
     const response = await route.fetch();

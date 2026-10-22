@@ -15,7 +15,9 @@ export async function GET(request: Request, { params }: Context) {
     const search = new URL(request.url).searchParams;
     const afterRaw = search.get("afterSequence"), limitRaw = search.get("limit");
     const afterSequence = afterRaw === null ? undefined : Number(afterRaw);
+    const order = search.get("order") ?? "desc";
+    if (order !== "asc" && order !== "desc") return NextResponse.json({ error: "Ordenação inválida." }, { status: 400, headers: packageCostPrivateHeaders });
     const limit = limitRaw === null ? undefined : Number(limitRaw);
-    return NextResponse.json({ data: await hubbuyBalanceServices(db, user.id).readStatement(accountId, { afterSequence, limit }) }, { headers: packageCostPrivateHeaders });
+    return NextResponse.json({ data: await hubbuyBalanceServices(db, user.id).readStatement(accountId, { afterSequence, limit, order }) }, { headers: packageCostPrivateHeaders });
   } catch (error) { return packageCostFailure(error); }
 }

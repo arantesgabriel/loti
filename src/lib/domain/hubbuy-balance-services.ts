@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, asc, eq, getTableColumns, gt, inArray, isNull, lte } from "drizzle-orm";
+import { and, asc, desc, lt, eq, getTableColumns, gt, inArray, isNull, lte } from "drizzle-orm";
 import { z } from "zod";
 import type { AppDatabase } from "../db/connection";
 import {
@@ -562,9 +562,11 @@ export function hubbuyBalanceServices(db: AppDatabase, userId: string) {
     });
   }
 
-  async function readStatement(accountId: string, options: { afterSequence?: number; limit?: number } = {}) {
+  async function readStatement(accountId: string, options: { afterSequence?: number; limit?: number; order?: "asc" | "desc" } = {}) {
     const afterSequence = options.afterSequence ?? -1;
     const limit = options.limit ?? 50;
+    const descending = options.order === "desc";
+    if (options.order !== undefined && options.order !== "asc" && options.order !== "desc") throw new DomainError("Ordenação inválida.", 400);
     if (!Number.isSafeInteger(afterSequence) || afterSequence < -1) throw new DomainError("Cursor de extrato inválido.", 400);
     if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new DomainError("O limite do extrato deve ficar entre 1 e 100 linhas.", 400);
     return db.transaction(async tx => {
@@ -573,21 +575,25 @@ export function hubbuyBalanceServices(db: AppDatabase, userId: string) {
         .from(hubbuyBalanceEntries).leftJoin(financialOperations, eq(hubbuyBalanceEntries.operationId, financialOperations.id))
         .where(afterSequence < 0
           ? eq(hubbuyBalanceEntries.accountId, account.id)
-          : and(eq(hubbuyBalanceEntries.accountId, account.id), gt(hubbuyBalanceEntries.sequence, afterSequence)))
-        .orderBy(asc(hubbuyBalanceEntries.sequence)).limit(limit + 1).all();
+          : and(eq(hubbuyBalanceEntries.accountId, account.id), (descending ? lt : gt)(hubbuyBalanceEntries.sequence, afterSequence)))
+        .orderBy((descending ? desc : asc)(hubbuyBalanceEntries.sequence)).limit(limit + 1).all();
       const hasMore = selected.length > limit;
       const page = hasMore ? selected.slice(0, limit) : selected;
       const adjustments = await tx.select().from(hubbuyBalanceAdjustments).where(eq(hubbuyBalanceAdjustments.accountId, accountId)).all();
       const actors = page.length ? await tx.select({ id: user.id, name: user.name }).from(user).where(inArray(user.id, page.flatMap(row => row.operation ? [row.operation.actorId] : []))).all() : [];
       const uses = await tx.select({ creditEntryId: hubbuyBalanceCreditShares.creditEntryId }).from(hubbuyBalanceConsumptions).innerJoin(hubbuyBalanceCreditShares, eq(hubbuyBalanceCreditShares.id, hubbuyBalanceConsumptions.creditShareId)).innerJoin(hubbuyBalanceEntries, eq(hubbuyBalanceEntries.id, hubbuyBalanceCreditShares.creditEntryId)).where(eq(hubbuyBalanceEntries.accountId, accountId)).all();
-      const previous = afterSequence < 0 ? [] : await tx.select().from(hubbuyBalanceEntries).where(and(eq(hubbuyBalanceEntries.accountId, account.id), lte(hubbuyBalanceEntries.sequence, afterSequence))).all();
+      const previous = descending || afterSequence < 0 ? [] : await tx.select().from(hubbuyBalanceEntries).where(and(eq(hubbuyBalanceEntries.accountId, account.id), lte(hubbuyBalanceEntries.sequence, afterSequence))).all();
+      const allEntries = descending ? await tx.select().from(hubbuyBalanceEntries).where(eq(hubbuyBalanceEntries.accountId, account.id)).orderBy(asc(hubbuyBalanceEntries.sequence)).all() : [];
+      const balances = new Map<number, number>();
+      let running = 0;
+      for (const row of allEntries) { running += row.direction === "credit" ? row.amountCnyMinor : -row.amountCnyMinor; balances.set(row.sequence, running); }
       let balance = previous.reduce((sum, row) => sum + (row.direction === "credit" ? row.amountCnyMinor : -row.amountCnyMinor), 0);
       const entries = page.map(({ entry, operation }) => {
         balance += entry.direction === "credit" ? entry.amountCnyMinor : -entry.amountCnyMinor;
         const adjustment = adjustments.find(row => row.balanceEntryId === entry.id);
         const reversedBy = adjustment ? adjustments.find(row => row.reversesAdjustmentId === adjustment.id) : undefined;
         const context = adjustment && operation ? JSON.parse(operation.contextJson) as { result?: { shares?: { personId: string; amountCnyMinor: number; historicalBrlCents: number }[] } } : null;
-        return { ...entry, occurredAt: operation?.occurredAt ?? null, operationRecordedAt: operation?.recordedAt ?? null, operationType: operation?.operationType ?? null, reason: operation?.reason ?? null, balanceAfterCnyMinor: balance,
+        return { ...entry, occurredAt: operation?.occurredAt ?? null, operationRecordedAt: operation?.recordedAt ?? null, operationType: operation?.operationType ?? null, reason: operation?.reason ?? null, balanceAfterCnyMinor: descending ? balances.get(entry.sequence)! : balance,
           actorName: actors.find(row => row.id === operation?.actorId)?.name ?? null,
           adjustment: adjustment ? { ...adjustment, reversedById: reversedBy?.id ?? null, canReverse: adjustment.kind !== "reversal" && !reversedBy && account.status === "active" && (entry.direction === "debit" || !uses.some(row => row.creditEntryId === entry.id)), shares: context?.result?.shares ?? [] } : null };
       });

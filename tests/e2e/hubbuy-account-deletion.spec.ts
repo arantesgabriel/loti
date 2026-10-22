@@ -12,6 +12,7 @@ test("deletes an unused account with cancellation, keyboard focus and an idempot
   await login(page, "profile-qa", "Profile-QA-Old-2026!");
   await page.goto("/packages/accounts");
   const name = `Conta para excluir ${Date.now()}`;
+  await page.getByRole("button", { name: "Adicionar conta", exact: true }).click();
   await page.getByRole("textbox", { name: "Adicionar conta HubBuy", exact: true }).fill(name);
   await page.getByRole("button", { name: "Criar conta · saldo ¥0" }).click();
   const row = page.locator(".cost-hubbuy-account").filter({ hasText: name });
