@@ -2,9 +2,69 @@ import { test, expect } from "@playwright/test";
 import { login } from "./helpers";
 
 test("profile name and password can be updated without losing the current session", async ({ page, browser }) => {
+  test.setTimeout(90_000);
   await login(page, "profile-qa", "Profile-QA-Old-2026!");
-  await page.getByRole("link", { name: "Perfil", exact: true }).click();
+  await page.getByRole("link", { name: /^Perfil(?: e configurações)?$/ }).click();
+  const tablist = page.getByRole("tablist", { name: "Categorias da conta" });
+  await expect(tablist.getByRole("tab")).toHaveCount(4);
+  await expect(page.getByRole("heading", { name: "Configurações", exact: true })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Perfil", exact: true })).toHaveAttribute("aria-selected", "true");
+
+  await page.getByRole("tab", { name: "Aparência", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Aparência", exact: true })).toBeVisible();
+  await expect(page.getByLabel("Tema da interface")).toBeVisible();
+  await expect(page.getByLabel("Nome completo")).toHaveCount(0);
+  await expect(page.getByLabel("Senha atual", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Acessar grupo", exact: true })).toHaveCount(0);
+
+  await page.getByRole("tab", { name: "Segurança", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Segurança", exact: true })).toBeVisible();
+  await expect(page.getByLabel("Senha atual", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Nome completo")).toHaveCount(0);
+  await expect(page.getByLabel("Tema da interface")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Acessar grupo", exact: true })).toHaveCount(0);
+
+  await page.getByRole("tab", { name: "Ações da conta", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Ações da conta", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Acessar grupo", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Sair da conta", exact: true })).toBeVisible();
+  await expect(page.getByLabel("Nome completo")).toHaveCount(0);
+  await expect(page.getByLabel("Senha atual", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Tema da interface")).toHaveCount(0);
+
+  await page.getByRole("tab", { name: "Perfil", exact: true }).click();
+  await page.getByRole("tab", { name: "Perfil", exact: true }).press("ArrowRight");
+  await expect(page.getByRole("tab", { name: "Aparência", exact: true })).toBeFocused();
+  await expect(page.getByRole("tab", { name: "Aparência", exact: true })).toHaveAttribute("aria-selected", "true");
+
+  if (process.env.LOTI_CAPTURE_SETTINGS_QA === "1") {
+    const fs = await import("node:fs/promises");
+    await fs.mkdir("artifacts/qa/settings", { recursive: true });
+    const originalViewport = page.viewportSize();
+    const captureCategories = [
+      { label: "Perfil", slug: "profile" },
+      { label: "Aparência", slug: "appearance" },
+      { label: "Segurança", slug: "security" },
+      { label: "Ações da conta", slug: "account-actions" },
+    ] as const;
+    for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
+      await page.setViewportSize(viewport);
+      for (const { label, slug } of captureCategories) {
+        await page.getByRole("tab", { name: label, exact: true }).click();
+        await page.screenshot({ path: `artifacts/qa/settings/${slug}-${viewport.width}.png`, fullPage: viewport.width === 390 });
+      }
+    }
+    if (originalViewport) await page.setViewportSize(originalViewport);
+    await page.getByRole("tab", { name: "Perfil", exact: true }).click();
+  }
+
   const nameInput = page.getByLabel("Nome completo");
+  await nameInput.fill("Rascunho que não deve sumir");
+  await page.getByRole("tab", { name: "Aparência", exact: true }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.getByRole("dialog").getByRole("button", { name: "Cancelar", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "Perfil", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(nameInput).toHaveValue("Rascunho que não deve sumir");
   await nameInput.fill("Ana Júlia D'Ávila-Santos");
   let failProfileRead = false;
   await page.route("**/api/app", route => {
@@ -15,9 +75,9 @@ test("profile name and password can be updated without losing the current sessio
     return route.continue();
   });
   failProfileRead = true;
-  await page.getByRole("button", { name: "Salvar nome", exact: true }).click();
+  await page.getByRole("button", { name: "Salvar alterações", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Ana Júlia D'Ávila-Santos", exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Perfil", exact: true })).toContainText("Ana Júlia D'Ávila-Santos");
+  await expect(page.getByRole("link", { name: /^Perfil(?: e configurações)?$/ })).toContainText("Ana Júlia D'Ávila-Santos");
   await expect(page.getByRole("status").filter({ hasText: "Nome salvo. Não foi possível atualizar todos os dados" })).toBeVisible();
   await page.unroute("**/api/app");
   await nameInput.fill("   ");
@@ -25,7 +85,8 @@ test("profile name and password can be updated without losing the current sessio
   await nameInput.fill("Ana Júlia D'Ávila-Santos");
   await page.reload();
   await expect(page.getByRole("heading", { name: "Ana Júlia D'Ávila-Santos", exact: true })).toBeVisible();
-  await page.getByRole("link", { name: /Meu grupo/ }).click();
+  await page.getByRole("tab", { name: "Ações da conta", exact: true }).click();
+  await page.getByRole("link", { name: "Acessar grupo", exact: true }).click();
   await expect(page.getByRole("listitem").filter({ hasText: "Ana Júlia D'Ávila-Santos" })).toBeVisible();
   await page.goto("/favorites");
   await page.getByRole("button", { name: "Novo favorito", exact: true }).first().click();
@@ -53,8 +114,8 @@ test("profile name and password can be updated without losing the current sessio
   const securityPage = await securityContext.newPage();
   await login(securityPage, "profile-qa", "Profile-QA-Old-2026!");
 
-  await page.getByRole("button", { name: "Alterar senha", exact: true }).click();
-  await expect(page.getByLabel("Senha atual", { exact: true })).toBeFocused();
+  await page.getByRole("tab", { name: "Segurança", exact: true }).click();
+  await expect(page.getByLabel("Senha atual", { exact: true })).toBeVisible();
   await page.getByLabel("Senha atual", { exact: true }).fill("wrong-profile-password");
   await page.getByLabel("Nova senha", { exact: true }).fill("Profile-QA-New-2026!");
   await page.getByLabel("Confirmar nova senha", { exact: true }).fill("Profile-QA-New-2026!");
@@ -71,10 +132,8 @@ test("profile name and password can be updated without losing the current sessio
   await page.getByRole("button", { name: "Ocultar nova senha", exact: true }).click();
   await expect(page.getByLabel("Nova senha", { exact: true })).toHaveAttribute("type", "password");
   await page.getByRole("button", { name: "Cancelar", exact: true }).click();
-  await expect(page.getByLabel("Senha atual", { exact: true })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Alterar senha", exact: true })).toBeFocused();
-  await page.getByRole("button", { name: "Alterar senha", exact: true }).click();
-  await expect(page.getByLabel("Senha atual", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Senha atual", { exact: true })).toHaveValue("");
+  await expect(page.getByLabel("Senha atual", { exact: true })).toBeFocused();
 
   let interruptedSubmissions = 0;
   await page.route("**/api/auth/change-password", route => { interruptedSubmissions += 1; return route.abort(); });
@@ -93,6 +152,7 @@ test("profile name and password can be updated without losing the current sessio
   expect((await securityPage.request.get("/api/app")).status()).toBe(401);
   await securityContext.close();
 
+  await page.getByRole("tab", { name: "Ações da conta", exact: true }).click();
   await page.getByRole("button", { name: "Sair da conta", exact: true }).click();
   await expect(page).toHaveURL(/\/login$/);
   await page.getByLabel("Email", { exact: true }).fill("profile-qa@loti.test");
@@ -102,13 +162,13 @@ test("profile name and password can be updated without losing the current sessio
   await page.getByLabel("Senha", { exact: true }).fill("Profile-QA-New-2026!");
   await page.getByRole("button", { name: "Entrar", exact: true }).click();
   await page.waitForURL("**/favorites");
-  await page.getByRole("link", { name: "Perfil", exact: true }).click();
+  await page.getByRole("link", { name: /^Perfil(?: e configurações)?$/ }).click();
   await expect(page.getByRole("heading", { name: "Ana Júlia D'Ávila-Santos", exact: true })).toBeVisible();
 
   for (const width of [320, 390, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 844 });
-    await expect(page.getByRole("heading", { name: "Seu perfil" })).toBeVisible();
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+    await expect(page.getByRole("heading", { name: "Configurações" })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     if (width <= 767) await expect(page.getByRole("navigation", { name: "Navegação móvel" })).toBeVisible();
   }
 });

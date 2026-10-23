@@ -32,8 +32,9 @@ test("creates zero-balance HubBuy accounts and credits the first confirmed refun
   await expect(page.getByRole("link", { name: "Contas HubBuy" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Acompanhamentos" })).toHaveCount(0);
   const accountManager = page.locator('section[aria-labelledby="hubbuy-accounts-title"]');
-  await accountManager.getByRole("textbox", { name: "Adicionar conta HubBuy", exact: true }).fill(independentAccountName);
-  await accountManager.getByRole("button", { name: "Criar conta · saldo ¥0" }).click();
+  await page.getByRole("button", { name: "Adicionar conta", exact: true }).click();
+  await page.getByRole("textbox", { name: "Adicionar conta HubBuy", exact: true }).fill(independentAccountName);
+  await page.getByRole("button", { name: "Criar conta · saldo ¥0" }).click();
   const independentAccount = accountManager.locator(".cost-hubbuy-account").filter({ hasText: independentAccountName });
   await expect(independentAccount).toContainText("Ativa e conciliada");
   await expect(independentAccount).toContainText("¥ 0,00");

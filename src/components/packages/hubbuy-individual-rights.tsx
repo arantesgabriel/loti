@@ -18,7 +18,7 @@ function Identity({ origin }: { origin: BalanceOriginHistory }) {
 
 function PersonHistory({ history, name, origins, onDetails }: { history: PersonBalanceHistory; name: string; origins: BalanceOriginHistory[]; onDetails: (origin: BalanceOriginHistory) => void }) {
   const [expanded, setExpanded] = useState(false);
-  const id = useId(), visible = expanded ? origins : origins.slice(0, 10);
+  const id = useId(), visible = expanded ? origins : origins.slice(0, 3);
   const adjustments = origins.some(row => row.adjustmentDeltaCnyMinor !== 0);
   return <section className="hubbuy-person-right" aria-label={`Histórico de ${name}`}>
     <div className="hubbuy-right-heading"><h4>{name}</h4><strong className="hubbuy-right-amount">Disponível {formatCnyMinor(history.availableCnyMinor)} · {formatBrlMinor(history.availableHistoricalBrlCents)}</strong></div>
@@ -33,7 +33,7 @@ function PersonHistory({ history, name, origins, onDetails }: { history: PersonB
         <td><button className="hubbuy-history-details" type="button" aria-label={`Detalhes de ${origin.label} de ${name}`} onClick={() => onDetails(origin)}>Detalhes</button></td>
       </tr>)}
     </tbody></table>
-    {origins.length > 10 && <button type="button" className="hubbuy-right-toggle" aria-expanded={expanded} aria-controls={id} onClick={() => setExpanded(value => !value)}>{expanded ? "Recolher" : `Mostrar mais (${origins.length - 10})`}<span className="sr-only"> de {name}</span></button>}
+    {origins.length > 3 && <button type="button" className="hubbuy-right-toggle" aria-expanded={expanded} aria-controls={id} onClick={() => setExpanded(value => !value)}>{expanded ? "Recolher" : `Mostrar mais (${origins.length - 3})`}<span className="sr-only"> de {name}</span></button>}
   </section>;
 }
 

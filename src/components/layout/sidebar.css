@@ -40,3 +40,18 @@
   .theme-track { transition: background-color 350ms ease, border-color 350ms ease; }
   html[data-theme-animating] body, html[data-theme-animating] .sidebar, html[data-theme-animating] .app-content, html[data-theme-animating] .sidebar-profile { transition: background-color 500ms ease, color 400ms ease, border-color 400ms ease, width 420ms cubic-bezier(.22,1,.36,1), margin-left 420ms cubic-bezier(.22,1,.36,1); }
 }
+
+/* One identity/settings destination, with the existing theme control above it. */
+.sidebar .sidebar-profile { gap: 10px; padding: 18px 20px; }
+.sidebar-profile .sidebar-label { flex: 1; min-width: 0; }
+.sidebar-account-avatar { position: relative; flex: 0 0 34px; }
+.sidebar-account-settings { flex-shrink: 0; color: var(--muted); }
+.sidebar-account-badge { display: none; }
+.sidebar-profile:hover, .sidebar-profile.selected { background: var(--surface-muted); }
+.sidebar-profile:focus-visible { outline: 2px solid var(--primary-ink); outline-offset: -4px; }
+.sidebar-profile.selected .sidebar-account-settings { color: var(--primary-ink); }
+@media (min-width: 768px) {
+  .is-collapsed .sidebar-account-settings { display: none; }
+  .is-collapsed .sidebar-account-badge { display: block; position: absolute; right: -5px; bottom: -3px; box-sizing: content-box; padding: 3px; border-radius: 50%; background: var(--sidebar-surface); color: var(--muted); }
+  .sidebar.is-collapsed .sidebar-profile { padding: 18px 0; }
+}

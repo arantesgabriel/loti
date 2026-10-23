@@ -33,6 +33,12 @@ describe("manual HubBuy balance adjustments", () => {
     expect(await service.recordManualAdjustment(id, input)).toEqual({ ...result, replayed: true });
     await service.recordManualAdjustment(id, { ...command(2), externalReference: "roulette-qa" });
     expect((await service.readStatement(id)).entries.map(row => row.balanceAfterCnyMinor)).toEqual([114, 0, 114]);
+    const newest = await service.readStatement(id, { order: "desc", limit: 2 });
+    expect(newest.entries.map(row => row.balanceAfterCnyMinor)).toEqual([114, 0]);
+    expect(newest.entries.map(row => row.sequence)).toEqual([2, 1]);
+    const older = await service.readStatement(id, { order: "desc", limit: 2, afterSequence: newest.nextAfterSequence! });
+    expect(older.entries.map(row => row.balanceAfterCnyMinor)).toEqual([114]);
+    expect(older.nextAfterSequence).toBeNull();
   });
 
   it("rejects invalid ownership, unknown basis, zero values, archived accounts and cross-workspace access", async () => {

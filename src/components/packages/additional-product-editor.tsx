@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Surface } from "@/components/ui/surface";
+import { PackageSurface as Surface } from "./package-surface";
 import type { CostTrackingView } from "@/lib/domain/package-cost-reading";
 import { formatBrlMinor, formatCnyMinor, parseFinancialMinor } from "@/lib/domain/financial-money";
 import { costRequest, basisPointsFromPercent, percentInputFromBasisPoints } from "./package-cost-client";

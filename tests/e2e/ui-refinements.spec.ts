@@ -5,7 +5,7 @@ test("ownership, single input focus border and aligned prices", async ({ page })
   await page.setViewportSize({ width: 1440, height: 900 });
   await login(page);
   await expect(page.locator(".mobile-header")).toBeHidden();
-  await expect(page.getByRole("link", { name: "Perfil", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: /^Perfil(?: e configurações)?$/ })).toBeVisible();
   await expect(page.getByText("Minhas coleções", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: /^Meus / }).click();
   for (const row of await page.getByTestId("favorite").all()) await expect(row).toContainText("Seu favorito");

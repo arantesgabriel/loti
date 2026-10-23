@@ -75,7 +75,7 @@ test("requests, receives, corrects and voids product refunds without changing th
     expect(layout.editTop).toBe(layout.menuTop);
     expect(layout.editRight).toBeLessThan(layout.menuLeft);
     expect(layout.menuRight).toBeLessThanOrEqual(layout.viewport);
-    expect(layout.scrollWidth).toBeLessThanOrEqual(layout.viewport);
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await actions.getByRole("button", { name: "Mais ações para SSD NVMe refund QA", exact: true }).click();
     await expect(page.getByRole("menuitem", { name: "Registrar reembolso", exact: true })).toBeEnabled();
     await capture(`product-costs-actions-${width}`, false);
@@ -238,6 +238,7 @@ test("requests, receives, corrects and voids product refunds without changing th
   await capture("refund-people-desktop");
   for (const [width, height] of [[320, 640], [360, 800], [390, 844], [430, 932], [768, 1000], [1440, 1000]] as const) {
     await page.setViewportSize({ width, height });
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     const dimensions = await page.evaluate(() => ({
       viewport: window.innerWidth,
       content: document.documentElement.scrollWidth,
@@ -329,6 +330,7 @@ test("summarizes multiple refunds while retaining cancelled product residuals", 
     await expect(page.getByRole("dialog")).toHaveCount(0);
     await expect(section.locator(".refund-record-toggle:visible")).toHaveCount(0);
     await expect(section).toContainText("Pagamento original · Pix");
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     const dimensions = await page.evaluate(() => ({ viewport: innerWidth, content: document.documentElement.scrollWidth }));
     expect(dimensions.content).toBeLessThanOrEqual(dimensions.viewport);
     if (process.env.LOTI_CAPTURE_REFUNDS_QA === "1") {
