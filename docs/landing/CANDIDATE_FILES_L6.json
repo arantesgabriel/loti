@@ -1,0 +1,194 @@
+{
+  "baseCommit": "6f0d10b67e4f22259fa5b67f4e565029d55272db",
+  "buildDirectory": ".next-landing-l6",
+  "buildId": "QGrQZd-Eo5CApd05-h36h",
+  "fingerprint": "59ab41dbfdf25a5beccf45122162360471453c4f79de6280106d3fd819fd6f73",
+  "algorithm": "SHA-256 of sorted path<TAB>sha256<LF> entries",
+  "files": [
+    {
+      "path": "playwright.landing.config.ts",
+      "bytes": 984,
+      "sha256": "5383952b9805e11355dc9e3ac07e2a9f1a23df1feb4cdec3b05894577d485738"
+    },
+    {
+      "path": "public/landing/favorites-cards-desktop.webp",
+      "bytes": 94872,
+      "sha256": "73f410965ad5f4b33f6db561986c25fc5bbe0be687f391018e09b243acbc0071"
+    },
+    {
+      "path": "public/landing/favorites-cards-mobile.webp",
+      "bytes": 20964,
+      "sha256": "b175d4fc1fde94f1e1f04f6301547ea5f1748f69cf3e6b315ed04000e1ca606c"
+    },
+    {
+      "path": "public/landing/journey-costs-desktop.webp",
+      "bytes": 47076,
+      "sha256": "00a05066a432ae6ca0a5126fae78792d6737aab0518fed9e3a24057a1a88a8c8"
+    },
+    {
+      "path": "public/landing/journey-costs-mobile.webp",
+      "bytes": 26410,
+      "sha256": "8e3ea5e498e617abcc605765f5170cf46038e3e56706b33211825c1f24385f63"
+    },
+    {
+      "path": "public/landing/journey-favorites-desktop.webp",
+      "bytes": 38346,
+      "sha256": "a9e9b84c3815bd15038beadf998060c6999ee1d514bb8df5b7a5d5c5e3c7231c"
+    },
+    {
+      "path": "public/landing/journey-favorites-mobile.webp",
+      "bytes": 19496,
+      "sha256": "a39fa4f87ea6e4cd14623af2670ae96f0820adaec6072119a1d036fb140ef8b1"
+    },
+    {
+      "path": "public/landing/journey-packages-desktop.webp",
+      "bytes": 10150,
+      "sha256": "0ccbb272e310c15296196b03d9bb47ab0ba5ac5da4855b3025b770b273da1770"
+    },
+    {
+      "path": "public/landing/journey-packages-mobile.webp",
+      "bytes": 7918,
+      "sha256": "b7300d2f650426fe2d3573a4b9a745ac267c62a38f4d2a1cc33fe226da4a4a59"
+    },
+    {
+      "path": "public/landing/journey-purchase-desktop.webp",
+      "bytes": 41310,
+      "sha256": "e8812b2c2868e160bc8392c4a85e43e33231890af16a78ca8602661556f822aa"
+    },
+    {
+      "path": "public/landing/journey-purchase-mobile.webp",
+      "bytes": 34134,
+      "sha256": "7eeb66bb55834ae965fdbc29531a9517c032e683d0ba9de39bf454977f9b1969"
+    },
+    {
+      "path": "public/landing/social-card.png",
+      "bytes": 37005,
+      "sha256": "321f0eba1b418122e5e21a15b713d6beb5234e5d1463a745c1d57263b1598a8d"
+    },
+    {
+      "path": "src/app/(marketing)/ferramentas/[slug]/page.tsx",
+      "bytes": 1147,
+      "sha256": "1aaa7334f575d7f66aa7b5d528557b90aaf33a2bea5de7f967be7d8e0c92a591"
+    },
+    {
+      "path": "src/app/(marketing)/ferramentas/page.tsx",
+      "bytes": 495,
+      "sha256": "52522e1e2f9f52d02e28a370305b62cfa6881f0f0f466e4d847766794cf58d5b"
+    },
+    {
+      "path": "src/app/(marketing)/landing/page.tsx",
+      "bytes": 1296,
+      "sha256": "44f085418c23cd9adc225fb6c21a74a77d2fab2a3030e29681f67fe2fd9cf30e"
+    },
+    {
+      "path": "src/app/(marketing)/layout.tsx",
+      "bytes": 326,
+      "sha256": "bb2e98a6f5c3a46cf48d63f1ba6416991d58b5027c8c0a553591161703c53421"
+    },
+    {
+      "path": "src/app/(marketing)/marketing.module.css",
+      "bytes": 747,
+      "sha256": "328fe4009556593e5389e8f4bce3c7bfa30df7356026c503a57c58448eb65925"
+    },
+    {
+      "path": "src/components/landing/favorites-transformation.tsx",
+      "bytes": 4204,
+      "sha256": "3c00bb98f7e6cf832f39cb766fe1b85a2b61a549bb025902033424a87880c040"
+    },
+    {
+      "path": "src/components/landing/landing-content.ts",
+      "bytes": 3871,
+      "sha256": "1b7c2879c4b048052c5cde1e856993961f93c843875811e7cf5e6a55bfb51c04"
+    },
+    {
+      "path": "src/components/landing/landing-faq.tsx",
+      "bytes": 476,
+      "sha256": "eb3f9948d4aff5d6c3ec4222a53a6a0aac5369e3fa415b0bd3b06a7e66a88514"
+    },
+    {
+      "path": "src/components/landing/landing-footer.tsx",
+      "bytes": 442,
+      "sha256": "049a8f1da8c211fbae7ead1e009a9b83a16c5190a50585f3025c69afe51b99e6"
+    },
+    {
+      "path": "src/components/landing/landing-header.tsx",
+      "bytes": 612,
+      "sha256": "27e3b01776819b2daa6c5ee4b9750614b8ba8625fd34fa96ba0887c84716724c"
+    },
+    {
+      "path": "src/components/landing/landing-hero.tsx",
+      "bytes": 841,
+      "sha256": "1261a0d66aef9a3bfe1e9bd546e05cb6250f29b04c11750945dee5c09bb6eebd"
+    },
+    {
+      "path": "src/components/landing/landing-media.ts",
+      "bytes": 2425,
+      "sha256": "f8c12a3b85ff6d6474b9eac3fb4f38f710087c6d795e93a70c03e4ce9ad2af1a"
+    },
+    {
+      "path": "src/components/landing/landing-outline.tsx",
+      "bytes": 1453,
+      "sha256": "1f490443468fb5245cfbc72d2cc44491d9c9e5e57cabd615b1abeb1efa791616"
+    },
+    {
+      "path": "src/components/landing/landing-page.tsx",
+      "bytes": 558,
+      "sha256": "64bf3de237d98c603ff73c83224b362dadb5700188473c048d1d58f85754a2f8"
+    },
+    {
+      "path": "src/components/landing/landing-tools.ts",
+      "bytes": 1042,
+      "sha256": "7e2d94f305164199f2c01b5e008a29a385e304e0b749505391cac5a7028633a7"
+    },
+    {
+      "path": "src/components/landing/landing.module.css",
+      "bytes": 7426,
+      "sha256": "05443bc828997964c2e2116e1314418b756a0e4f9d3130017c3afac9c792e728"
+    },
+    {
+      "path": "src/components/landing/manager-journey.tsx",
+      "bytes": 1916,
+      "sha256": "2c2042603553402f54feddc63bc612a98e286398bcd11b0ae08224d1c40e15f6"
+    },
+    {
+      "path": "src/components/landing/product-capture.tsx",
+      "bytes": 916,
+      "sha256": "6f9b1662fb197121d2c1e2b3944425dcf351bcc2471cf2e99fc6f517cf66dc0a"
+    },
+    {
+      "path": "src/components/landing/tools-page.tsx",
+      "bytes": 2023,
+      "sha256": "c49e57cf9694cdd38098d6fca48bdf689246a2baa45bf6e4fa16a38b4739a61a"
+    },
+    {
+      "path": "src/components/landing/tools-section.tsx",
+      "bytes": 1603,
+      "sha256": "32a6a66f787deeeaf8018e2afc3c077bf6107ff012e34c4c94586f9d859d612a"
+    },
+    {
+      "path": "src/components/landing/tools.module.css",
+      "bytes": 3341,
+      "sha256": "0c6630147f69d03a23efdc7fae476fc0d3cf372b82cf6af32d71778669fd96c9"
+    },
+    {
+      "path": "src/components/landing/transformation.module.css",
+      "bytes": 1909,
+      "sha256": "6add9cb9140cd74a299465738b69b0eedbec80168f28bcb3bf3c37ce036c80c9"
+    },
+    {
+      "path": "src/components/landing/use-cases.tsx",
+      "bytes": 1178,
+      "sha256": "d3ac11cf1a726ed9041f2f146131df0cea628a82083d7112bf8ba932ca764ed8"
+    },
+    {
+      "path": "tests/e2e/landing.spec.ts",
+      "bytes": 2707,
+      "sha256": "fe4818ec861ebd08992ea14369fc5c2e24ac4f47bbfe048350cc569d2de155ed"
+    },
+    {
+      "path": "tests/landing/landing.spec.ts",
+      "bytes": 6874,
+      "sha256": "58eee4f953b21c74358971f844b4ab3ff6f9b521cb9633ae0e01c3c955708505"
+    }
+  ]
+}
