@@ -1,6 +1,6 @@
-import { PackageCostDetailScreen } from "@/components/packages/package-cost-detail-screen";
+import { redirect } from "next/navigation";
 
 export default async function PackageCostDetailPage({ params }: { params: Promise<{ trackingId: string }> }) {
   const { trackingId } = await params;
-  return <PackageCostDetailScreen trackingId={trackingId} />;
+  redirect(`/orders/${encodeURIComponent(trackingId)}`);
 }

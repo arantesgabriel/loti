@@ -9,7 +9,7 @@ import { DomainError } from "./errors";
 import { purchaseServices } from "./purchase-services";
 import { allocateItemCost } from "./cost-sharing";
 
-export function createServices(db: AppDatabase, userId: string) {
+export function createServices(db: AppDatabase, userId: string, initializeCosts?: Parameters<typeof purchaseServices>[2]) {
   const guard = authorization(db, userId);
 
   async function collectionForFavorite(collectionId: string | null, workspaceId: string) {
@@ -78,7 +78,7 @@ export function createServices(db: AppDatabase, userId: string) {
     await db.insert(userPreferences).values({ userId, favoritesView: view, createdAt: now, updatedAt: now }).onConflictDoUpdate({ target: userPreferences.userId, set: { favoritesView: view, updatedAt: now } }).run();
   }
 
-  return { ...guard, ...purchaseServices(db, userId), getData, saveFavorite, deleteFavorite, saveCollection, deleteCollection, setView };
+  return { ...guard, ...purchaseServices(db, userId, initializeCosts), getData, saveFavorite, deleteFavorite, saveCollection, deleteCollection, setView };
 }
 
 export type WorkspaceData = Awaited<ReturnType<ReturnType<typeof createServices>["getData"]>>;

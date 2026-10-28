@@ -18,7 +18,8 @@ import { DomainError } from "./errors";
 import type { CostTransaction } from "./purchase-cost-initialization";
 import { serializeDomainTransaction } from "./transaction-lock";
 import { previewFifoConsumption } from "./hubbuy-balance-calculations";
-import { accountDeletionBlockCode, accountDeletionBlockMessage, accountDiscardEligible } from "./hubbuy-account-lifecycle";
+import { accountDeletionBlockMessage, accountLifecycleExpressions } from "./hubbuy-account-lifecycle";
+import {usesOrdersWorkflow} from "./orders-workflow";
 import { presentIndividualRights, type AvailableCreditShare } from "./hubbuy-rights-presentation";
 import { readRefundProductOrigins } from "./hubbuy-rights-reading";
 import { presentBalanceTraceability } from "./hubbuy-balance-traceability";
@@ -483,7 +484,8 @@ export function hubbuyBalanceServices(db: AppDatabase, userId: string) {
       }
       if (account.deletedAt) throw new DomainError("Este cadastro já foi excluído do Loti.", 409, "ACCOUNT_DELETED");
       if (account.revision !== value.expectedRevision) throw new DomainError("A conta mudou em outra sessão. Atualize a tela e tente novamente.", 409, "ACCOUNT_REVISION_CONFLICT");
-      const eligibility = await tx.select({ code: accountDeletionBlockCode, canDiscard: accountDiscardEligible }).from(hubbuyAccounts).where(eq(hubbuyAccounts.id, accountId)).get();
+      const lifecycle=accountLifecycleExpressions(await usesOrdersWorkflow(tx));
+      const eligibility = await tx.select({ code: lifecycle.deletion, canDiscard: lifecycle.discard }).from(hubbuyAccounts).where(eq(hubbuyAccounts.id, accountId)).get();
       if (!eligibility || (discardIncorrectRegistration ? !eligibility.canDiscard : eligibility.code)) throw new DomainError(discardIncorrectRegistration ? "Esta conta tem uso, vínculo ou histórico que impede anular o cadastro. Não é possível apagar dinheiro ou movimentações reais por este caminho." : accountDeletionBlockMessage(eligibility?.code ?? "ACCOUNT_HAS_HISTORY")!, 409, discardIncorrectRegistration ? "ACCOUNT_DISCARD_INELIGIBLE" : eligibility?.code ?? "ACCOUNT_HAS_HISTORY");
       const state = await calculateLedgerState(tx, account);
       if (!state.reconciled || (!discardIncorrectRegistration && (state.ledgerBalanceCnyMinor !== 0 || state.rights.length)) || (account.status !== "reconciling" && state.ledgerBalanceCnyMinor !== account.balanceCnyMinor)) throw new DomainError("O saldo e os direitos precisam ser conferidos antes de excluir.", 409, "BALANCE_RECONCILIATION_REQUIRED");
@@ -529,7 +531,8 @@ export function hubbuyBalanceServices(db: AppDatabase, userId: string) {
   async function listAccounts(workspaceId?: string) {
     return db.transaction(async tx => {
       const membership = await authorization(tx, userId).requireWorkspaceMember(workspaceId);
-      const rows = await tx.select({ account: hubbuyAccounts, deletionBlockCode: accountDeletionBlockCode, canDiscard: accountDiscardEligible }).from(hubbuyAccounts).where(and(eq(hubbuyAccounts.workspaceId, membership.workspaceId), isNull(hubbuyAccounts.deletedAt))).orderBy(asc(hubbuyAccounts.createdAt)).all();
+      const lifecycle=accountLifecycleExpressions(await usesOrdersWorkflow(tx));
+      const rows = await tx.select({ account: hubbuyAccounts, deletionBlockCode: lifecycle.deletion, canDiscard: lifecycle.discard }).from(hubbuyAccounts).where(and(eq(hubbuyAccounts.workspaceId, membership.workspaceId), isNull(hubbuyAccounts.deletedAt))).orderBy(asc(hubbuyAccounts.createdAt)).all();
       const accounts = rows.map(({ account, deletionBlockCode, canDiscard }) => ({ ...account, canDelete: deletionBlockCode === null, canDiscardIncorrectRegistration: !!canDiscard, deletionBlockCode, deletionBlockReason: accountDeletionBlockMessage(deletionBlockCode) }));
       const accountIds = accounts.map(account => account.id);
       if (!accountIds.length) return [];

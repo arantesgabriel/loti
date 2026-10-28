@@ -1,10 +1,23 @@
 import { eq, inArray, asc } from "drizzle-orm";
 import type { AppDatabase } from "../db/connection";
+import { usesOrdersWorkflow } from "./orders-workflow";
+import { DomainError } from "./errors";
 import { purchaseCostCharges, purchaseCostOrders, purchaseCostTrackings, purchaseItemCosts, purchaseCostParticipants, purchaseItems, purchaseItemParticipants, purchasePackages, purchasePackageItems, type Purchase } from "../db/schema";
 
 export type CostTransaction = Parameters<Parameters<AppDatabase["transaction"]>[0]>[0];
 
+export async function initializeLegacyPurchaseCosts(tx: CostTransaction, purchase: Purchase, actorId: string) {
+  return initializeCosts(tx, purchase, actorId, true);
+}
+
 export async function initializePurchaseCosts(tx: CostTransaction, purchase: Purchase, actorId: string) {
+  const existing = await tx.select().from(purchaseCostTrackings).where(eq(purchaseCostTrackings.purchaseId,purchase.id)).get();
+  if (existing) return existing;
+  if (!await usesOrdersWorkflow(tx)) throw new DomainError("Atualize as migrations antes de finalizar uma compra.",409,"ORDERS_WORKFLOW_UPGRADE_REQUIRED");
+  return initializeCosts(tx, purchase, actorId, false);
+}
+
+async function initializeCosts(tx: CostTransaction, purchase: Purchase, actorId: string, legacy: boolean) {
   const existing = await tx.select().from(purchaseCostTrackings).where(eq(purchaseCostTrackings.purchaseId, purchase.id)).get();
   if (existing) return existing;
 
@@ -70,6 +83,10 @@ export async function initializePurchaseCosts(tx: CostTransaction, purchase: Pur
   });
   if (participantRows.length) await tx.insert(purchaseCostParticipants).values(participantRows).run();
 
+  if (!legacy) {
+    await tx.insert(purchaseCostCharges).values({ id: crypto.randomUUID(), trackingId, orderId, packageId: null, chargeType: "products", valueState: null, amountCents: null, paymentMethod: null, feeBps: null, paymentStatus: "pending", paidAt: null, paidBy: null, createdAt: now, updatedAt: now }).run();
+    return tracking;
+  }
   const packageId = crypto.randomUUID();
   await tx.insert(purchasePackages).values({ id: packageId, trackingId, name: "Pacote 1", packageOrder: 0, logisticsStatus: "preparing", createdAt: now, updatedAt: now }).run();
   const packageRows = costRows.map((item, allocationOrder) => ({ packageId, costItemId: item.id, quantity: items[allocationOrder].quantity, allocationOrder: item.itemOrder }));

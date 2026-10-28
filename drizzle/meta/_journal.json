@@ -162,6 +162,36 @@
       "when": 1792557724467,
       "tag": "0022_hubbuy_manual_adjustments",
       "breakpoints": true
-    }
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1793125384391,
+      "tag": "0023_orders_warehouse_packages",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1793125384392,
+      "tag": "0024_orders_legacy_backfill",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1793127031431,
+      "tag": "0025_legacy_charge_compatibility",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1793127288298,
+      "tag": "0026_logistics_charge_states",
+      "breakpoints": true
+    },
+    {"idx":27,"version":"6","when":1793127288299,"tag":"0027_logistics_integrity_guards","breakpoints":true},
+    {"idx":28,"version":"6","when":1793127288300,"tag":"0028_legacy_account_review_guard","breakpoints":true}
   ]
 }

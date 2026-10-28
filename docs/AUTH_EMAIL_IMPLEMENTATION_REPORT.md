@@ -1,5 +1,25 @@
 # Relatório — Resend e segurança da autenticação
 
+## Validação de Dev — 22/10/2026
+
+O usuário informou que as migrações já foram aplicadas e solicitou validar em `https://dev.useloti.com`, sem ler o arquivo `.env`. Nenhum `.env` foi lido nesta rodada; testes locais usaram uma cópia do Git em `artifacts/qa/auth-validation-20261022/source`, sem esse arquivo e com `DOTENV_CONFIG_PATH` apontando para caminho inexistente. Nenhuma migração foi executada nem houve alteração em produção.
+
+A solicitação inicial em Dev retornou HTTP 403 na função de autenticação, com firewall Allowed. Foi configurado um override de `BETTER_AUTH_URL=https://dev.useloti.com` somente no Preview da branch `dev`, preservando a verificação estrita de origem. Também foram criados `LOTI_EMAIL_MODE=resend` e `LOTI_EMAIL_TEST_RECIPIENTS` nesse mesmo escopo. A chave de Preview foi criada e preenchida pelo usuário; não foi revelada pelo agente. Após republicar o Preview, a solicitação para endereço sem conta passou a retornar a resposta genérica esperada.
+
+O usuário confirmou encaminhamento Spaceship de `noreply@useloti.com` para seu Gmail e informou que o remetente não possui conta no app. A allowlist foi então substituída pelo endereço da conta existente de Dev autorizado pelo usuário. Somente esse destinatário fica permitido; o remetente permanece `Loti <noreply@useloti.com>`.
+
+Validação local desta rodada: **43 testes passaram em oito arquivos**, cobrindo recuperação, tokens, sessões, convites, cotas, concorrência, origem e templates. Playwright local: tratamento mobile/link inválido passou; jornada completa ficou bloqueada por timeout de navegação antes do formulário de recuperação em compilação dev isolada. Não contabilizar essa jornada como aprovada nesta rodada. Os resultados anteriores sobre build estável permanecem históricos.
+
+Evidências: `artifacts/qa/auth-dev-reset-403-20261022.png`, `auth-dev-invalid-token-20261022.png`, `auth-dev-email-config-20261022.png`, `auth-dev-generic-success-20261022.png`. Entrega real e conclusão da troca de senha serão registradas após o teste controlado e a participação do usuário na definição da nova senha.
+
+A publicação Preview `8NdebAH4s7BY82yduviDcovD6mSr` ficou Ready com a allowlist atualizada. A primeira tentativa para a conta existente gerou os eventos `auth_email_budget` (daily/monthly 1) e `auth_email` reset/failed; nenhuma mensagem apareceu na Resend. O usuário informou ter corrigido a chave diretamente na Vercel. Foi iniciada nova republicação apenas do Preview para carregar o segredo corrigido, sem revelar ou ler seu valor.
+
+Após a correção, o Preview **ytcvbB1Ngp8ty5kajca1iR3bQ4GD** ficou **Ready**, associado a `dev.useloti.com`. Uma nova solicitação para a conta autorizada resultou em **Delivered** na Resend. **Uma mensagem real entregue** nesta rodada. Remetente e assunto corretos; o link do template usa a origem HTTPS de Dev e informa validade de 30 minutos e uso único. Não foram registrados tokens, credenciais ou URLs de recuperação neste relatório.
+
+Evidências finais de envio: `artifacts/qa/auth-dev-email-delivered-20261022.png` e `auth-dev-corrected-key-ready-20261022.png`. A definição de nova senha, login com ela e confirmação de que o link não pode ser reutilizado dependem da participação do usuário. Foi solicitado que conclua a troca diretamente pelo email e informe o resultado sem compartilhar senha ou link. **Não declarar recuperação 100% validada antes dessa confirmação.** Nenhum código funcional foi alterado nesta rodada; apenas configurações do Preview e este relatório. Não houve push, commit ou publicação de produção pelo agente nesta rodada.
+
+**Confirmação do usuário em 22/10/2026:** “o reset funcionou”, após o teste com email real entregue. A troca de senha pelo fluxo publicado em Dev está confirmada pelo usuário. O retorno não discrimina login com a nova senha, revogação de sessões anteriores ou tentativa de reutilizar o link; esses comportamentos têm cobertura automatizada local, mas não foram confirmados separadamente no ambiente remoto. A validação de Dev não equivale a uma validação operacional de produção. Nenhuma senha ou link foi solicitado ou registrado.
+
 Data: 20/10/2026. **Implementação local validada; configuração externa e aprovação de publicação pendentes.** Contrato: [31 — emails e segurança](31_AUTH_EMAIL_SECURITY_PLAN.md).
 
 ## Atualização após as autorizações externas

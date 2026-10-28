@@ -27,6 +27,8 @@ Before writing code, read the files in this order:
 
 For approved post-MVP extensions that are in scope for the current task, also read their full handoff after the canonical list. In particular, refunds use `docs/23_PRODUCT_REFUNDS_PLAN.md` and HubBuy QC uses `docs/24_HUBBUY_QC_IMPORT_PLAN.md`.
 
+The approved Pedidos → Armazém → Pacotes extension is documented in `docs/39_ORDERS_WAREHOUSE_AND_PACKAGES_PLAN.md`; read its full handoff when it is in scope for the current task.
+
 The execution prompt is `PROMPT_ONE_SHOT.md`.
 
 ## Source of truth priority

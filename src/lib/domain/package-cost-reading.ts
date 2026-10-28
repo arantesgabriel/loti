@@ -6,6 +6,7 @@ import { DomainError } from "./errors";
 import { calculateCostTracking } from "./package-cost-calculations";
 import { projectCostFinancialDisplay } from "./package-cost-display";
 import { CostTransaction } from "./purchase-cost-initialization";
+import { usesOrdersWorkflow } from "./orders-workflow";
 
 type CostReadDatabase = Pick<AppDatabase, "select">;
 type CostDatabase = CostReadDatabase | CostTransaction;
@@ -14,7 +15,8 @@ function pendingPackageCharge() {
   return { value: { state: "pending" as const, amountCents: null }, paymentMethod: null, feeBps: null, paymentStatus: "pending" as const };
 }
 
-export async function readCostTracking(db: CostDatabase, userId: string, trackingId: string) {
+export async function readCostTracking(db: CostDatabase, userId: string, trackingId: string, scope: "legacy" | "order" | "auto" = "auto") {
+  if (scope === "auto") scope = await usesOrdersWorkflow(db) ? "order" : "legacy";
   const tracking = await db.select().from(purchaseCostTrackings).where(eq(purchaseCostTrackings.id, trackingId)).get();
   if (!tracking) throw new DomainError("Acompanhamento de custos não encontrado.", 404);
   await authorization(db, userId).requireWorkspaceMember(tracking.workspaceId);
@@ -143,6 +145,7 @@ export async function readCostTracking(db: CostDatabase, userId: string, trackin
   });
   let calculation: ReturnType<typeof calculateCostTracking>;
   try { calculation = calculateCostTracking({
+    requirePackageCoverage: scope !== "order",
     items: calculatedCostItems.map(cost => {
       const original = cost.purchaseItemId ? purchaseItemsById.get(cost.purchaseItemId) : null;
       const additional = cost.additionalOrderItemId ? additionalItemRows.find(item => item.id === cost.additionalOrderItemId) : null;
@@ -166,7 +169,7 @@ export async function readCostTracking(db: CostDatabase, userId: string, trackin
         refunds: refundCalculationRows(cost.id),
       };
     }),
-    packages: packages.map(pkg => {
+    packages: (scope === "order" ? [] : packages).map(pkg => {
       const freight = chargeByScope.get(`${pkg.id}:brazil_freight`), customs = chargeByScope.get(`${pkg.id}:customs`);
       return {
         id: pkg.id,
@@ -334,6 +337,7 @@ export async function readCostTracking(db: CostDatabase, userId: string, trackin
   }
   const settings = await db.select().from(workspaceCostSettings).where(eq(workspaceCostSettings.workspaceId, tracking.workspaceId)).get();
   return {
+    workflow: scope === "order" ? "orders-v2" as const : "legacy" as const,
     tracking,
     purchase,
     items,
@@ -352,7 +356,7 @@ export async function readCostTracking(db: CostDatabase, userId: string, trackin
       };
     }),
     hubbuyAccounts: accountRowsWithEligibility,
-    packages: packageData,
+    packages: scope === "order" ? [] : packageData,
     charges,
     productsCharge: productCharge ?? null,
     members,

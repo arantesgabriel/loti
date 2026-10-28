@@ -1,0 +1,103 @@
+.page {
+    --landing-gutter: max(24px, env(safe-area-inset-left), env(safe-area-inset-right));
+    width: 100%;
+}
+
+.header, .hero, .footer, .section, .journeyRow {
+    width: min(calc(100% - var(--landing-gutter) - var(--landing-gutter)), 1328px);
+    margin-inline: auto;
+}
+
+.page a { text-underline-offset: 5px; }
+.page :is(section, main) { scroll-margin-top: 24px; }
+.skipLink { position: absolute; z-index: 10; top: 12px; left: 24px; padding: 12px 18px; border-radius: 10px; background: var(--surface); color: var(--foreground); transform: translateY(-180%); }
+.skipLink:focus { transform: none; }
+
+.header { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 24px; min-height: 100px; border-bottom: 1px solid var(--border); }
+.brand { display: inline-flex; width: fit-content; min-height: 44px; align-items: center; gap: 7px; color: var(--brand); font-size: 27px; font-weight: 650; letter-spacing: -0.05em; text-decoration: none; }
+.brand svg { color: var(--primary); }
+.navigation { display: flex; align-items: center; gap: 32px; }
+.navigation a, .login, .footer > a:last-child { display: inline-flex; align-items: center; min-height: 44px; color: var(--foreground); font-size: 14px; font-weight: 500; text-decoration: none; }
+.navigation a:hover, .login:hover, .footer > a:last-child:hover { text-decoration: underline; }
+.login { justify-self: end; padding-inline: 18px; border: 1px solid var(--border-control); border-radius: 10px; }
+
+.hero { padding-top: 72px; }
+.heroCopy { max-width: 830px; margin-inline: auto; text-align: center; }
+.heroCopy h1 { margin: 0; font-size: clamp(38px, 5.1vw, 72px); font-weight: 600; line-height: 1.06; letter-spacing: -0.055em; }
+.heroCopy > p { max-width: 620px; margin: 28px auto 0; color: var(--muted); font-size: 18px; line-height: 1.65; }
+.actions { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; column-gap: 28px; row-gap: 12px; margin-top: 32px; }
+.primaryAction { min-height: 48px; padding-inline: 24px; text-decoration: none; font-size: 15px; }
+.secondaryAction { display: inline-flex; align-items: center; min-height: 48px; color: var(--foreground); font-size: 14px; font-weight: 500; }
+
+.productCapture { margin: 56px 0 0; }
+.productCapture picture, .journeyCapture picture { display: block; overflow: hidden; border: 1px solid var(--border-emphasis); border-radius: 18px; background: var(--surface); box-shadow: 0 16px 48px var(--shadow-menu); }
+.productCapture img, .journeyCapture img { display: block; width: 100%; height: auto; }
+.productCapture figcaption, .journeyCapture figcaption { margin-top: 16px; color: var(--muted); font-size: 12px; text-align: center; line-height: 1.5; }
+
+.section { padding-block: 96px; border-bottom: 1px solid var(--border); }
+.sectionIntro { max-width: 700px; margin-inline: auto; text-align: center; }
+.section h2 { margin: 0; font-size: clamp(28px, 3.2vw, 44px); line-height: 1.15; font-weight: 550; letter-spacing: -0.04em; }
+.section p { color: var(--muted); font-size: 16px; line-height: 1.7; }
+.sectionIntro > p { margin: 24px 0 0; }
+.journeyStage { padding-block: 112px; background: var(--background); color: var(--foreground); }
+.journeyStage + .journeyStage { border-top: 1px solid var(--border); }
+.journeyRow { display: grid; grid-template-columns: minmax(0, .75fr) minmax(0, 1.25fr); align-items: center; gap: 64px; }
+.journeyCopy { min-width: 0; }
+.journeyCopy h2 { margin: 0; max-width: 440px; font-size: clamp(30px, 3.3vw, 46px); font-weight: 550; line-height: 1.13; letter-spacing: -.04em; }
+.journeyCopy > p { max-width: 440px; margin: 24px 0 0; color: var(--muted); font-size: 16px; line-height: 1.7; }
+.journeyCopy .journeyLabel { display: flex; align-items: center; gap: 9px; margin: 0 0 24px; color: inherit; font-size: 14px; font-weight: 600; }
+.journeyCopy .journeyNote { padding-top: 20px; border-top: 1px solid var(--border); font-size: 14px; }
+.journeyProof { display: grid; gap: 24px; min-width: 0; }
+.journeyCapture { min-width: 0; margin: 0; }
+.purchaseBand { --muted: var(--journey-muted); background: var(--journey-contrast); color: var(--journey-on-contrast); }
+.purchaseBand .journeyNote { border-color: rgb(255 255 255 / .2); }
+.journeyReverse { grid-template-columns: minmax(0, 1.25fr) minmax(0, .75fr); }
+.journeyReverse .journeyCopy { grid-column: 2; grid-row: 1; }
+.journeyReverse .journeyProof { grid-column: 1; grid-row: 1; }
+.useCasesGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; max-width: 1060px; margin: 48px auto 0; }
+.useCaseCard { min-width: 0; display: grid; align-content: start; grid-template-rows: auto auto 1fr auto; gap: 18px; padding: 32px; border: 1px solid var(--border); border-radius: 20px; background: var(--surface); }
+.useCaseIcon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; background: var(--surface-muted); color: var(--brand); }
+.useCaseCard h3 { min-height: 2.5em; margin: 0; font-size: 24px; font-weight: 550; line-height: 1.25; letter-spacing: -.025em; }
+.useCaseCard p { margin: 0; }
+.useCaseCard ul { display: grid; gap: 8px; margin: 8px 0 0; padding: 20px 0 0 18px; border-top: 1px solid var(--border); color: var(--muted); font-size: 14px; line-height: 1.6; }
+.faq { max-width: 760px; margin-inline: auto; }
+.faq h2 { margin-bottom: 40px; }
+.faq details { padding-block: 20px; border-top: 1px solid var(--border-emphasis); }
+.faq summary { min-height: 44px; align-content: center; cursor: pointer; color: var(--foreground); font-size: 18px; font-weight: 500; }
+.faq details > p { margin: 12px 0 0; }
+.closing { text-align: center; }
+.closing p { max-width: 560px; margin: 24px auto 32px; }
+.footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; column-gap: 32px; row-gap: 8px; padding-block: 32px; }
+.footer p { color: var(--muted); font-size: 13px; line-height: 1.6; }
+
+@media (max-width: 900px) {
+    .productCapture { max-width: 440px; margin-inline: auto; }
+}
+
+@media (max-width: 1100px) {
+    .journeyStage { padding-block: 72px; }
+    .journeyRow, .journeyReverse { grid-template-columns: minmax(0, 1fr); gap: 40px; }
+    .journeyReverse .journeyCopy, .journeyReverse .journeyProof { grid-column: auto; grid-row: auto; }
+    .journeyCopy { max-width: 640px; width: 100%; margin-inline: auto; }
+    .journeyCopy h2, .journeyCopy > p { max-width: none; }
+    .journeyProof { width: min(100%, 440px); margin-inline: auto; }
+}
+
+@media (max-width: 767px) {
+    .header { grid-template-columns: 1fr auto; gap: 8px; min-height: 112px; padding-top: 14px; }
+    .brand { font-size: 25px; }
+    .login { grid-column: 2; grid-row: 1; }
+    .navigation { grid-row: 2; grid-column: 1 / -1; justify-content: space-between; gap: 12px; }
+    .navigation a { font-size: 13px; }
+    .hero { padding-top: 44px; }
+    .heroCopy h1 { font-size: clamp(34px, 7.8vw, 54px); letter-spacing: -0.045em; }
+    .heroCopy > p { margin-top: 24px; font-size: 16px; line-height: 1.6; }
+    .actions { margin-top: 24px; }
+    .productCapture { margin-top: 40px; }
+    .productCapture picture, .journeyCapture picture { border-radius: 12px; }
+    .section { padding-block: 64px; }
+    .useCasesGrid { grid-template-columns: minmax(0, 1fr); gap: 24px; margin-top: 32px; }
+    .useCaseCard { padding: 24px; }
+    .footer { flex-direction: column; align-items: flex-start; gap: 12px; }
+    .footer p { margin: 0; }
+}

@@ -1,0 +1,115 @@
+{
+  "totalBytes": 377681,
+  "files": [
+    {
+      "path": "public/landing/favorites-cards-desktop.webp",
+      "bytes": 94872,
+      "width": 1440,
+      "height": 900,
+      "format": "webp",
+      "sha256": "73f410965ad5f4b33f6db561986c25fc5bbe0be687f391018e09b243acbc0071",
+      "exif": false,
+      "provenance": "L2 real app capture, synthetic dataset"
+    },
+    {
+      "path": "public/landing/favorites-cards-mobile.webp",
+      "bytes": 20964,
+      "width": 390,
+      "height": 609,
+      "format": "webp",
+      "sha256": "b175d4fc1fde94f1e1f04f6301547ea5f1748f69cf3e6b315ed04000e1ca606c",
+      "exif": false,
+      "provenance": "L2 real app capture, synthetic dataset"
+    },
+    {
+      "path": "public/landing/journey-costs-desktop.webp",
+      "bytes": 47076,
+      "width": 880,
+      "height": 815,
+      "format": "webp",
+      "sha256": "00a05066a432ae6ca0a5126fae78792d6737aab0518fed9e3a24057a1a88a8c8",
+      "exif": false,
+      "provenance": "L3 real app capture, synthetic dataset"
+    },
+    {
+      "path": "public/landing/journey-costs-mobile.webp",
+      "bytes": 26410,
+      "width": 350,
+      "height": 740,
+      "format": "webp",
+      "sha256": "8e3ea5e498e617abcc605765f5170cf46038e3e56706b33211825c1f24385f63",
+      "exif": false,
+      "provenance": "L3 real app capture, synthetic dataset"
+    },
+    {
+      "path": "public/landing/journey-favorites-desktop.webp",
+      "bytes": 38346,
+      "width": 880,
+      "height": 590,
+      "format": "webp",
+      "sha256": "a9e9b84c3815bd15038beadf998060c6999ee1d514bb8df5b7a5d5c5e3c7231c",
+      "exif": false,
+      "provenance": "L3 real app capture, synthetic dataset"
+    },
+    {
+      "path": "public/landing/journey-favorites-mobile.webp",
+      "bytes": 19496,
+      "width": 390,
+      "height": 610,
+      "format": "webp",
+      "sha256": "a39fa4f87ea6e4cd14623af2670ae96f0820adaec6072119a1d036fb140ef8b1",
+      "exif": false,
+      "provenance": "L3 real app capture, synthetic dataset"
+    },
+    {
+      "path": "public/landing/journey-packages-desktop.webp",
+      "bytes": 10150,
+      "width": 880,
+      "height": 198,
+      "format": "webp",
+      "sha256": "0ccbb272e310c15296196b03d9bb47ab0ba5ac5da4855b3025b770b273da1770",
+      "exif": false,
+      "provenance": "L3 real app capture, synthetic dataset"
+    },
+    {
+      "path": "public/landing/journey-packages-mobile.webp",
+      "bytes": 7918,
+      "width": 350,
+      "height": 285,
+      "format": "webp",
+      "sha256": "b7300d2f650426fe2d3573a4b9a745ac267c62a38f4d2a1cc33fe226da4a4a59",
+      "exif": false,
+      "provenance": "L3 real app capture, synthetic dataset"
+    },
+    {
+      "path": "public/landing/journey-purchase-desktop.webp",
+      "bytes": 41310,
+      "width": 880,
+      "height": 710,
+      "format": "webp",
+      "sha256": "e8812b2c2868e160bc8392c4a85e43e33231890af16a78ca8602661556f822aa",
+      "exif": false,
+      "provenance": "L3 real app capture, synthetic dataset"
+    },
+    {
+      "path": "public/landing/journey-purchase-mobile.webp",
+      "bytes": 34134,
+      "width": 350,
+      "height": 810,
+      "format": "webp",
+      "sha256": "7eeb66bb55834ae965fdbc29531a9517c032e683d0ba9de39bf454977f9b1969",
+      "exif": false,
+      "provenance": "L3 real app capture, synthetic dataset"
+    },
+    {
+      "path": "public/landing/social-card.png",
+      "bytes": 37005,
+      "width": 1200,
+      "height": 630,
+      "format": "png",
+      "sha256": "321f0eba1b418122e5e21a15b713d6beb5234e5d1463a745c1d57263b1598a8d",
+      "exif": false,
+      "provenance": "L5 original editorial composition with local Geist"
+    }
+  ]
+}

@@ -1,3 +1,3 @@
-import { PackagesScreen } from "@/components/packages/packages-screen";
+import { LogisticsPackagesScreen } from "@/components/orders/logistics-packages-screen";
 
-export default function PackagesPage() { return <PackagesScreen />; }
+export default function PackagesPage() { return <LogisticsPackagesScreen />; }

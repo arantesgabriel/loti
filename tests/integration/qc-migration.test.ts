@@ -7,6 +7,8 @@ import { migrate } from "drizzle-orm/libsql/migrator";
 import { openDatabase } from "@/lib/db/connection";
 import { hubbuyExternalItems, purchaseCostCharges, purchaseCostRefundEvents, purchaseCostRefundParticipants, purchaseCostRefunds, purchaseCostTrackings, purchaseItemCosts, purchaseItems, purchases, qcEvents, qcImagePreviews, qcImageSources, qcImages, qcImports, qcPresentations, user, workspaceMembers, workspaces } from "@/lib/db/schema";
 import { packageCostServices } from "@/lib/domain/package-cost-services";
+import {initializeLegacyPurchaseCosts} from "@/lib/domain/purchase-cost-initialization";
+import {legacyMigrationsFolder} from "../fixtures/orders-transition/legacy-migrations";
 
 describe("QC migration from the refund baseline", () => {
   it("preserves an open tracking, a closed tracking, snapshots, paid fees and received refund events", async () => {
@@ -25,7 +27,7 @@ describe("QC migration from the refund baseline", () => {
       // Build the financial fixture with the current services on their matching
       // schema, then copy historical columns into the actual pre-QC database.
       // Current readers must never be run against an unmigrated account schema.
-      await migrate(db, { migrationsFolder: resolve("drizzle") });
+      await migrate(db, { migrationsFolder: legacyMigrationsFolder() });
       const now = new Date("2026-10-14T12:00:00.000Z");
       await db.insert(user).values([{ id: "alice", name: "Alice", email: "alice@qc-migration.test", emailVerified: true, createdAt: now, updatedAt: now }, { id: "bob", name: "Bob", email: "bob@qc-migration.test", emailVerified: true, createdAt: now, updatedAt: now }]).run();
       await db.insert(workspaces).values({ id: "workspace", name: "Loti", createdAt: now }).run();
@@ -39,7 +41,7 @@ describe("QC migration from the refund baseline", () => {
         { id: "open-item", purchaseId: "open-history", sourceFavoriteId: null, personId: "alice", createdBy: "alice", name: "Mouse", url: "https://weidian.com/item.html?itemID=2", platform: "weidian", visualKey: "accessory", variant: null, notes: null, quantity: 1, unitPriceCents: 5000, cartStatus: "added", sharingMode: "equal", createdAt: now, updatedAt: now },
       ]).run();
 
-      const costs = packageCostServices(db, "alice");
+      const costs = packageCostServices(db, "alice",initializeLegacyPurchaseCosts);
       const closed = await costs.startTracking("refund-history");
       let detail = await costs.getTracking(closed.id);
       detail = await costs.saveItemCosts(closed.id, { expectedRevision: detail.tracking.revision, itemId: detail.items[0]!.id, effectivePriceState: "known", effectivePriceUnitCents: 10000, chinaFreightState: "known", chinaFreightUnitCents: 1000 });

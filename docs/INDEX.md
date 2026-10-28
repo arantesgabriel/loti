@@ -42,9 +42,11 @@ Authentication email extension: [`31_AUTH_EMAIL_SECURITY_PLAN.md`](31_AUTH_EMAIL
 | `35_DARK_MODE.md` | Browser theme preference, semantic light/dark palettes, accessibility and local validation |
 | `37_HUBBUY_MANUAL_BALANCE_ADJUSTMENTS_PLAN.md` | Implementation handoff for manual CNY credits/debits, promotional bonuses, audited reversals, individual ownership and zero-BRL refund compatibility |
 | `38_HUBBUY_BALANCE_TRACEABILITY_PLAN.md` | Implementation plan for historical balance origins, paid costs, received credits, consumption destinations, exhausted lots and audited restorations per person |
+| `39_ORDERS_WAREHOUSE_AND_PACKAGES_PLAN.md` | Complete handoff for Orders/warehouse, packages across purchases in the same account, restricted refunds, conservative legacy migration and a mandatory synthetic development rehearsal |
 | `audits/2026-10-17_HUBBUY_BALANCE_AND_MIXED_PAYMENTS.md` | Technical and functional investigation supporting the HubBuy balance and mixed-payment proposal |
 | `design/REFERENCES.md` | Figma and palette inspiration URLs |
 | `design/PACKAGES_AND_COSTS_REFERENCES.md` | Approved A/B/C/D visual references, images and acceptance for Pacotes e custos |
 | `design/MOCKUPS.md` | Approved visual references and interpretation notes |
+| `testing/DEVELOPMENT_SEED.md` | One-time SQL seed for direct Turso Cloud CLI import into loti-dev, generated credentials, checks and disposable files |
 
 The root `PROMPT_ONE_SHOT.md` is the final implementation prompt.

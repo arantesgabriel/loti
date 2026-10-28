@@ -1,5 +1,21 @@
 # Loti — relatório da migração Vercel + Turso
 
+## Pedidos, armazém e pacotes — execução em 27/10/2026
+
+A extensão tem implementação local de Pedidos, chegada parcial, reservas multi-compra, pacotes independentes, encargos, manifestos, despacho, peso, conferência legada e adaptação de refunds/correções/QC. Foram acrescentadas migrations 0023–0028, guards de cutover, ponte financeira legada e cenários sintéticos separados. **Esta etapa está encerrada com handoff para finalização; aceite humano e reviewer da extensão não foram obtidos.**
+
+Por solicitação do usuário, esta etapa será encerrada com [handoff para o próximo agente](HANDOFF_ORDERS_WAREHOUSE_PACKAGES_2026-10-27.md), incluindo os pontos de finalização ainda necessários. Não considerar todos os gates do plano 39 concluídos.
+
+O roteiro completo de Pacotes passou no Chromium, incluindo cotação sem pagamento, fechamento, frete pago, peso, Receita, despacho e recebimento. A suíte completa do estado entregue passou com **500 testes aprovados e sete ignorados**; typecheck isolado, lint e build isolado também passaram. O último upgrade sintético e a comparação da baseline passaram sem diferenças. Há pontos de finalização de produto/operação explicitamente listados no handoff; aprovação dos testes não significa aceite humano ou liberação. A execução final, os limites e o runbook estão em [execução e operação local](testing/ORDERS_TRANSITION_EXECUTION.md).
+
+### Registro histórico da preparação inicial
+
+**Entrega parcial: somente baseline legado. A extensão do plano 39 não está completa.** Estão disponíveis manifesto versionado, builder sintético pelos serviços reais, comandos locais explícitos de seed/comparação/dev, armazenamento QC privado guardado para QA e cenário Chromium dedicado. As âncoras globais e somas FIFO/pagamentos/pessoas conciliam. O schema e o fluxo operacional anterior permanecem; migrations e novo ciclo de pedidos/pacotes estão pendentes. Não foi solicitado nem obtido aceite humano do novo fluxo.
+
+Ver [carga e comandos](testing/ORDERS_TRANSITION_DEV_SCENARIO.md) e [auditoria/evidências](audits/2026-10-27_ORDERS_TRANSITION_BASELINE.md). Nenhum banco remoto, dado financeiro real, configuração externa, publicação, commit ou PR foi alterado. A exportação integral de tabelas foi rejeitada pela revisão automática e não foi aplicada; os dados continuam sendo gerados pelos serviços. A tentativa inicial de atualizar AGENTS/PROMPT foi rejeitada; após autorização explícita do usuário, somente as referências ao plano 39 foram acrescentadas.
+
+Após code review, o comparador passou a exigir a baseline persistida e verificar snapshots, parcelas/capacidades pessoais, pagamentos, ledger e proveniência QC completa. O contrato v2 inclui `qcImports`; os dez refunds são conferidos individualmente. Dezoito testes dirigidos, typecheck/lint e o seed/CLI em banco novo passaram. A terceira revisão Sol 6.1 high não encontrou achados de código nos eixos Standards e Spec deste incremento. Isso fecha os achados do comparador, sem declarar G1–G7 ou a extensão completa atendidos.
+
 Atualizado em 5 de outubro de 2026. **Loti está publicado em https://loti-omega.vercel.app**, no projeto Vercel `loti`, conectado ao Turso `loti-prod`. Os dois bancos remotos receberam migrations; login, sessão após recarga, gravação/leitura de favorito e logout foram verificados na URL pública. Usuários reais e importação da planilha aguardam as identidades e decisões do legado.
 
 ## Implementado
@@ -285,3 +301,12 @@ Handoff: backup e alvo autorizados → corte coordenado de escritores antigos �
 Após o usuário esclarecer que informou saldo apenas para tentar excluir uma conta, foi implementado **Corrigir cadastro e excluir**. A confirmação exige motivo e declaração explícita de valores incorretos. O serviço `discardIncorrectAccount` aceita apenas conciliação ainda sem uso ou vínculo operacional, estorna integralmente créditos e direitos CNY/BRL por lançamentos vinculados e mantém os originais antes de persistir o tombstone na mesma transação. Não existe movimentação financeira externa nem correção automática da conta real mostrada pelo usuário.
 
 Migration `0019_discard_incorrect_hubbuy_registration.sql` mantém as proteções anteriores e exige auditoria e compensação integral para a exceção; um marcador isolado não libera a exclusão. Handoff atualizado: aplicar até `0019` somente no alvo especificamente autorizado. Validação local: **290 testes passaram e 7 foram ignorados**, incluindo nove corridas em processos independentes; **3 cenários Chromium passaram**; TypeScript, lint, build e migration/verify em banco descartável passaram (47 tabelas verificadas, 51 triggers requeridos, zero violações FK). Capturas desktop/mobile do aditivo foram inspecionadas em `artifacts/qa/hubbuy-account-deletion/discard-{320,1440}.png`. A limpeza de bancos de corrida no Windows ocorre após a saída do runner porque libSQL pode reter handles nativos durante o teardown. Nenhuma publicação, migração remota ou alteração da conta do usuário foi realizada.
+
+
+## Pedidos, armazem e pacotes - finalizacao local, 27/10/2026
+
+As seis pendencias do handoff foram tratadas: rateio dos encargos na UI, propriedade permanente da ponte legada, leitura financeira consistente e somas seguras, verificador operacional reutilizavel/runner sintetico, paginacao SQL e cobertura das acoes finais. O marcador de propriedade usa eventos imutaveis existentes; nao foi criada nova migration nesta finalizacao. As migrations 0023-0028 da extensao permanecem no working tree.
+
+Evidencias, limites, matriz G0-G7 e ambiente concreto: [relatorio de finalizacao](testing/ORDERS_TRANSITION_FINALIZATION.md). Typecheck/lint/build isolados, comparacao/upgrade da baseline, auditoria operacional e quatro jornadas Chromium passaram. A regressao final teve 507 testes aprovados e sete ignorados, em 78 arquivos aprovados e um ignorado, com saida zero.
+
+Aceite humano da simulacao e autorizacao do reviewer continuam pendentes. O novo cenario inicial e `data/orders-transition-finalization-human-01.sqlite`, independente dos bancos alterados pelos testes. Nenhum commit, PR, deploy, migration de producao, dado financeiro real ou configuracao externa foi realizado. Alteracoes independentes do checkout foram preservadas.

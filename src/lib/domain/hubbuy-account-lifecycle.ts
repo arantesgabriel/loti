@@ -44,3 +44,9 @@ export function accountDeletionBlockMessage(code: string | null): string | null 
   if (code === "ACCOUNT_HAS_RECONCILIATION") return "Esta conta tem conciliação iniciada. Conclua a conferência; depois, poderá arquivá-la se o saldo estiver zerado.";
   return "Esta conta tem histórico ou vínculos. Preserve os registros e arquive a conta quando o saldo estiver conciliado e zerado.";
 }
+
+export function accountLifecycleExpressions(ordersWorkflow:boolean){
+  if(!ordersWorkflow)return {deletion:accountDeletionBlockCode,discard:accountDiscardEligible};
+  const references=sql`(EXISTS(SELECT 1 FROM order_warehouse_positions w WHERE w.account_id="hubbuy_accounts"."id") OR EXISTS(SELECT 1 FROM logistics_packages p WHERE p.account_id="hubbuy_accounts"."id"))`;
+  return {deletion:sql<string|null>`CASE WHEN ${references} THEN 'ACCOUNT_HAS_REFERENCES' ELSE ${accountDeletionBlockCode} END`,discard:sql<number>`(${accountDiscardEligible}) AND NOT ${references}`};
+}

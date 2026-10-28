@@ -121,8 +121,14 @@ function packageAllocationLines(detail: Detail): PackageAllocationLine[] {
 }
 export function PackageCostDetailScreen({
   trackingId,
+  orders = false,
+  returnTo,
+  focusItemId,
 }: {
   trackingId: string;
+  orders?: boolean;
+  returnTo?: string;
+  focusItemId?: string;
 }) {
   const router = useRouter();
   const [detail, setDetail] = useState<Detail | null>(null),
@@ -154,6 +160,7 @@ export function PackageCostDetailScreen({
     Record<string, boolean>
   >({});
   const focusTarget = useRef<string | null>(null);
+  const initialProductFocusHandled = useRef(false);
   const [focusRequestId, setFocusRequestId] = useState(0);
   const url = `/api/packages/${encodeURIComponent(trackingId)}`;
 
@@ -202,6 +209,34 @@ export function PackageCostDetailScreen({
       target.focus({ preventScroll: true });
     }
   }, [focusRequestId]);
+
+  useEffect(() => {
+    if (!orders || !focusItemId || !detail || initialProductFocusHandled.current)
+      return;
+    const exists =
+      detail.items.some((item) => item.id === focusItemId) ||
+      detail.productOrders.some((order) =>
+        order.items.some((item) => item.cost.id === focusItemId),
+      );
+    initialProductFocusHandled.current = true;
+    if (!exists) return;
+    const target = [
+      ...document.querySelectorAll<HTMLElement>("[data-cost-target]"),
+    ].find(
+      (element) =>
+        element.dataset.costTarget === `order-product-${focusItemId}` &&
+        element.getClientRects().length > 0,
+    );
+    if (target) {
+      target.scrollIntoView({
+        block: "center",
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+          ? "auto"
+          : "smooth",
+      });
+      target.focus({ preventScroll: true });
+    }
+  }, [detail, focusItemId, orders]);
 
   async function mutate(
     operation: string,
@@ -270,9 +305,9 @@ export function PackageCostDetailScreen({
   if (!detail)
     return (
       <>
-        <Link className="cost-back" href="/packages">
+        <Link className="cost-back" href={orders ? returnTo ?? "/orders" : "/packages"}>
           <ArrowLeft size={16} />
-          Pacotes e custos
+          {orders ? "Pedidos" : "Pacotes"}
         </Link>
         {error && (
           <p className="error" role="alert">
@@ -483,9 +518,9 @@ export function PackageCostDetailScreen({
   return (
     <>
       <div className="cost-v4">
-      <Link className="cost-back" href="/packages">
+      <Link className="cost-back" href={orders ? returnTo ?? "/orders" : "/packages"}>
         <ArrowLeft size={16} />
-        Pacotes e custos
+        {orders ? "Pedidos" : "Pacotes"}
       </Link>
       <header className="cost-purchase-header">
         <div className="cost-purchase-header-main">
@@ -868,7 +903,7 @@ export function PackageCostDetailScreen({
         />
       </ProgressiveSection>
 
-      <ProgressiveSection
+      {!orders && <ProgressiveSection
         id="packages"
         title="Pacotes"
         summary={presentation.packagesSummary}
@@ -944,6 +979,7 @@ export function PackageCostDetailScreen({
         </div>
       </ProgressiveSection>
 
+      }
       <ProgressiveSection
         id="people"
         title="Divisão por pessoa"
@@ -967,6 +1003,9 @@ export function PackageCostDetailScreen({
               apenas as parcelas que já podem ser calculadas.
             </p>
           )}
+          <p className="cost-people-explanation">
+            Unidades individuais somam as quantidades dos itens atribuídos a uma só pessoa. Itens compartilhados contam uma linha do produto por participante, independentemente da quantidade.
+          </p>
           <ul className="cost-people-list">
             {detail.memberTotals.map((person) => (
               <li key={person.personId}>
@@ -974,10 +1013,7 @@ export function PackageCostDetailScreen({
                 <span>
                   <strong>{person.name}</strong>
                   <small>
-                    {person.personalUnits}{" "}
-                    {person.personalUnits === 1
-                      ? "unidade"
-                      : "unidades"}
+                    {unitsLabel(person.personalUnits)}{" individuais"}
                     {person.sharedItems
                       ? ` · ${person.sharedItems} ${person.sharedItems === 1 ? "item compartilhado" : "itens compartilhados"}`
                       : ""}

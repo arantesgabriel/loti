@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
+import { logisticsPackages, logisticsReservations, orderWarehousePositions, logisticsEvents } from "../db/schema";
+import { usesOrdersWorkflow } from "./orders-workflow";
 import { z } from "zod";
 import type { AppDatabase } from "../db/connection";
 import { financialOperations, hubbuyAccounts, hubbuyBalanceConsumptions, hubbuyBalanceCreditShares, hubbuyBalanceEntries, hubbuyExternalItems, memberBalanceFinancingEntries, purchaseAdditionalOrderItems, purchaseCostCharges, purchaseCostOrders, purchaseCostPackageEvents, purchaseCostParticipants, purchaseCostRefunds, purchaseCostTrackings, purchaseItemCosts, purchaseOrderCorrections, purchasePackageItems, purchasePackages, purchasePaymentAllocations, purchasePaymentComponents, qcAdditionalPresentations } from "../db/schema";
@@ -38,18 +40,10 @@ export function purchaseOrderCorrectionServices(db: AppDatabase, actorId: string
   async function correct(trackingId: string, orderId: string, input: unknown, preview = false, attempt = 0): Promise<Result> {
     const value = schema.parse(input);
     const payloadHash = createHash("sha256").update(JSON.stringify({ trackingId, orderId, ...value })).digest("hex");
-    // A lost response may be retried after closure, or after another writer has
-    // committed. Authenticate before returning its persisted receipt, without
-    // starting a second write transaction just to acknowledge that receipt.
+    // Authorize and recover the receipt on the same connection as the write.
+    // A pooled preflight read can retain a competing local SQLite snapshot.
+    // Receipt recovery precedes revision/closure checks, including lost responses.
     try {
-      const replayTracking = await db.select().from(purchaseCostTrackings).where(eq(purchaseCostTrackings.id, trackingId)).get();
-      if (!replayTracking) throw new DomainError("Acompanhamento não encontrado.", 404);
-      await authorization(db, actorId).requireWorkspaceMember(replayTracking.workspaceId);
-      const receipt = await db.select().from(financialOperations).where(and(eq(financialOperations.workspaceId, replayTracking.workspaceId), eq(financialOperations.idempotencyKey, value.idempotencyKey))).get();
-      if (receipt) {
-        if (receipt.operationType !== "additional_order_corrected" || receipt.payloadHash !== payloadHash) throw new DomainError("Esta chave já foi usada com outros dados.", 409, "IDEMPOTENCY_CONFLICT");
-        return { ...JSON.parse(receipt.contextJson) as Result, replayed: true };
-      }
       return await serializeDomainTransaction(() => db.transaction(async tx => {
         const tracking = await tx.select().from(purchaseCostTrackings).where(eq(purchaseCostTrackings.id, trackingId)).get();
         if (!tracking) throw new DomainError("Acompanhamento não encontrado.", 404);
@@ -69,6 +63,12 @@ export function purchaseOrderCorrectionServices(db: AppDatabase, actorId: string
         const costs = await tx.select().from(purchaseItemCosts).where(eq(purchaseItemCosts.orderId, orderId)).orderBy(asc(purchaseItemCosts.itemOrder)).all();
         if (!costs.some(cost => cost.id === value.itemId)) throw new DomainError("Produto não encontrado neste pedido.", 404);
         const costIds = costs.map(cost => cost.id);
+        const ordersWorkflow = await usesOrdersWorkflow(tx);
+        const logistics = ordersWorkflow ? await tx.select().from(logisticsReservations).where(and(inArray(logisticsReservations.costItemId,costIds),isNull(logisticsReservations.releasedAt))).all() : [];
+        const positions = ordersWorkflow ? await tx.select().from(orderWarehousePositions).where(inArray(orderWarehousePositions.costItemId,costIds)).all() : [];
+        const newPackages = logistics.length ? await tx.select().from(logisticsPackages).where(inArray(logisticsPackages.id,[...new Set(logistics.map(r=>r.packageId))])).all() : [];
+        if (newPackages.some(p=>p.contentClosedAt || p.stage!=="preparing" || p.reviewState!=="confirmed" || p.financialClosedAt)) throw new DomainError("Reabra e confira os pacotes antes de corrigir o pedido.",409,"CORRECTION_PACKAGE_DEPENDENCY");
+        if (positions.some(p=>p.costItemId===value.itemId && p.receivedUnits.some(i=>i>=value.quantity)) || logistics.some(r=>r.costItemId===value.itemId && r.unitIndex>=value.quantity)) throw new DomainError("Corrija a chegada e retire as unidades excedentes antes de reduzir a quantidade.",409);
         const [items, participants, refunds, assignments, components] = await Promise.all([
           tx.select().from(purchaseAdditionalOrderItems).where(eq(purchaseAdditionalOrderItems.orderId, orderId)).all(),
           tx.select().from(purchaseCostParticipants).where(inArray(purchaseCostParticipants.costItemId, costIds)).orderBy(asc(purchaseCostParticipants.allocationOrder)).all(),
@@ -76,6 +76,7 @@ export function purchaseOrderCorrectionServices(db: AppDatabase, actorId: string
           tx.select().from(purchasePackageItems).where(inArray(purchasePackageItems.costItemId, costIds)).all(),
           tx.select().from(purchasePaymentComponents).where(eq(purchasePaymentComponents.orderId, orderId)).all(),
         ]);
+        if (ordersWorkflow) assignments.length=0;
         if (refunds.some(refund => refund.status !== "voided")) throw new DomainError("Anule os reembolsos deste pedido antes de corrigir seu pagamento.", 409, "CORRECTION_REFUND_DEPENDENCY");
         const packages = assignments.length ? await tx.select().from(purchasePackages).where(inArray(purchasePackages.id, [...new Set(assignments.map(row => row.packageId))])).all() : [];
         if (packages.some(pkg => pkg.trackingId !== trackingId || pkg.logisticsStatus !== "preparing" || pkg.contentSealSource !== null)) throw new DomainError("O pedido possui unidades em pacote enviado, recebido ou selado. Corrija a situação do pacote antes de editar.", 409, "CORRECTION_PACKAGE_DEPENDENCY");
@@ -148,6 +149,21 @@ export function purchaseOrderCorrectionServices(db: AppDatabase, actorId: string
           await tx.update(purchasePackages).set({ contentRevision: pkg.contentRevision + 1, updatedAt: now }).where(eq(purchasePackages.id, pkg.id)).run();
           const events = await tx.select().from(purchaseCostPackageEvents).where(eq(purchaseCostPackageEvents.packageId, pkg.id)).all();
           await tx.insert(purchaseCostPackageEvents).values({ id: crypto.randomUUID(), trackingId, packageId: pkg.id, eventOrder: Math.max(-1, ...events.map(event => event.eventOrder)) + 1, eventType: "content_changed", contentRevision: pkg.contentRevision + 1, reason: null, actorId, createdAt: now }).run();
+        }
+        if (ordersWorkflow) {
+          for(const reservation of logistics)await tx.update(logisticsReservations).set({releasedAt:now}).where(eq(logisticsReservations.id,reservation.id)).run();
+          for (const position of positions) {
+            const replacement = costMap.get(position.costItemId)!;
+            await tx.update(orderWarehousePositions).set({receivedUnits:position.receivedUnits,accountId:position.accountId,reviewState:position.reviewState,revision:position.revision+1,updatedBy:actorId,updatedAt:now}).where(eq(orderWarehousePositions.costItemId,replacement)).run();
+            await tx.update(orderWarehousePositions).set({receivedUnits:[],revision:position.revision+1,updatedBy:actorId,updatedAt:now}).where(eq(orderWarehousePositions.costItemId,position.costItemId)).run();
+          }
+          for (const reservation of logistics) {
+            await tx.insert(logisticsReservations).values({...reservation,id:crypto.randomUUID(),costItemId:costMap.get(reservation.costItemId)!,createdBy:actorId,createdAt:now}).run();
+          }
+          for (const pkg of newPackages) {
+            await tx.update(logisticsPackages).set({revision:pkg.revision+1}).where(eq(logisticsPackages.id,pkg.id)).run();
+            await tx.insert(logisticsEvents).values({id:crypto.randomUUID(),workspaceId:tracking.workspaceId,resourceId:pkg.id,action:"order_corrected",reason:value.reason,before:{orderId},after:{replacementOrderId},actorId,createdAt:now}).run();
+          }
         }
         const finalState = await calculateHubBuyBalanceState(tx, account.id);
         if (!finalState.reconciled || finalState.ledgerBalanceCnyMinor !== finalState.account.balanceCnyMinor) throw new DomainError("A correção não conciliou o saldo.", 409);

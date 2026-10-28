@@ -28,13 +28,14 @@ function defaultUrl() {
   return "file:./data/loti.sqlite";
 }
 
-export function openDatabase(url = defaultUrl()) {
+export function openDatabase(url = defaultUrl(), options: { localConcurrency?: number } = {}) {
   const normalizedUrl = /^(?:libsql|https?):\/\//.test(url) ? url : connectionUrl(url);
   const isRemoteDatabase = !normalizedUrl.startsWith("file:");
   if (process.env.VERCEL === "1" && isRemoteDatabase && !process.env.TURSO_AUTH_TOKEN) {
     throw new Error("TURSO_AUTH_TOKEN precisa estar configurado para acessar o banco Turso no Vercel.");
   }
-  const client = createClient({ url: normalizedUrl, ...(process.env.TURSO_AUTH_TOKEN ? { authToken: process.env.TURSO_AUTH_TOKEN } : {}) });
+  if(options.localConcurrency!==undefined && (!Number.isSafeInteger(options.localConcurrency) || options.localConcurrency<1))throw new Error("Invalid local database concurrency.");
+  const client = createClient({ url: normalizedUrl, ...(!isRemoteDatabase && options.localConcurrency!==undefined?{concurrency:options.localConcurrency}:{}), ...(process.env.TURSO_AUTH_TOKEN ? { authToken: process.env.TURSO_AUTH_TOKEN } : {}) });
   // Measure adapter calls only inside an explicitly injected, request-local QC
   // metrics context. SQL text and bound values are never retained.
   type DriverTransaction = { execute: (...args: unknown[]) => Promise<unknown>; commit: (...args: unknown[]) => Promise<unknown>; rollback: (...args: unknown[]) => Promise<unknown> };

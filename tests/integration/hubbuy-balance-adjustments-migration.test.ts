@@ -43,7 +43,7 @@ describe("manual adjustment migration", () => {
       for (const [table, value] of historical) expect((await legacy.client.execute(`SELECT ${value.columns} FROM "${table}" ORDER BY rowid`)).rows, table).toEqual(value.rows);
       const nextGuards = (await legacy.client.execute("SELECT name FROM sqlite_master WHERE type='trigger' ORDER BY name")).rows.map(row => row.name);
       expect(nextGuards).toEqual(expect.arrayContaining(guards));
-      expect(nextGuards.length).toBe(guards.length + 4);
+      expect(nextGuards.length).toBeGreaterThanOrEqual(guards.length + 4);
       expect((await legacy.client.execute("PRAGMA foreign_key_check")).rows).toHaveLength(0);
       expect((await legacy.client.execute("SELECT requested_product_cny_minor, requested_china_cny_minor FROM purchase_cost_refunds")).rows).toEqual([{ requested_product_cny_minor: null, requested_china_cny_minor: null }]);
       const result = await hubbuyBalanceServices(legacy.db, "alice").recordManualAdjustment(account.accountId, { expectedRevision: 0, idempotencyKey: "after-upgrade", kind: "promotional_bonus", amountCnyMinor: 114, occurredAt: "2026-10-21T12:00:00Z", reason: "Bônus após upgrade", shares: [{ personId: "alice", amountCnyMinor: 114 }] });

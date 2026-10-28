@@ -642,6 +642,68 @@ export const hubbuyBalanceConsumptions = sqliteTable("hubbuy_balance_consumption
   check("hubbuy_consumption_brl", sql`typeof(${t.historicalBrlCents}) = 'integer' AND ${t.historicalBrlCents} BETWEEN 0 AND 1000000000000`),
 ]);
 
+export const orderWarehousePositions = sqliteTable("order_warehouse_positions", {
+  costItemId: text("cost_item_id").primaryKey().references(() => purchaseItemCosts.id),
+  workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+  accountId: text("account_id").references(() => hubbuyAccounts.id),
+  reviewState: text("review_state", { enum: ["pending_review", "confirmed"] }).notNull(),
+  receivedUnits: text("received_units", { mode: "json" }).$type<number[]>().notNull(),
+  revision: integer("revision").notNull().default(0),
+  updatedBy: text("updated_by").references(() => user.id), updatedAt: timestamp("updated_at"),
+}, t => [index("warehouse_workspace_account_idx").on(t.workspaceId,t.accountId,t.costItemId),check("warehouse_review", sql`${t.reviewState} IN ('pending_review','confirmed')`), check("warehouse_revision", sql`${t.revision} >= 0`)]);
+
+export const logisticsPackages = sqliteTable("logistics_packages", {
+  id: text("id").primaryKey(), workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+  accountId: text("account_id").references(() => hubbuyAccounts.id),
+  legacyPackageId: text("legacy_package_id").unique().references(() => purchasePackages.id),
+  name: text("name").notNull(), revision: integer("revision").notNull().default(0),
+  reviewState: text("review_state", { enum: ["pending_review", "confirmed"] }).notNull(),
+  stage: text("stage", { enum: ["preparing", "sent", "received"] }).notNull().default("preparing"),
+  contentClosedAt: integer("content_closed_at", { mode: "timestamp_ms" }),
+  freightCents: integer("freight_cents"), freightFeeCents: integer("freight_fee_cents"),
+  freightState:text("freight_state",{enum:["pending","known","no_charge"]}).notNull().default("pending"),
+  customsState:text("customs_state",{enum:["pending","known","no_charge"]}).notNull().default("pending"),
+  freightPaymentMethod:text("freight_payment_method",{enum:["pix","card"]}),
+  freightFeeBps:integer("freight_fee_bps"),
+  freightPaidAt: integer("freight_paid_at", { mode: "timestamp_ms" }),
+  customsCents: integer("customs_cents"), customsPaidAt: integer("customs_paid_at", { mode: "timestamp_ms" }),
+  weightGrams: integer("weight_grams"), dispatchedAt: integer("dispatched_at", { mode: "timestamp_ms" }),
+  receivedAt: integer("received_at", { mode: "timestamp_ms" }), financialClosedAt: integer("financial_closed_at", { mode: "timestamp_ms" }),
+  createdBy: text("created_by").references(() => user.id), createdAt: timestamp("created_at"),
+}, t => [check("logistics_stage", sql`${t.stage} IN ('preparing','sent','received')`), check("logistics_review", sql`${t.reviewState} IN ('pending_review','confirmed')`), check("logistics_weight", sql`${t.weightGrams} IS NULL OR (typeof(${t.weightGrams}) = 'integer' AND ${t.weightGrams} BETWEEN 1 AND 1000000000)`), check("logistics_money", sql`(${t.freightCents} IS NULL OR ${t.freightCents} >= 0) AND (${t.freightFeeCents} IS NULL OR ${t.freightFeeCents} >= 0) AND (${t.customsCents} IS NULL OR ${t.customsCents} >= 0)`)]);
+
+export const logisticsLegacyCharges = sqliteTable("logistics_legacy_charges", {
+  legacyChargeId:text("legacy_charge_id").primaryKey().references(()=>purchaseCostCharges.id),
+  packageId:text("package_id").notNull().references(()=>logisticsPackages.id),
+  snapshot:text("snapshot",{mode:"json"}).$type<unknown>().notNull(),
+});
+
+export const logisticsReservations = sqliteTable("logistics_reservations", {
+  id: text("id").primaryKey(), packageId: text("package_id").notNull().references(() => logisticsPackages.id),
+  costItemId: text("cost_item_id").notNull().references(() => purchaseItemCosts.id),
+  unitIndex: integer("unit_index").notNull(), releasedAt: integer("released_at", { mode: "timestamp_ms" }),
+  createdBy: text("created_by").references(() => user.id), createdAt: timestamp("created_at"),
+}, t => [uniqueIndex("logistics_active_unit_idx").on(t.costItemId, t.unitIndex).where(sql`${t.releasedAt} IS NULL`), check("logistics_unit_index", sql`${t.unitIndex} >= 0`)]);
+
+export const logisticsEvents = sqliteTable("logistics_events", {
+  id: text("id").primaryKey(), workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+  resourceId: text("resource_id").notNull(), action: text("action").notNull(), reason: text("reason").notNull(),
+  before: text("before", { mode: "json" }).$type<unknown>(), after: text("after", { mode: "json" }).$type<unknown>(),
+  actorId: text("actor_id").notNull().references(() => user.id), createdAt: timestamp("created_at"),
+});
+
+export const logisticsManifests = sqliteTable("logistics_manifests", {
+  id: text("id").primaryKey(), packageId: text("package_id").notNull().references(() => logisticsPackages.id),
+  revision: integer("revision").notNull(), snapshot: text("snapshot", { mode: "json" }).$type<unknown>().notNull(),
+  createdBy: text("created_by").notNull().references(() => user.id), createdAt: timestamp("created_at"),
+}, t => [uniqueIndex("logistics_manifest_revision_idx").on(t.packageId, t.revision)]);
+
+export const logisticsCommands = sqliteTable("logistics_commands", {
+  id: text("id").primaryKey(), workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+  key: text("key").notNull(), payload: text("payload").notNull(), resultId: text("result_id").notNull(),
+  actorId: text("actor_id").notNull().references(() => user.id), createdAt: timestamp("created_at"),
+}, t => [uniqueIndex("logistics_command_key_idx").on(t.workspaceId, t.key)]);
+
 export const memberBalanceFinancingEntries = sqliteTable("member_balance_financing_entries", {
   id: text("id").primaryKey(), operationId: text("operation_id").notNull().references(() => financialOperations.id),
   consumptionId: text("consumption_id").notNull().references(() => hubbuyBalanceConsumptions.id),
