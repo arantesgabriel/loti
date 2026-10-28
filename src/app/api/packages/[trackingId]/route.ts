@@ -3,6 +3,8 @@ import { z } from "zod";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { packageCostServices } from "@/lib/domain/package-cost-services";
+import { DomainError } from "@/lib/domain/errors";
+import { usesOrdersWorkflow } from "@/lib/domain/orders-workflow";
 import { packageCostFailure, packageCostPrivateHeaders, requirePackageCostOrigin } from "@/lib/domain/package-cost-http";
 
 export const runtime = "nodejs";
@@ -48,6 +50,7 @@ export async function POST(request: Request, context: RouteContext) {
     requirePackageCostOrigin(request);
     const user = await requireUser(), { trackingId } = await context.params;
     const body = bodySchema.parse(await request.json()), service = packageCostServices(db, user.id);
+    if (await usesOrdersWorkflow(db) && (request.headers.get("X-Loti-Workflow") !== "orders-v2" || body.operation.startsWith("package."))) throw new DomainError("O fluxo de pedidos mudou. Atualize a página e use Pacotes para alterar a logística.",409,"ORDERS_WORKFLOW_UPGRADE_REQUIRED");
     switch (body.operation) {
       case "item.save": await service.saveItemCosts(trackingId, body.input); break;
       case "order.additional.create": await service.createAdditionalOrder(trackingId, body.input); break;

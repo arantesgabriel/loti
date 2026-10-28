@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Fragment } from "react";
-import { Bookmark, ShoppingCart, History, Folder, Plus, ChevronDown, Package, WalletCards, Settings, PanelLeftClose, PanelLeftOpen, Sun, Moon } from "lucide-react";
+import { Bookmark, ShoppingCart, History, Folder, Plus, ChevronDown, Package, WalletCards, Settings, PanelLeftClose, PanelLeftOpen, Sun, Moon, ReceiptText, Ellipsis } from "lucide-react";
 import { Avatar } from "../shared";
 import { useWorkspace } from "../workspace-provider";
 import { useTheme } from "../theme-provider";
@@ -13,9 +13,10 @@ const collapseEvent = "loti:sidebar";
 let collapsedFallback = false;
 function subscribeCollapse(callback: () => void) { window.addEventListener(collapseEvent, callback); window.addEventListener("storage", callback); return () => { window.removeEventListener(collapseEvent, callback); window.removeEventListener("storage", callback); }; }
 function getCollapsed() { try { return localStorage.getItem(collapseKey) === "true"; } catch { return collapsedFallback; } }
-const nav = [{ href: "/favorites", label: "Favoritos", short: "Favoritos", icon: Bookmark }, { href: "/purchase", label: "Compra atual", short: "Compra", icon: ShoppingCart }, { href: "/packages", label: "Pacotes e custos", short: "Pacotes", icon: Package }, { href: "/history", label: "Histórico", short: "Histórico", icon: History }];
+const nav = [{ href: "/favorites", label: "Favoritos", short: "Favoritos", icon: Bookmark }, { href: "/purchase", label: "Compra atual", short: "Compra", icon: ShoppingCart }, { href: "/orders", label: "Pedidos", short: "Pedidos", icon: ReceiptText }, { href: "/packages", label: "Pacotes", short: "Pacotes", icon: Package }, { href: "/history", label: "Histórico", short: "Histórico", icon: History }];
 const hubbuyAccountsNav = { href: "/packages/accounts", label: "Contas HubBuy", short: "Contas", icon: WalletCards };
-const mobileNav = [...nav.slice(0, 3), hubbuyAccountsNav, nav[3]];
+const moreNav = { href: "/more", label: "Mais", short: "Mais", icon: Ellipsis };
+const mobileNav = [...nav.slice(0, 4), moreNav];
 export function AppShell({ children }: { children: React.ReactNode }) {
   const collapsed = useSyncExternalStore(subscribeCollapse, getCollapsed, () => false);
   const { resolvedTheme, setPreference } = useTheme();
@@ -24,7 +25,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const mobileNavRef = useRef<HTMLElement>(null), mobileNavItems = useRef(new Map<string, HTMLAnchorElement>());
   const [mobileNavSelection, setMobileNavSelection] = useState<{ left: number; width: number } | null>(null);
   const activeNav = path === hubbuyAccountsNav.href ? hubbuyAccountsNav : nav.find(item => path.startsWith(item.href));
-  const activeNavHref = activeNav?.href ?? "";
+  const activeNavHref = path === "/more" || path === "/history" || path === hubbuyAccountsNav.href ? moreNav.href : activeNav?.href ?? "";
   const selectedCollection = params.get("collection");
   const mine = data.collections.filter(c => c.ownerId === data.currentUser.id);
   const otherOwners = data.members.filter(m => m.id !== data.currentUser.id && data.collections.some(c => c.ownerId === m.id));
@@ -53,5 +54,5 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <button className="sidebar-theme" type="button" role="switch" aria-label="Tema escuro" aria-checked={resolvedTheme === "dark"} title={resolvedTheme === "dark" ? "Ativar tema claro" : "Ativar tema escuro"} onClick={() => setPreference(resolvedTheme === "dark" ? "light" : "dark")}><Sun className="theme-sun" size={22} aria-hidden="true"/><Moon className="theme-moon" size={21} aria-hidden="true"/><span className="theme-track" aria-hidden="true"><span className="theme-thumb"/></span></button></div>
     <Link className={`sidebar-profile${path === "/profile" ? " selected" : ""}`} href="/profile" aria-label="Perfil e configurações" title={collapsed ? "Perfil e configurações" : data.currentUser.email} aria-current={path === "/profile" ? "page" : undefined}><span className="sidebar-account-avatar"><Avatar name={data.currentUser.name}/><Settings className="sidebar-account-badge" size={13} aria-hidden="true"/></span><span className="sidebar-label"><strong>{data.currentUser.name}</strong><small>Conta e configurações</small></span><Settings className="sidebar-account-settings" size={18} aria-hidden="true"/></Link>
   </aside><div className="app-content"><header className="mobile-header"><Link className="brand" href="/favorites"><Bookmark size={30} fill="currentColor" strokeWidth={0} aria-hidden="true"/><span>Loti</span></Link><div className="mobile-header-actions"><button className="sidebar-theme mobile-header-theme" type="button" role="switch" aria-label="Tema escuro" aria-checked={resolvedTheme === "dark"} title={resolvedTheme === "dark" ? "Ativar tema claro" : "Ativar tema escuro"} onClick={() => setPreference(resolvedTheme === "dark" ? "light" : "dark")}><Sun className="theme-sun" size={22} aria-hidden="true"/><Moon className="theme-moon" size={21} aria-hidden="true"/><span className="theme-track" aria-hidden="true"><span className="theme-thumb"/></span></button><Link href="/profile" className="profile-link" aria-label="Perfil"><Avatar name={data.currentUser.name}/></Link></div></header><main id="main" className="page-content">{children}</main></div>
-  <nav className="mobile-island" aria-label="Navegação móvel" ref={mobileNavRef} style={{ "--selection-left": `${mobileNavSelection?.left ?? 0}px`, "--selection-width": `${mobileNavSelection?.width ?? 0}px` } as React.CSSProperties}><span className={`mobile-island-selection${mobileNavSelection ? " ready" : ""}`} aria-hidden="true"/>{mobileNav.map(n => { const selected = activeNav?.href === n.href; return <Link key={n.href} ref={element => { if (element) mobileNavItems.current.set(n.href, element); else mobileNavItems.current.delete(n.href); }} href={n.href} className={selected ? "selected" : ""} aria-label={n.label} aria-current={selected ? "page" : undefined}><n.icon size={21} aria-hidden="true"/>{selected && <span>{n.short}</span>}</Link>; })}</nav></>;
+  <nav className="mobile-island" aria-label="Navegação móvel" ref={mobileNavRef} style={{ "--selection-left": `${mobileNavSelection?.left ?? 0}px`, "--selection-width": `${mobileNavSelection?.width ?? 0}px` } as React.CSSProperties}><span className={`mobile-island-selection${mobileNavSelection ? " ready" : ""}`} aria-hidden="true"/>{mobileNav.map(n => { const selected = activeNavHref === n.href; return <Link key={n.href} ref={element => { if (element) mobileNavItems.current.set(n.href, element); else mobileNavItems.current.delete(n.href); }} href={n.href} className={selected ? "selected" : ""} aria-label={n.label} aria-current={selected ? "page" : undefined}><n.icon size={21} aria-hidden="true"/>{selected && <span>{n.short}</span>}</Link>; })}</nav></>;
 }

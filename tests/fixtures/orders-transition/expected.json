@@ -1,0 +1,15 @@
+{
+  "scenario": "orders-transition-v1",
+  "legacyMigration": "0022_hubbuy_manual_adjustments",
+  "counts": { "originalLines": 30, "purchasedUnits": 41, "cancelledUnits": 10, "shippingUnits": 31, "shippingLines": 29, "packageLines": 24, "packageUnits": 26, "unassignedUnits": 5, "additionalOrders": 9, "corrections": 8 },
+  "money": { "originalProducts": 146609, "originalBase": 163359, "originalFee": 1634, "originalPayment": 164993, "additionalBrl": 35145, "additionalCny": 45651, "receivedBrl": 65515, "receivedCny": 84142, "retained": 10959, "remaining": 123664, "net": 134623, "balanceCny": 37034, "balanceBrl": 28868, "simulationCny": 1800, "simulationBrl": 1502 },
+  "referencePeople": { "net": [39496, 25268, 39375, 30484], "receivedBrl": [24815, 14254, 25021, 1425], "balanceCny": [14233, 13894, 7009, 1898], "balanceBrl": [10406, 10432, 6605, 1425] },
+  "syntheticDecisions": [
+    "The original line bases, China freight, native refund amounts and participant distribution are synthetic, not recovered production data.",
+    "Low-basis refunds belong to Pessoa A (2 CNY minor per historical BRL cent); high-basis shared refunds belong to B/C/D (1:1). These captured synthetic pairs deliberately exercise mixed FIFO and explicit advances without market conversion.",
+    "The toy refund has a synthetic native amount of 2767. Other non-shared credits belong to D and are not consumed.",
+    "Promotional credits of 229 and 114 CNY minor have zero BRL basis. The second bonus is an explicit test construction.",
+    "Eight paid corrections keep the same financial amounts and change descriptive metadata. Every correction uses the real compensating service.",
+    "Individual reference values are comparison data, not forced targets. The report must display actual values and signed differences."
+  ]
+}

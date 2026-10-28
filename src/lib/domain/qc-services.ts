@@ -17,6 +17,7 @@ import { generateQcPreview, QC_PREVIEW, type GeneratedQcPreview } from "../qc/pr
 import { measureQcStage, noopQcMetrics, withQcMetricContext, type QcMetricCollector } from "../qc/metrics";
 import { FifoSemaphore, SerialQueue, withQcDatabaseQueueContext } from "../qc/concurrency";
 import { matchesQcEtag, qcPreviewEtag, qcPreviewVersion } from "../qc/preview-http";
+import { ordersTransitionQcStorage } from "../qc/orders-transition-storage";
 
 type ManagerConfig = { managerId?: string | null; storage?: QcStorage; download?: typeof downloadHubbuyImage; validate?: typeof validateQcImage; makePreview?: typeof generateQcPreview; now?: () => number; metrics?: QcMetricCollector; pipelineConcurrency?: number; sleep?: (ms: number) => Promise<void>; random?: () => number; signal?: AbortSignal };
 type QcRestoreSnapshot = { imageId: string; revision: number; r2Key: string; sourceUrlHash: string; contentSha256: string | null; preview: { revision: number; r2Key: string } | null };
@@ -78,7 +79,8 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
   const pipelineSlots = new FifoSemaphore(configuredConcurrency);
   const imageSemaphore = new SerialQueue();
   const databaseQueue = new SerialQueue();
-  const rawStorage = config.storage ?? r2QcStorage;
+  const localQaStorage = config.storage ? null : ordersTransitionQcStorage();
+  const rawStorage = config.storage ?? localQaStorage ?? r2QcStorage;
   const storage: QcStorage = {
     async put(object, signal) { metrics.increment("putCalls"); metrics.increment("bytesObserved", object.bytes.byteLength); return measureQcStage(metrics, "storage", () => rawStorage.put(object, signal ?? config.signal)); },
     async head(key, signal) { metrics.increment("headCalls"); return measureQcStage(metrics, "storage", () => rawStorage.head(key, signal ?? config.signal)); },
@@ -86,7 +88,7 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
     async delete(key, signal) { metrics.increment("deleteCalls"); return measureQcStage(metrics, "storage", () => rawStorage.delete(key, signal ?? config.signal)); },
     signRead(key) { return rawStorage.signRead(key); },
   };
-  const download = config.download ?? downloadHubbuyImage;
+  const download = config.download ?? (localQaStorage ? async () => { throw new DomainError("A carga QA não acessa imagens externas.", 403, "QC_QA_NETWORK_DISABLED"); } : downloadHubbuyImage);
   const validate = config.validate ?? validateQcImage;
   const makePreview = config.makePreview ?? generateQcPreview;
   const sleep = config.sleep ?? ((milliseconds: number) => new Promise<void>(resolve => setTimeout(resolve, milliseconds)));
@@ -391,7 +393,7 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
     if (!image || !external || !targetKeyForExternal(external) || !await resolveTarget(db, external.purchaseId, targetKeyForExternal(external)!)) throw new DomainError("Imagem QC não encontrada.", 404, "QC_IMAGE_NOT_FOUND");
     await rate(external.purchaseId, "preview");
     const sources = await db.select({ sourceUrl: qcImageSources.sourceUrl }).from(qcImageSources).where(and(eq(qcImageSources.imageId, imageId), eq(qcImageSources.state, "ready"))).orderBy(asc(qcImageSources.createdAt)).limit(1).get();
-    return { sourceUrl: validateHubbuySourceUrl(sources?.sourceUrl ?? image.sourceUrl).toString() };
+    return { sourceUrl: localQaStorage ? `/api/orders-transition/qc/${encodeURIComponent(imageId)}` : validateHubbuySourceUrl(sources?.sourceUrl ?? image.sourceUrl).toString() };
   }
 
   async function readPreview(imageId: string, ifNoneMatch: string | null = null) {
@@ -1337,7 +1339,7 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
       const selectedDelete = deleteAt <= sourceAt && deleteAt <= previewAt ? pendingDeletes[0] : undefined;
       const selectedImage = !selectedDelete && sourceAt <= previewAt ? eligible[0] : undefined;
       const selectedPreview = !selectedDelete && !selectedImage ? previewWork[0] : undefined;
-      if ((selectedImage || selectedDelete || selectedPreview) && !config.storage) assertQcStorageConfigured();
+      if ((selectedImage || selectedDelete || selectedPreview) && !config.storage && !localQaStorage) assertQcStorageConfigured();
       const results: { sourceId?: string; imageId?: string; status: string; code?: string; message?: string; retryAfterSeconds?: number; upstreamStatus?: number }[] = [];
       let stopReason: "deadline" | "quota" | "recovery" | "failure" | undefined;
       if (selectedDelete) {

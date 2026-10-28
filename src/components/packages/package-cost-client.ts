@@ -5,7 +5,7 @@ export type CostResponse<T> = { ok: boolean; status: number; data?: T; error?: s
 
 export async function costRequest<T>(url: string, operation?: Record<string, unknown>): Promise<CostResponse<T>> {
   try {
-    const response = await fetch(url, operation ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(operation) } : { cache: "no-store" });
+    const response = await fetch(url, operation ? { method: "POST", headers: { "Content-Type": "application/json", "X-Loti-Workflow":"orders-v2" }, body: JSON.stringify(operation) } : { cache: "no-store" });
     const result = await response.json();
     return { ok: response.ok, status: response.status, data: result.data as T | undefined, error: result.error as string | undefined, code: result.code as string | undefined };
   } catch {

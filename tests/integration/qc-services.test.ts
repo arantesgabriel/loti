@@ -9,6 +9,7 @@ import { createQcMetricCollector } from "@/lib/qc/metrics";
 import { QC_LIMITS } from "@/lib/domain/qc-limits";
 import { hubbuyBalanceServices } from "@/lib/domain/hubbuy-balance-services";
 import { packageCostServices } from "@/lib/domain/package-cost-services";
+import {initializeLegacyPurchaseCosts} from "@/lib/domain/purchase-cost-initialization";
 import type { QcObject, QcStorage } from "@/lib/qc/storage";
 import { fixture, type Fixture } from "./helpers";
 
@@ -67,7 +68,7 @@ describe("HubBuy QC persistence and permissions", () => {
   it("links, views, and authorizes QC photos for a recorded additional order item", async () => {
     const balance = hubbuyBalanceServices(f.db, "alice");
     const account = await balance.createAccount({ workspaceId: "workspace", idempotencyKey: "qc-additional-account", label: "Conta QC adicional", confirmZeroBalance: true });
-    const packages = packageCostServices(f.db, "alice"), tracking = await packages.startTracking("qc-purchase");
+    const packages = packageCostServices(f.db, "alice",initializeLegacyPurchaseCosts), tracking = await packages.startTracking("qc-purchase");
     let detail = await packages.getTracking(tracking.id);
     const draft = await packages.createAdditionalOrder(tracking.id, {
       expectedRevision: detail.tracking.revision, idempotencyKey: "qc-additional-draft", accountId: account.accountId,

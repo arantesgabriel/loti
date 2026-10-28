@@ -5,6 +5,7 @@ import { authOrigin } from "@/lib/auth/origin";
 import { db } from "@/lib/db";
 import { createServices } from "@/lib/domain/services";
 import { DomainError } from "@/lib/domain/errors";
+import { usesOrdersWorkflow } from "@/lib/domain/orders-workflow";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const requestSchema = z.object({ operation: z.enum(["favorite.save", "favorite.delete", "collection.save", "collection.delete", "preference.view", "purchase.save", "purchase.finalize", "item.favorite", "item.save", "item.delete", "item.status", "item.status.person"]), id: z.string().min(1).optional(), input: z.unknown().optional() });
@@ -22,6 +23,7 @@ export async function POST(request: Request) {
     if (request.headers.get("origin") !== expected) throw new DomainError("Origem da solicitação inválida.", 403);
     const user = await requireUser();
     const body = requestSchema.parse(await request.json());
+    if (body.operation === "purchase.finalize" && await usesOrdersWorkflow(db) && request.headers.get("X-Loti-Workflow") !== "orders-v2") throw new DomainError("O fluxo de pedidos mudou. Atualize a página antes de finalizar.",409,"ORDERS_WORKFLOW_UPGRADE_REQUIRED");
     const service = createServices(db, user.id);
     const id = () => z.string().min(1).parse(body.id);
     let result: unknown;

@@ -3,6 +3,9 @@ import { eq } from "drizzle-orm";
 import { packageCostServices } from "@/lib/domain/package-cost-services";
 import { financialOperations, hubbuyBalanceEntries, memberBalanceFinancingEntries, purchaseCostCharges, purchaseCostParticipants, purchaseCostRefundEvents, purchaseCostRefundParticipants, purchaseCostRefunds, purchaseItems, purchasePackageItems, purchasePackages, purchasePaymentAllocations, purchasePaymentComponents } from "@/lib/db/schema";
 import { fixture, type Fixture } from "./helpers";
+import {warehouseServices} from "@/lib/domain/warehouse-services";
+import {hubbuyBalanceServices} from "@/lib/domain/hubbuy-balance-services";
+import {migrate} from "drizzle-orm/libsql/migrator";
 
 let f: Fixture;
 beforeEach(async () => { f = await fixture(); });
@@ -23,6 +26,32 @@ async function paidTracking(quantity = 1) {
 }
 
 describe("package product refunds", () => {
+  it("cancels only the free stable unit and never removes an active assembly reservation",async()=>{
+    f.client.close();f=await fixture(":memory:","orders");
+    const s=await paidTracking(3),warehouse=warehouseServices(f.db,"alice");
+    const {accountId}=await hubbuyBalanceServices(f.db,"alice").createAccount({workspaceId:"workspace",idempotencyKey:"refund-warehouse-account",label:"Conta sintética",confirmZeroBalance:true});
+    let row=(await warehouse.list()).rows[0];
+    await warehouse.execute("workspace","refund-arrival",{operation:"receive",costItemId:row.costItemId,expectedRevision:row.revision,accountId,units:[0,1,2],reason:"Recebimento sintético conferido"});
+    row=(await warehouse.list()).rows[0];
+    const {id:packageId}=await warehouse.execute("workspace","refund-reserve",{operation:"reserve",accountId,name:"Unidades reservadas",selection:[{costItemId:row.costItemId,expectedRevision:row.revision,units:[0,2]}],reason:"Reserva de duas posições"});
+    const input={expectedRevision:s.detail.tracking.revision,costItemId:row.costItemId,quantity:1,requestedProductCents:10000,requestedChinaCents:1000,reason:"Cancelar somente a posição livre",packageRemovals:[],unassignedQuantity:1};
+    await expect(s.service.requestRefund(s.tracking.id,{...input,quantity:3,unassignedQuantity:3})).rejects.toMatchObject({status:409});
+    const after=await s.service.requestRefund(s.tracking.id,input);
+    expect(after.refunds[0].unitStart).toBe(1);expect((await warehouse.list()).reservations).toHaveLength(2);
+    expect(after.productsCharge).toEqual(s.detail.productsCharge);
+    const state=await warehouse.list(),pkg=state.packages.find(p=>p.id===packageId)!;
+    await warehouse.execute("workspace","refund-release",{operation:"release",packageId,expectedRevision:pkg.revision,reservationIds:[state.reservations.find(r=>r.unitIndex===0)!.id],reason:"Retirada explícita sem estorno"});
+    expect((await warehouse.list()).rows[0].availableUnits).toEqual([0]);
+    expect(await f.db.select().from(hubbuyBalanceEntries).all()).toEqual([]);
+  });
+  it("receives a valid legacy request after upgrade without inferring arrival or cancelling again",async()=>{
+    const s=await paidTracking(1),before=s.detail;
+    const requested=await s.service.requestRefund(s.tracking.id,{expectedRevision:before.tracking.revision,costItemId:before.items[0].id,quantity:1,requestedProductCents:10000,requestedChinaCents:1000,reason:"Solicitação anterior ao upgrade",packageRemovals:[{packageId:before.packages[0].id,quantity:1}],unassignedQuantity:0});
+    await migrate(f.db,{migrationsFolder:"./drizzle"});
+    const receipt=await s.service.receiveRefund(s.tracking.id,requested.refunds[0].id,{expectedRevision:requested.tracking.revision,receivedProductCents:9000,receivedChinaCents:1000,confirmed:true});
+    expect(receipt.refunds[0].status).toBe("received");expect(receipt.productsCharge).toEqual(before.productsCharge);
+    const state=await warehouseServices(f.db,"alice").list();expect(state.rows[0].reviewState).toBe("pending_review");expect(state.rows[0].receivedUnits).toEqual([]);
+  });
   it("projects persisted refund ranges on read without writing financial or purchase state", async () => {
     const { item, service, tracking, detail: before } = await paidTracking(2);
     const itemCost = before.items[0], pkg = before.packages[0];

@@ -32,7 +32,7 @@ function checkedComposition(quantity: number, unitPriceCents: number | null, sha
   }
 }
 
-export function purchaseServices(db: AppDatabase, userId: string) {
+export function purchaseServices(db: AppDatabase, userId: string, initializeCosts = initializePurchaseCosts) {
   const guard = authorization(db, userId);
   type PurchaseTransaction = Parameters<Parameters<AppDatabase["transaction"]>[0]>[0];
 
@@ -147,7 +147,7 @@ export function purchaseServices(db: AppDatabase, userId: string) {
       await authorization(tx, userId).requireEditablePurchase(id);
       const finalized = await tx.update(purchases).set({ status: "finalized", finalizedAt: new Date() }).where(and(eq(purchases.id, id), eq(purchases.status, "active"))).returning().get();
       if (!finalized) throw new DomainError("Esta compra foi finalizada e não pode ser alterada.", 409);
-      await initializePurchaseCosts(tx, finalized, userId);
+      await initializeCosts(tx, finalized, userId);
       return finalized;
     });
   }

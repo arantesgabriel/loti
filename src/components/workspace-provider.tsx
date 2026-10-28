@@ -42,7 +42,7 @@ export function WorkspaceProvider({ initialData, children }: { initialData: Clie
   async function mutate(operation: Operation, input?: unknown, id?: string, message = "Alterações salvas") {
     setBusy(true);
     try {
-      const response = await fetch("/api/app", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ operation, input, id }) });
+      const response = await fetch("/api/app", { method: "POST", headers: { "Content-Type": "application/json", "X-Loti-Workflow":"orders-v2" }, body: JSON.stringify({ operation, input, id }) });
       const result = await response.json();
       if (!response.ok) { toast.error(result.error ?? "Não foi possível salvar."); if (response.status === 401) { resetQcClient(); router.replace("/login"); } router.refresh(); return false; }
       dataVersion.current += 1; setData(result.data); toast.success(message); return true;

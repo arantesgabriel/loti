@@ -34,6 +34,8 @@ Before changing code, read all canonical files in this order:
 
 Then inspect the existing repository before making assumptions.
 
+For the approved Pedidos → Armazém → Pacotes extension, also read `docs/39_ORDERS_WAREHOUSE_AND_PACKAGES_PLAN.md` and follow its scope, preservation requirements, local validation gates and production restrictions.
+
 The approved mockups are:
 
 - `docs/design/mockups/favorites-desktop.png`

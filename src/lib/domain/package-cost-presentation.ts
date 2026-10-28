@@ -33,7 +33,7 @@ function nextAction(detail: CostTrackingView): CostNextAction | null {
     return { label: "Confirmar pagamento dos produtos", section: "payments", target: "products-paid" };
   }
 
-  if (detail.calculation.summary.assignedUnits < detail.calculation.summary.shippingUnits) {
+  if (detail.workflow !== "orders-v2" && detail.calculation.summary.assignedUnits < detail.calculation.summary.shippingUnits) {
     const targetPackage = detail.packages[0];
     return targetPackage
       ? { label: "Distribuir unidades nos pacotes", section: "packages", target: `package-content-${targetPackage.id}`, packageId: targetPackage.id }

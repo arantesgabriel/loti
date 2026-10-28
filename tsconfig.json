@@ -39,7 +39,11 @@
     ".next-e2e-auth-email/types/**/*.ts",
     ".next-e2e-auth-email/dev/types/**/*.ts",
     ".next-e2e-drawerfix/types/**/*.ts",
-    ".next-e2e-drawerfix/dev/types/**/*.ts"
+    ".next-e2e-drawerfix/dev/types/**/*.ts",
+    ".next-orders-transition/types/**/*.ts",
+    ".next-orders-transition/dev/types/**/*.ts",
+    ".next-orders-transition-build/types/**/*.ts",
+    ".next-orders-transition-build/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

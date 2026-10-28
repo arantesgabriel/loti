@@ -15,6 +15,9 @@ import { activateEmptyHubbuyAccountAtZeroInTransaction, calculateHubBuyBalanceSt
 import { allocateRefundCredit } from "./package-refund-calculations";
 import { refundUnitRangeCapacityCents } from "./refund-unit-capacity";
 import { purchaseOrderCorrectionServices } from "./purchase-order-corrections";
+import { usesOrdersWorkflow } from "./orders-workflow";
+import { logisticsReservations, orderWarehousePositions } from "../db/schema";
+import { isNull } from "drizzle-orm";
 
 const maxCost = 1_000_000_000_000;
 const revisionSchema = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
@@ -179,7 +182,7 @@ function isDatabaseBusy(error: unknown, seen = new Set<unknown>()): boolean {
   return candidate.code === "SQLITE_BUSY" || /SQLITE_BUSY|database is locked/i.test(candidate.message ?? "") || isDatabaseBusy(candidate.cause, seen);
 }
 
-export function packageCostServices(db: AppDatabase, userId: string) {
+export function packageCostServices(db: AppDatabase, userId: string, initializeCosts = initializePurchaseCosts) {
   const orders = purchaseCostOrderServices(db, userId);
   const correctAdditionalOrder = purchaseOrderCorrectionServices(db, userId).correct;
   const transact = <T>(operation: (tx: CostTransaction) => Promise<T>) => serializeDomainTransaction(async () => {
@@ -377,7 +380,7 @@ export function packageCostServices(db: AppDatabase, userId: string) {
     return transact(async tx => {
       const purchase = await authorization(tx, userId).requirePurchase(purchaseId);
       if (purchase.status !== "finalized") throw new DomainError("Finalize a compra antes de iniciar os custos.", 409);
-      try { return await initializePurchaseCosts(tx, purchase, userId); }
+      try { return await initializeCosts(tx, purchase, userId); }
       catch (error) { if (isUniqueConstraint(error)) { const existing = await tx.select().from(purchaseCostTrackings).where(eq(purchaseCostTrackings.purchaseId, purchaseId)).get(); if (existing) return existing; } throw error; }
     });
   }
@@ -640,7 +643,15 @@ export function packageCostServices(db: AppDatabase, userId: string) {
       const alreadyCancelled = activeRefunds.reduce((sum, refund) => sum + refund.quantity, 0);
       const shippingQuantity = quantity - alreadyCancelled;
       if (value.quantity > shippingQuantity) throw new DomainError("A quantidade solicitada excede as unidades ainda enviáveis.", 409, "REFUND_INELIGIBLE_UNITS");
-      const unitStart = firstAvailableRefundUnit(activeRefunds.map(refund => ({ unitStart: refund.unitStart, quantity: refund.quantity })), quantity, value.quantity);
+      const ordersWorkflow = await usesOrdersWorkflow(tx);
+      const reservations = ordersWorkflow ? await tx.select().from(logisticsReservations).where(and(eq(logisticsReservations.costItemId,item.id),isNull(logisticsReservations.releasedAt))).all() : [];
+      if (ordersWorkflow) {
+        const position = await tx.select().from(orderWarehousePositions).where(eq(orderWarehousePositions.costItemId,item.id)).get();
+        if (!position || position.reviewState !== "confirmed") throw new DomainError("Confira a posição legada antes de solicitar um reembolso.",409);
+        if (value.packageRemovals.length || value.unassignedQuantity !== value.quantity) throw new DomainError("Retire as unidades do pacote explicitamente antes de solicitar o reembolso.",409);
+        packages.length = 0; assignments.length = 0;
+      }
+      const unitStart = firstAvailableRefundUnit([...activeRefunds.map(refund => ({ unitStart: refund.unitStart, quantity: refund.quantity })),...reservations.map(row=>({unitStart:row.unitIndex,quantity:1}))], quantity, value.quantity);
       const productTotalCents = additional ? additional.productBrlCents : (item.effectivePriceState === "no_charge" ? 0 : item.effectivePriceUnitCents!) * quantity;
       const chinaTotalCents = additional ? additional.chinaBrlCents : (item.chinaFreightState === "no_charge" ? 0 : item.chinaFreightUnitCents!) * quantity;
       const productCapacity = refundQuantityCapacity(productTotalCents, quantity, unitStart, value.quantity);
@@ -1276,7 +1287,7 @@ export function packageCostServices(db: AppDatabase, userId: string) {
     return mutate(trackingId, value.expectedRevision, async tx => {
       const detail = await readCostTracking(tx, userId, trackingId);
       const blockers: string[] = [];
-      if (detail.calculation.summary.assignedUnits !== detail.calculation.summary.shippingUnits) blockers.push("Atribua todas as unidades enviáveis a pacotes.");
+      if (!await usesOrdersWorkflow(tx) && detail.calculation.summary.assignedUnits !== detail.calculation.summary.shippingUnits) blockers.push("Atribua todas as unidades enviáveis a pacotes.");
       if (detail.refundsSummary.requestedCount > 0) blockers.push("Registre o recebimento ou anule as solicitações de reembolso pendentes.");
       if (detail.items.some(item => item.effectivePriceState === "pending" || item.chinaFreightState === "pending")) blockers.push("Informe o preço efetivo e o frete China ou marque sem cobrança.");
       if (detail.items.some(item => item.participants.reduce((sum, participant) => sum + participant.weight, 0) <= 0)) blockers.push("Defina uma composição positiva para cada produto e pessoa.");
