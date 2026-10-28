@@ -27,6 +27,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node --import tsx scripts/migrate.ts",
     "db:seed": "node --import tsx scripts/seed.ts",
+    "db:seed:dev": "node --conditions=react-server --import tsx scripts/seed-development.ts",
+    "db:seed:dev:sql": "node --conditions=react-server --import tsx scripts/export-development-seed.ts",
     "user:create": "node --import tsx scripts/create-user.ts",
     "user:reset-password": "node --import tsx scripts/reset-password.ts",
     "auth:audit": "node --import tsx scripts/audit-auth.ts",

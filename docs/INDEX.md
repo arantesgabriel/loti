@@ -47,5 +47,6 @@ Authentication email extension: [`31_AUTH_EMAIL_SECURITY_PLAN.md`](31_AUTH_EMAIL
 | `design/REFERENCES.md` | Figma and palette inspiration URLs |
 | `design/PACKAGES_AND_COSTS_REFERENCES.md` | Approved A/B/C/D visual references, images and acceptance for Pacotes e custos |
 | `design/MOCKUPS.md` | Approved visual references and interpretation notes |
+| `testing/DEVELOPMENT_SEED.md` | One-time SQL seed for direct Turso Cloud CLI import into loti-dev, generated credentials, checks and disposable files |
 
 The root `PROMPT_ONE_SHOT.md` is the final implementation prompt.
