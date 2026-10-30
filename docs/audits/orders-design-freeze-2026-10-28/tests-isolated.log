@@ -1,0 +1,18 @@
+npm notice run loti@0.1.0 test
+npm notice run vitest run --maxWorkers=2
+
+ RUN  v5.0.3 C:/Fontes/loti
+
+ ❯ tests/integration/hubbuy-account-deletion-concurrency.test.ts (9 tests | 9 failed) 46331ms
+   ❯ account deletion races in independent Node processes (9)
+     × replays one audited discard and reverses the original credit only once 5008ms
+     × allows either an audited discard or a new real-use draft to win 5005ms
+     × allows one deletion with different keys and replays one deletion with the same key 5004ms
+     × serializes exclusion against activate 5003ms
+     × serializes exclusion against reconcile 5014ms
+     × serializes exclusion against creation of a draft without relying on balance revision 5001ms
+     × guards package assignment that does not increment the account revision 5012ms
+     × serializes exclusion against receipt of 0 CNY minor units 5001ms
+     × serializes exclusion against receipt of 100 CNY minor units 5015ms
+ ❯ tests/integration/logistics-finalization.test.ts (8 tests | 1 failed) 20962ms
+   × keeps package list and detail unit counts aligned for active, partially released, and released reservations 6738ms

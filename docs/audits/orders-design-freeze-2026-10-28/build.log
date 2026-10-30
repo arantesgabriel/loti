@@ -1,0 +1,13 @@
+npm notice run loti@0.1.0 build
+npm notice run next build --webpack
+▲ Next.js 16.3.8 (webpack)
+- Environments: .env.local, .env
+✓ Running next.config.ts took 762ms
+
+  Creating an optimized production build ...
+Failed to compile.
+
+Error: EPERM: operation not permitted, mkdir 'C:\Fontes\loti\.next-orders-freeze-phase0\static\chunks\next\dist\client'
+
+
+> Build failed because of webpack errors

@@ -1,0 +1,83 @@
+npm notice run loti@0.1.0 build
+npm notice run next build --webpack
+▲ Next.js 16.3.8 (webpack)
+- Environments: .env.local, .env
+✓ Running next.config.ts took 52ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 25.5s
+  Running TypeScript ...
+
+  We detected TypeScript in your project and reconfigured your tsconfig.json file for you.
+  The following suggested values were added to your tsconfig.json. These values can be changed to fit your project's needs:
+
+  	- include was updated to add '.next-orders-freeze-phase0/types/**/*.ts'
+  	- include was updated to add '.next-orders-freeze-phase0/dev/types/**/*.ts'
+
+  Finished TypeScript in 29.1s ...
+  Collecting page data using 11 workers ...
+  Generating static pages using 11 workers (0/13) ...
+  Generating static pages using 11 workers (3/13) 
+  Generating static pages using 11 workers (6/13) 
+  Generating static pages using 11 workers (9/13) 
+✓ Generating static pages using 11 workers (13/13) in 1275ms
+  Finalizing page optimization ...
+  Collecting build traces ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ƒ /api/app
+├ ƒ /api/auth/[...all]
+├ ƒ /api/cost-settings
+├ ƒ /api/group
+├ ƒ /api/health
+├ ƒ /api/hubbuy/accounts
+├ ƒ /api/hubbuy/accounts/[accountId]
+├ ƒ /api/hubbuy/accounts/[accountId]/statement
+├ ƒ /api/invitations/[token]
+├ ƒ /api/logistics/packages
+├ ƒ /api/logistics/packages/[packageId]
+├ ƒ /api/orders-transition/qc/[imageId]
+├ ƒ /api/packages
+├ ƒ /api/packages/[trackingId]
+├ ƒ /api/purchases/[purchaseId]/items/[itemId]/qc-presentation
+├ ƒ /api/purchases/[purchaseId]/qc
+├ ƒ /api/qc/images/[imageId]
+├ ƒ /api/qc/images/[imageId]/fallback
+├ ƒ /api/qc/images/[imageId]/preview
+├ ƒ /api/qc/images/[imageId]/source
+├ ƒ /api/qc/imports/[importId]
+├ ƒ /api/warehouse
+├ ƒ /favorites
+├ ○ /ferramentas
+├   /ferramentas/[slug]
+│ ├ ● /ferramentas/simulador-de-custo-final
+│ ├ ● /ferramentas/calculadora-de-impostos
+│ ├ ● /ferramentas/conversor-de-moedas
+│ └ ● [+2 more paths]
+├ ○ /forgot-password
+├ ƒ /group
+├ ƒ /history
+├ ƒ /history/[purchaseId]
+├ ○ /icon.svg
+├ ƒ /invite/[token]
+├ ○ /landing
+├ ○ /login
+├ ƒ /more
+├ ƒ /orders
+├ ƒ /orders/[orderId]
+├ ƒ /packages
+├ ƒ /packages/[trackingId]
+├ ƒ /packages/accounts
+├ ƒ /packages/detail/[packageId]
+├ ƒ /profile
+├ ƒ /purchase
+├ ƒ /reset-password
+└ ƒ /verify-email
+
+
+○  (Static)   prerendered as static content
+●  (SSG)      prerendered as static HTML (uses generateStaticParams)
+ƒ  (Dynamic)  server-rendered on demand
+

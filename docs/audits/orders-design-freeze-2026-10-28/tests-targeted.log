@@ -1,0 +1,12 @@
+
+ RUN  v5.0.3 C:/Fontes/loti
+
+
+ Test Files  3 passed (3)
+      Tests  24 passed (24)
+   Start at  22:12:42
+   Duration  1.25s (tests 60%, import 27%, transform 10%, worker 2%)
+
+    Isolate  3 workers spawned · ~159ms startup each (spawn + environment, per file)
+             at least ~318ms faster with isolate: false — reuses workers across files instead of one per file
+
