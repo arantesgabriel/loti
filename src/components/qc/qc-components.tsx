@@ -98,6 +98,8 @@ function invalidateSummary(purchaseId: string, clearBytes = true) {
   for (const [key] of summaryCache) if (key.endsWith(`:${purchaseId}`)) summaryCache.delete(key);
   for (const [key, listeners] of summaryListeners) if (key.endsWith(`:${purchaseId}`)) for (const listener of listeners) listener();
 }
+/** Notify existing galleries after the Orders global entry point uses QC commands. */
+export function invalidateQcPurchase(purchaseId: string) { invalidateSummary(purchaseId); }
 function useQcSummary(purchaseId: string, enabled = true) {
   const { data } = useWorkspace();
   const userId = data.currentUser.id, key = summaryKey(userId, purchaseId);
@@ -463,18 +465,34 @@ function QcPreviewImage({ image, userId, workspaceId, purchaseId, alt, priority 
   return <img src={current.src} referrerPolicy="no-referrer" alt={alt} onError={() => onUnavailableRef.current?.()} />;
 }
 
-export function QcGalleryButton({ purchaseId, itemId, itemName, canManageHere = false, triggerLabel = "Ver QC", triggerAriaLabel, costThumbnails, costIdentity }: { purchaseId: string; itemId: string; itemName: string; canManageHere?: boolean; triggerLabel?: string; triggerAriaLabel?: string; costThumbnails?: "desktop" | "mobile"; costIdentity?: { marker: ReactNode; label: ReactNode } }) {
+export function QcGalleryButton({ purchaseId, itemId, itemName, canManageHere = false, triggerLabel = "Ver QC", triggerAriaLabel, costThumbnails, costIdentity, galleryPreview = false, bottomSheet = false }: { purchaseId: string; itemId: string; itemName: string; canManageHere?: boolean; triggerLabel?: string; triggerAriaLabel?: string; costThumbnails?: "desktop" | "mobile"; costIdentity?: { marker: ReactNode; label: ReactNode }; galleryPreview?: boolean; bottomSheet?: boolean }) {
   const { data } = useWorkspace();
   const userId = data.currentUser.id;
   const [open, setOpen] = useState(false), [images, setImages] = useState<QcImage[]>([]), [loading, setLoading] = useState(false), [pageLoading, setPageLoading] = useState(false), [error, setError] = useState(""), [selectedImageId, setSelectedImageId] = useState<string | null>(null), [pageOffset, setPageOffset] = useState(0), [totalCount, setTotalCount] = useState(0), [primaryImageId, setPrimaryImageId] = useState<string | null>(null), [presentationRevision, setPresentationRevision] = useState(0), [canSetCover, setCanSetCover] = useState(false), [original, setOriginal] = useState<{ imageId: string | null; url: string; stage: "idle" | "loading" | "source" | "fallback-loading" | "fallback" | "failed" }>({ imageId: null, url: "", stage: "idle" }), [confirmDelete, setConfirmDelete] = useState<string | null>(null), [deleting, setDeleting] = useState(false), [savingCover, setSavingCover] = useState(false);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const { summary } = useQcSummary(purchaseId, !costThumbnails || open);
   const { ref: identityRef, visible, near } = useQcVisibility();
-  const presentation = useQcPresentation(qcScope(userId, data.workspaceId), purchaseId, itemId, !!costThumbnails && visible, near);
+  const presentation = useQcPresentation(qcScope(userId, data.workspaceId), purchaseId, itemId, galleryPreview || (!!costThumbnails && visible), galleryPreview || near);
+  const [previewWait, setPreviewWait] = useState(false);
+  const galleryReturnFocus = useRef<HTMLElement | null>(null);
+  const galleryReturnImageId = useRef<string | null>(null);
+  const galleryPreviewRef = useRef<HTMLDivElement>(null);
+  const galleryFallback = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!galleryPreview) return;
+    const buttons = galleryPreviewRef.current?.querySelectorAll<HTMLButtonElement>("button") ?? [];
+    galleryReturnFocus.current = Array.from(buttons).find(button => button.dataset.qcImageId === galleryReturnImageId.current) ?? galleryFallback.current;
+  }, [galleryPreview, presentation]);
+  useEffect(() => {
+    if (!galleryPreview || presentation) return;
+    const timer = window.setTimeout(() => setPreviewWait(true), 5000);
+    return () => window.clearTimeout(timer);
+  }, [galleryPreview, presentation]);
   const countValue = costThumbnails ? presentation?.qcCount ?? 0 : summary ? summary.counts.find(row => row.itemId === itemId)?.count ?? 0 : null;
   const [failedCover, setFailedCover] = useState<QcImage | null>(null);
   const asImage = (image: NonNullable<typeof presentation>["previews"][number]): QcImage => ({ ...image, id: image.imageId });
   const costImages = presentation?.previews.map(asImage) ?? [];
+  const galleryImages = [presentation?.coverPreview, ...(presentation?.previews ?? [])].filter((preview): preview is NonNullable<typeof preview> => !!preview).map(asImage).filter((image, index, images) => images.findIndex(candidate => candidate.id === image.id) === index);
   const candidateCover = presentation?.coverPreview ? asImage(presentation.coverPreview) : null;
   const costCover = candidateCover && !(failedCover?.id === candidateCover.id && failedCover.previewUrl === candidateCover.previewUrl) ? candidateCover : null;
   const unavailableCover = useCallback(() => { setFailedCover(costCover); }, [costCover]);
@@ -569,6 +587,12 @@ export function QcGalleryButton({ purchaseId, itemId, itemName, canManageHere = 
   const currentPosition = selectedIndex < 0 ? 0 : pageOffset + selectedIndex + 1;
   const originalView = open && selectedImageId && original.imageId === selectedImageId ? original : { imageId: selectedImageId, url: "", stage: open && selectedImageId ? "loading" as const : "idle" as const };
   return <>
+    {galleryPreview && <div ref={galleryPreviewRef} className="qc-gallery-preview" aria-label={`Previews QC de ${itemName}`} onClickCapture={event => {
+      const trigger = (event.target as Element).closest<HTMLButtonElement>("button[data-qc-image-id]");
+      if (trigger) { galleryReturnImageId.current = trigger.dataset.qcImageId ?? null; galleryReturnFocus.current = trigger; }
+    }}>
+      {!presentation ? <span role="status">{previewWait ? "Previews indisponíveis no momento. Use Ver fotos para tentar novamente." : "Carregando previews QC…"}</span> : presentation.qcCount === 0 ? <span>Nenhuma foto QC disponível para este produto.</span> : galleryImages.map((image, index) => <button type="button" key={image.id} data-qc-image-id={image.id} aria-label={`Abrir foto QC ${index + 1} de ${itemName}`} onClick={() => openGallery(image.id)}><QcPreviewImage image={image} userId={userId} workspaceId={data.workspaceId} purchaseId={purchaseId} alt={`Preview QC ${index + 1} de ${itemName}`} /></button>)}
+    </div>}
     {costThumbnails ? <div className="cost-compact-identity" ref={identityRef}>
       {costCover ? <button type="button" className={`qc-product-photo qc-product-cover${costThumbnails === "mobile" ? " qc-product-photo-count" : ""}`} data-qc-image-id={costCover.id} aria-label={`Abrir capa QC de ${itemName}${costThumbnails === "mobile" ? ` · ${countValue} fotos` : ""}`} onClick={() => openGallery(costCover.id)}><QcPreviewImage image={costCover} priority={0} userId={userId} workspaceId={data.workspaceId} purchaseId={purchaseId} alt={`Capa QC de ${itemName}`} onUnavailable={unavailableCover}/>{costThumbnails === "mobile" && <span className="qc-product-photo-badge" aria-hidden="true">{countValue}</span>}</button> : costIdentity?.marker}
       {costIdentity?.label}
@@ -579,8 +603,8 @@ export function QcGalleryButton({ purchaseId, itemId, itemName, canManageHere = 
         {costImages.map((image, index) => <button type="button" className="qc-product-photo" key={image.id} data-qc-image-id={image.id} aria-label={`Abrir foto QC ${index + 1} de ${itemName}`} onClick={() => openGallery(image.id)}><QcPreviewImage image={image} userId={userId} workspaceId={data.workspaceId} purchaseId={purchaseId} alt=""/></button>)}
         <button type="button" className="qc-product-photos-more" aria-label={`Ver ${countValue} fotos QC de ${itemName}`} onClick={() => openGallery()}>Ver mais</button>
       </>}
-    </div>}</div> : <Button type="button" variant="ghost" size="sm" onClick={() => openGallery()} aria-label={triggerAriaLabel ?? `Ver QC de ${itemName}`}>{triggerLabel}{countValue === null ? "" : ` (${countValue})`}</Button>}
-    <Surface open={open} onOpenChange={value => { setOpen(value); if (!value) { setSelectedImageId(null); setError(""); } }} title={`QC · ${itemName}`} className="qc-viewer-surface">
+    </div>}</div> : <Button ref={galleryFallback} type="button" variant="ghost" size="sm" onClick={event => { if (galleryPreview) { galleryReturnImageId.current = null; galleryReturnFocus.current = event.currentTarget; } openGallery(); }} aria-label={triggerAriaLabel ?? `Ver QC de ${itemName}`}>{triggerLabel}{countValue === null ? "" : ` (${countValue})`}</Button>}
+    <Surface open={open} onOpenChange={value => { setOpen(value); if (!value) { setSelectedImageId(null); setError(""); } }} title={`QC · ${itemName}`} sheet={bottomSheet} returnFocusTo={galleryPreview ? galleryReturnFocus : undefined} className={`qc-viewer-surface${bottomSheet ? " orders-foundation orders-bottom-sheet" : ""}`}>
       {loading && <p className="muted" role="status">Carregando fotos QC…</p>}
       {error && <p className="error" role="alert">{error}</p>}
       {!selectedImageId && !loading && !images.length && !error && <p className="muted">Nenhuma foto QC disponível para este produto.</p>}

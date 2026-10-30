@@ -1,0 +1,26 @@
+.orders-qc-import, .orders-origin-summary { display: grid; gap: 18px; min-width: 0; font-size: 13px; line-height: 1.6; }
+.orders-qc-import-surface { width: min(640px, calc(100vw - 32px)); }
+.orders-qc-import label { display: grid; gap: 8px; min-width: 0; }
+.orders-qc-import textarea { min-height: 150px; resize: vertical; }
+.orders-qc-import :is(textarea, select) { width: 100%; min-width: 0; border: 1px solid var(--orders-border); border-radius: 10px; padding: 12px; background: var(--orders-surface); color: inherit; }
+.orders-qc-upload { position: relative; justify-items: center; text-align: center; padding: 28px 16px; border: 1px dashed var(--border-control); border-radius: 10px; background: var(--orders-surface-muted); }
+.orders-qc-upload span { font-size: 12px; color: var(--orders-muted); }
+.orders-qc-upload input { max-width: 100%; min-height: 44px; padding: 8px; }
+.orders-qc-rows { list-style: none; padding: 0; margin: 0; }
+.orders-qc-rows li { padding: 14px 0; border-bottom: 1px solid var(--orders-border); overflow-wrap: anywhere; }
+.orders-qc-rows small { display: block; color: var(--orders-muted); margin: 5px 0 10px; }
+.orders-action-footer { display: flex; flex-wrap: wrap; gap: 12px; position: sticky; bottom: 0; padding-top: 16px; background: var(--orders-surface); }
+.orders-action-footer > .button { flex: 1; min-height: 44px; }
+.orders-action-notice { padding: 12px; border-radius: 10px; background: var(--orders-info-soft); color: var(--orders-info); }
+.orders-origin-summary dl > div { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.orders-origin-summary dt { color: var(--orders-muted); }
+.orders-origin-summary dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+.orders-item-action-error { font-size: 12px; color: var(--danger-ink); }
+.orders-item-context-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.orders-item-context-actions > .button { min-height: 44px; font-size: 12px; }
+.orders-item-detail .orders-item-origin { justify-content: flex-start; padding-inline: 0; white-space: normal; text-align: left; color: var(--orders-primary-ink); text-decoration: underline; text-underline-offset: 3px; }
+.orders-action-surface form { display: grid; gap: 18px; }
+.orders-action-surface fieldset { min-width: 0; }
+.orders-action-surface .form-actions { flex-wrap: wrap; }
+.orders-action-surface :is(label, input, textarea, select) { max-width: 100%; }
+@media (max-width: 1199px) { .sheet.orders-qc-import-surface { width: 100%; } }

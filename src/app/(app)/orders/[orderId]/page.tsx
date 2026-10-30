@@ -12,7 +12,7 @@ function safeOrdersReturnTo(value: string) {
     const parsed = new URL(value, "https://loti.invalid");
     if (parsed.origin !== "https://loti.invalid" || parsed.pathname !== "/orders") return "/orders";
     const params = new URLSearchParams();
-    for (const key of ["search", "account", "person", "origin", "trackingId", "status", "page"]) {
+    for (const key of ["search", "account", "person", "origin", "trackingId", "status", "view", "page"]) {
       const content = parsed.searchParams.get(key);
       if (content && content.length <= 200) params.set(key, content);
     }

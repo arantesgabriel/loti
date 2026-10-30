@@ -29,6 +29,7 @@ type RefundItem = {
   nativeProductCnyMinor?: number;
   nativeChinaCnyMinor?: number;
   legacyItem: Item | null;
+  excludedUnits?: number[];
 };
 type RefundGroup = Detail["financialDisplay"]["refundGroups"][number] & {
   item: RefundItem | undefined;
@@ -64,7 +65,7 @@ function RefundQcIdentity({ purchaseId, itemId, itemName, visualKey, subtitle }:
 
 function firstAvailableUnit(item: RefundItem, quantity: number) {
   let start = 0;
-  for (const refund of item.refunds.filter(row => row.status !== "voided").sort((a, b) => a.unitStart - b.unitStart)) {
+  for (const refund of [...item.refunds.filter(row => row.status !== "voided"), ...(item.excludedUnits ?? []).map(unitStart => ({ unitStart, quantity: 1 }))].sort((a, b) => a.unitStart - b.unitStart)) {
     if (start + quantity <= refund.unitStart) return start;
     start = Math.max(start, refund.unitStart + refund.quantity);
   }
@@ -82,12 +83,7 @@ function fullAmounts(item: RefundItem, quantity: number) {
   };
 }
 
-export function RefundsSection({ detail, locked, busy, requestItemId, onRequestClose, onDetails, mutate }: {
-  detail: Detail; locked: boolean; busy: boolean; requestItemId: string | null; onRequestClose: () => void; onDetails: (itemId: string) => void; mutate: Mutate;
-}) {
-  const [activeRefundId, setActiveRefundId] = useState<string | null>(null);
-  const [mode, setMode] = useState<"receive" | "correct" | "void" | "edit">("receive");
-  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+function refundItemsForDetail(detail: Detail) {
   const displayById = new Map(detail.financialDisplay.items.map(item => [item.costItemId, item]));
   const totalBase = (display: DisplayItem, key: "product" | "china") => {
     const remaining = display.remaining[key].finalCents;
@@ -106,6 +102,27 @@ export function RefundsSection({ detail, locked, busy, requestItemId, onRequestC
       nativeProductCnyMinor: row.cost.nativeProductCnyMinor ?? 0, nativeChinaCnyMinor: row.cost.nativeChinaCnyMinor ?? 0,
     }] : [])),
   ];
+  return { displayById, refundItems };
+}
+
+export function OrderRefundForm({ detail, itemId, reservedUnits, busy, onClose, onSubmit }: { detail: Detail; itemId: string; reservedUnits: number[]; busy: boolean; onClose: () => void; onSubmit: (input: unknown) => Promise<void> }) {
+  const item = refundItemsForDetail(detail).refundItems.find(item => item.id === itemId);
+  return item ? <RefundRequestSurface item={{ ...item, excludedUnits: reservedUnits }} detail={detail} busy={busy} onClose={onClose} onSubmit={onSubmit}/> : null;
+}
+
+export function OrderRefundRecordForm({ detail, refundId, mode, busy, onClose, onSubmit }: { detail: Detail; refundId: string; mode: "receive" | "correct" | "void" | "edit"; busy: boolean; onClose: () => void; onSubmit: (operation: string, input: unknown) => Promise<void> }) {
+  const refund = detail.refunds.find(row => row.id === refundId);
+  const item = refund ? refundItemsForDetail(detail).refundItems.find(item => item.id === refund.costItemId) : undefined;
+  return refund && item ? <RefundActionSurface refund={refund} item={item} mode={mode} detail={detail} locked={detail.tracking.status === "closed"} busy={busy} onClose={onClose} onSubmit={onSubmit}/> : null;
+}
+
+export function RefundsSection({ detail, locked, busy, requestItemId, onRequestClose, onDetails, mutate }: {
+  detail: Detail; locked: boolean; busy: boolean; requestItemId: string | null; onRequestClose: () => void; onDetails: (itemId: string) => void; mutate: Mutate;
+}) {
+  const [activeRefundId, setActiveRefundId] = useState<string | null>(null);
+  const [mode, setMode] = useState<"receive" | "correct" | "void" | "edit">("receive");
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const { displayById, refundItems } = refundItemsForDetail(detail);
   const itemByCostId = new Map(refundItems.map(item => [item.id, item]));
   const activeRefund = detail.refunds.find(refund => refund.id === activeRefundId) ?? null;
   const requestItem = requestItemId ? itemByCostId.get(requestItemId) ?? null : null;
@@ -257,9 +274,13 @@ function RefundDetails({ refund, capacity, detail, compact }: { refund: Refund; 
 }
 
 function RefundRequestSurface({ item, detail, busy, onClose, onSubmit }: { item: RefundItem; detail: Detail; busy: boolean; onClose: () => void; onSubmit: (input: unknown) => Promise<void> }) {
-  const eligiblePackages = detail.packages.filter(pkg => pkg.logisticsStatus === "preparing" && pkg.contentSealSource === null && pkg.contentSealedAt === null && pkg.items.some(row => row.costItemId === item.id && row.quantity > 0));
-  const assigned = item.calculation?.allocatedQuantity ?? 0;
-  const unassignedAvailable = Math.max(0, (item.calculation?.shippingQuantity ?? 0) - assigned);
+  const eligiblePackages = item.excludedUnits ? [] : detail.packages.filter(pkg => pkg.logisticsStatus === "preparing" && pkg.contentSealSource === null && pkg.contentSealedAt === null && pkg.items.some(row => row.costItemId === item.id && row.quantity > 0));
+  const assigned = item.excludedUnits?.length ?? item.calculation?.allocatedQuantity ?? 0;
+  const freeCount = Math.max(0, (item.calculation?.shippingQuantity ?? 0) - assigned);
+  const occupied = new Set([...(item.excludedUnits ?? []), ...item.refunds.filter(row => row.status !== "voided").flatMap(row => Array.from({ length: row.quantity }, (_, i) => row.unitStart + i))]);
+  let longest = 0, run = 0;
+  for (let i = 0; i < item.original.quantity; i++) { run = occupied.has(i) ? 0 : run + 1; longest = Math.max(longest, run); }
+  const unassignedAvailable = item.excludedUnits ? Math.min(freeCount, longest) : freeCount;
   const defaultByPackage = Object.fromEntries(eligiblePackages.map(pkg => [pkg.id, eligiblePackages.length === 1 ? pkg.items.find(row => row.costItemId === item.id)?.quantity ?? 0 : 0]));
   const [packageQuantities, setPackageQuantities] = useState<Record<string, number>>(defaultByPackage);
   const [unassignedQuantity, setUnassignedQuantity] = useState(eligiblePackages.length === 0 ? unassignedAvailable : 0);
@@ -306,7 +327,7 @@ function RefundRequestSurface({ item, detail, busy, onClose, onSubmit }: { item:
 
   function applyFullAmounts() { const amounts = fullAmounts(item, selectedQuantity); setManualProduct(false); setManualChina(false); setRequestedProduct(formatInput(amounts.product)); setRequestedChina(formatInput(amounts.china)); }
 
-  return <Surface sheet open className="refund-request-sheet" title="Registrar reembolso" subtitle={item.original.name} description="Cancele apenas unidades sem pacote ou em preparação. O status é manual: confirme que ainda não foram enviadas." onOpenChange={open => { if (!open && !busy) onClose(); }}>
+  return <Surface sheet open className="refund-request-sheet" title="Registrar reembolso" subtitle={item.original.name} description={item.excludedUnits ? "Cancele apenas unidades livres. Retire reservas explicitamente no pacote antes de cancelar. Somente o recebimento confirmado gera crédito." : "Cancele apenas unidades sem pacote ou em preparação. O status é manual: confirme que ainda não foram enviadas."} onOpenChange={open => { if (!open && !busy) onClose(); }}>
     <form onSubmit={event => { event.preventDefault(); if (!valid || productCents === null || chinaCents === null) return; void onSubmit({ expectedRevision: detail.tracking.revision, costItemId: item.id, quantity: selectedQuantity, requestedProductCents: productCents, requestedChinaCents: chinaCents, ...(nativeOnly ? { requestedProductCnyMinor, requestedChinaCnyMinor } : {}), reason, packageRemovals: eligiblePackages.map(pkg => ({ packageId: pkg.id, quantity: packageQuantities[pkg.id] ?? 0 })).filter(row => row.quantity > 0), unassignedQuantity }); }}>
       <p className="refund-request-context"><Box size={20} aria-hidden="true"/><span>{item.original.variant || "Sem variação"} · {itemUnitsSummary(item)}</span></p>
       <fieldset className="refund-request-units"><legend>Selecionar unidades</legend>

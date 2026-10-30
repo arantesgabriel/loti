@@ -1,0 +1,96 @@
+/* V2 composition, with the same semantic identity as Favorites and Purchase.
+   Aliases flow from the shared theme into Orders, including portaled sheets. */
+.orders-foundation {
+  --orders-background: var(--background);
+  --orders-surface: var(--surface);
+  --orders-surface-muted: var(--surface-muted);
+  --orders-foreground: var(--foreground);
+  --orders-muted: var(--muted);
+  --orders-border: var(--border);
+  --orders-primary: var(--primary);
+  --orders-primary-ink: var(--primary-ink);
+  --orders-success: var(--success);
+  --orders-success-soft: var(--success-soft);
+  --orders-info: var(--info);
+  --orders-info-soft: var(--info-soft);
+  --orders-panel-width: 390px;
+  --orders-radius: 10px;
+  color: var(--orders-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.orders-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  background: var(--orders-background);
+}
+.page-content:has(> .orders-workspace) { max-width: none; padding: 0; }
+.orders-workspace-main { min-height: 100dvh; padding: 32px 28px 64px 40px; }
+.orders-workspace-main, .orders-workspace-content, .orders-workspace-toolbar,
+.orders-workspace-footer { min-width: 0; }
+.orders-workspace-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin-bottom: 26px; }
+.orders-workspace-heading > div { min-width: 0; }
+.orders-workspace-heading h1 { margin: 0 0 9px; font-size: 30px; font-weight: 680; line-height: 1.2; letter-spacing: -.03em; }
+.orders-workspace-heading p { margin: 0; color: var(--orders-muted); font-size: 14px; line-height: 1.5; }
+.orders-workspace-tools { display: flex; align-items: center; gap: 8px; }
+.orders-workspace-toolbar { margin-bottom: 24px; }
+.orders-workspace-tabs { display: flex; align-items: center; gap: 36px; margin-bottom: 28px; min-width: 0; overflow-x: auto; }
+.orders-workspace-tabs > button { flex: none; padding: 8px 0; background: transparent; border: 0; border-bottom: 2px solid transparent; color: var(--orders-muted); font-size: 13px; cursor: pointer; }
+.orders-workspace-tabs > button[aria-current="true"] { color: var(--orders-primary-ink); border-bottom-color: var(--orders-primary); }
+.orders-workspace-footer { margin-top: 24px; color: var(--orders-muted); font-size: 12px; }
+.orders-foundation :is(button, a, input, select, textarea):focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+.orders-panel-heading h2:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 4px; }
+
+.orders-desktop-panel { position: sticky; top: 0; display: flex; flex-direction: column; min-width: 0; height: 100dvh; max-height: 100dvh; border-left: 1px solid var(--orders-border); background: var(--orders-surface); }
+.orders-panel-heading { flex: none; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 24px 28px 20px; }
+.orders-panel-heading > div { min-width: 0; }
+.orders-panel-heading h2 { font-size: 21px; font-weight: 700; line-height: 1.3; letter-spacing: -.03em; overflow-wrap: anywhere; }
+.orders-panel-heading p { margin: 4px 0 0; color: var(--orders-muted); font-size: 12px; }
+.orders-panel-heading > .button { flex: none; margin: -8px -12px 0 0; color: var(--orders-muted); }
+.orders-panel-content { min-height: 0; min-width: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; padding: 24px 28px; overflow-wrap: anywhere; }
+.orders-panel-footer { flex: none; margin: 0 28px; padding: 20px 0 max(24px, env(safe-area-inset-bottom)); border-top: 1px solid var(--orders-border); }
+.orders-panel-footer > .button { width: 100%; min-height: 44px; }
+
+.sheet.orders-bottom-sheet { inset: auto 0 0; display: flex; flex-direction: column; width: 100%; height: auto; max-height: calc(100dvh - 24px - env(safe-area-inset-top)); border-radius: 22px 22px 0 0; transform: none; background: var(--orders-surface); padding-top: 14px; animation: orders-sheet-enter 220ms cubic-bezier(.2,.8,.2,1); }
+.sheet.orders-bottom-sheet::before { content: ""; position: absolute; inset: 11px auto auto 50%; width: 42px; height: 4px; margin-left: -21px; border-radius: 3px; background: var(--orders-border); }
+.sheet.orders-bottom-sheet[data-state="closed"] { animation: orders-sheet-exit 160ms ease-out; }
+.sheet.orders-bottom-sheet .surface-head { flex: none; align-items: flex-start; padding: 16px 20px; gap: 12px; border: 0; }
+.sheet.orders-bottom-sheet .surface-head h2 { font-size: 22px; font-weight: 700; letter-spacing: -.03em; }
+.sheet.orders-bottom-sheet .surface-head .muted { margin: 4px 0 0; font-size: 12px; line-height: 1.5; }
+.sheet.orders-bottom-sheet .surface-head > .button { flex: none; margin: -6px -8px 0 0; }
+.sheet.orders-bottom-sheet > .surface-body { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 20px max(24px, env(safe-area-inset-bottom)); gap: 0; }
+.orders-bottom-sheet .orders-panel-content { flex: 0 0 auto; overflow: visible; padding: 20px 0; }
+.orders-bottom-sheet .orders-panel-footer { margin: 0; padding: 20px 0 0; }
+.orders-bottom-sheet :is(input, select, textarea) { font-size: 16px; }
+
+.orders-badge { display: inline-flex; align-items: center; padding: 5px 10px; border-radius: 7px; background: var(--orders-surface-muted); color: var(--orders-muted); font-size: 11px; font-weight: 600; line-height: 1.5; }
+.orders-badge[data-tone="success"] { color: var(--orders-success); background: var(--orders-success-soft); }
+.orders-badge[data-tone="info"] { color: var(--orders-info); background: var(--orders-info-soft); }
+.orders-badge[data-tone="warning"] { color: var(--warning); background: var(--warning-soft); }
+.orders-feedback { padding: 24px 0; color: var(--orders-muted); font-size: 13px; }
+.orders-feedback strong { color: var(--orders-foreground); font-size: 14px; font-weight: 600; }
+.orders-feedback p { margin-top: 6px; }
+.orders-feedback[data-error="true"] strong { color: var(--danger-ink); }
+.orders-icon-control { position: relative; display: inline-flex; }
+.orders-icon-control > .button { min-width: 44px; min-height: 44px; color: var(--orders-muted); }
+.orders-icon-tooltip { position: absolute; z-index: 1; inset: 100% 0 auto auto; width: max-content; max-width: min(240px, 80vw); padding: 8px 10px; border: 1px solid var(--orders-border); border-radius: var(--orders-radius); color: var(--orders-foreground); background: var(--orders-surface); font-size: 12px; line-height: 1.5; }
+
+@media (min-width: 1200px) {
+  .orders-workspace:not([data-panel="closed"]) { grid-template-columns: minmax(0, 1fr) var(--orders-panel-width); }
+  .orders-workspace:not([data-panel="closed"]) .orders-workspace-main { padding-right: 30px; }
+}
+@media (max-width: 1199px) { .orders-workspace-main { padding: 28px 24px 64px; } }
+@media (max-width: 767px) {
+  .orders-workspace-main { min-height: 0; padding: 22px 20px 120px; }
+  .orders-workspace-heading { gap: 12px; margin-bottom: 22px; }
+  .orders-workspace-heading h1 { font-size: 27px; }
+  .orders-workspace-heading p { font-size: 13px; }
+  .orders-workspace-tabs { justify-content: space-between; gap: 24px; }
+}
+@keyframes orders-sheet-enter { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes orders-sheet-exit { from { transform: translateY(0); } to { transform: translateY(100%); } }
+@media (prefers-reduced-motion: reduce) { .sheet.orders-bottom-sheet, .sheet.orders-bottom-sheet[data-state="closed"] { animation: none; } }

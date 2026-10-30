@@ -1,0 +1,51 @@
+/* 04B uses the shared panel; images stay inside the QC gallery section. */
+.orders-item-detail { display: grid; gap: 24px; min-width: 0; font-size: 12px; line-height: 1.5; }
+.orders-item-detail section { min-width: 0; }
+.orders-item-detail h3 { margin: 0 0 12px; color: var(--orders-foreground); font-size: 14px; font-weight: 600; }
+.orders-item-detail p { margin: 8px 0 0; color: var(--orders-muted); }
+.orders-item-identity { display: flex; align-items: center; gap: 14px; }
+.orders-item-identity > .category-marker { flex: none; width: 44px; height: 44px; border: 1px solid var(--orders-border); border-radius: var(--orders-radius); background: var(--orders-surface-muted); }
+.orders-item-identity p { margin: 0 0 8px; }
+.orders-item-detail .orders-item-stage-detail { margin-top: -12px; }
+.orders-item-quantities { display: flex; flex-wrap: wrap; gap: 10px 20px; margin-top: 8px; }
+.orders-item-detail .orders-item-available { color: var(--orders-foreground); font-size: 28px; line-height: 1.2; font-weight: 700; letter-spacing: -.03em; }
+.orders-item-quantities dt, .orders-item-costs dt { color: var(--orders-muted); }
+.orders-item-quantities dd { margin: 3px 0 0; font-size: 13px; font-weight: 600; }
+.orders-item-costs { margin: 0; }
+.orders-item-costs > div { display: flex; justify-content: space-between; gap: 16px; margin-block: 10px; }
+.orders-item-costs > div:last-child { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--orders-border); font-weight: 600; }
+.orders-item-costs > div:last-child dd { font-size: 22px; letter-spacing: -.02em; }
+.orders-item-costs dd { margin: 0; text-align: right; }
+.orders-item-costs small { display: block; font-size: 11px; font-weight: 400; color: var(--orders-muted); }
+.orders-item-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.orders-item-actions > .button { min-height: 44px; font-size: 12px; }
+.orders-item-detail a { color: var(--orders-primary-ink); text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; }
+.orders-item-origin { display: flex; align-items: center; min-height: 44px; }
+.orders-item-packages { padding-left: 16px; margin: 8px 0 0; }
+.orders-item-packages a { display: inline-flex; align-items: center; min-height: 44px; }
+.qc-gallery-preview { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.qc-gallery-preview > button { flex: 1 1 80px; max-width: 106px; height: 86px; border: 1px solid var(--orders-border); border-radius: var(--orders-radius); padding: 0; overflow: hidden; background: var(--orders-surface-muted); }
+.qc-gallery-preview img { width: 100%; height: 100%; object-fit: cover; }
+.qc-gallery-preview .qc-preview-placeholder { font-size: 10px; width: 100%; height: 100%; }
+.sheet.orders-bottom-sheet.qc-viewer-surface { --orders-surface: #18181b; --orders-foreground: #fafafa; --orders-muted: #c4c4cc; --orders-border: #ffffff40; height: min(900px, calc(100dvh - 24px - env(safe-area-inset-top))); color-scheme: dark; }
+.orders-catalog-row[data-detail-open="true"] { background: var(--orders-surface-muted); }
+@media (min-width: 1200px) {
+  .orders-workspace:not([data-panel="closed"]) .orders-list-toolbar { grid-template-columns: minmax(0, 1fr) 180px 100px; gap: 10px; }
+  .orders-workspace:not([data-panel="closed"]) .orders-prepare-button { grid-column: 3; }
+  .orders-workspace:not([data-panel="closed"]) .orders-tabs-bar { gap: 8px; }
+  .orders-workspace:not([data-panel="closed"]) .orders-view-tabs { gap: 24px; }
+}
+
+.orders-item-detail { gap: 16px; }
+.orders-item-detail h3 { font-size: 12px; margin-bottom: 8px; }
+.orders-item-detail .orders-item-available { font-size: 25px; }
+.orders-item-detail .orders-item-total { color: var(--orders-foreground); font-size: 24px; font-weight: 700; line-height: 1.2; letter-spacing: -.03em; }
+.orders-item-total small { display: block; margin-top: 6px; color: var(--orders-muted); font-size: 11px; font-weight: 400; }
+.orders-item-more { margin-top: 8px; }
+.orders-item-more summary { cursor: pointer; min-height: 32px; padding: 8px 0; color: var(--orders-muted); font-size: 11px; }
+.orders-item-costs > div:last-child { margin-top: 10px; padding-top: 0; border: 0; font-weight: 400; }
+.orders-item-costs > div:last-child dd { font-size: 12px; }
+.orders-item-selection { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+
+.orders-desktop-panel:has(.orders-item-detail) .orders-panel-content { padding-top: 4px; }
+.orders-workspace-sheet:has(.orders-item-detail) .orders-panel-content { padding-top: 8px; }
