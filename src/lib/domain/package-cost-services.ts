@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { AppDatabase } from "../db/connection";
 import { financialOperations, hubbuyAccounts, hubbuyBalanceConsumptions, hubbuyBalanceCreditShares, hubbuyBalanceEntries, memberBalanceFinancingEntries, purchaseAdditionalOrderItems, purchaseCostCharges, purchaseCostOrders, purchaseOrderCorrections, purchaseCostPackageEvents, purchaseCostParticipants, purchaseCostRefundEvents, purchaseCostRefundParticipants, purchaseCostRefunds, purchaseCostReopenings, purchaseCostTrackings, purchaseItemCosts, purchaseItems, purchasePackageItems, purchasePackages, purchasePaymentAllocations, purchasePaymentComponents, purchaseRefundPaymentAllocations, workspaceCostSettings } from "../db/schema";
@@ -16,7 +16,7 @@ import { allocateRefundCredit } from "./package-refund-calculations";
 import { refundUnitRangeCapacityCents } from "./refund-unit-capacity";
 import { purchaseOrderCorrectionServices } from "./purchase-order-corrections";
 import { usesOrdersWorkflow } from "./orders-workflow";
-import { logisticsReservations, orderWarehousePositions } from "../db/schema";
+import { logisticsEvents, logisticsPackages, logisticsReservations, orderWarehousePositions } from "../db/schema";
 import { isNull } from "drizzle-orm";
 
 const maxCost = 1_000_000_000_000;
@@ -1044,7 +1044,7 @@ export function packageCostServices(db: AppDatabase, userId: string, initializeC
     const value = itemCostSchema.parse(input);
     assertValueState(value.effectivePriceState, value.effectivePriceUnitCents, "o preço efetivo");
     assertValueState(value.chinaFreightState, value.chinaFreightUnitCents, "o frete China");
-    return mutate(trackingId, value.expectedRevision, async tx => {
+    return mutate(trackingId, value.expectedRevision, async (tx, tracking) => {
       const costItem = await tx.select().from(purchaseItemCosts).where(and(eq(purchaseItemCosts.id, value.itemId), eq(purchaseItemCosts.trackingId, trackingId))).get();
       if (!costItem) throw new DomainError("Produto não encontrado neste acompanhamento.", 404);
       if (costItem.additionalOrderItemId) {
@@ -1072,6 +1072,27 @@ export function packageCostServices(db: AppDatabase, userId: string, initializeC
         const nextRows = value.composition.participants.map((person, allocationOrder) => ({ costItemId: costItem.id, personId: person.personId, allocationOrder, weightMode: value.composition!.mode, weight: weights[allocationOrder] }));
         await tx.delete(purchaseCostParticipants).where(eq(purchaseCostParticipants.costItemId, costItem.id)).run();
         await tx.insert(purchaseCostParticipants).values(nextRows).run();
+      }
+      if (changed || compositionChanged) {
+        const now = new Date();
+        const legacyAssignments = await tx.select({ packageId: purchasePackageItems.packageId }).from(purchasePackageItems).where(eq(purchasePackageItems.costItemId, costItem.id)).all();
+        const legacyPackageIds = [...new Set(legacyAssignments.map(row => row.packageId))];
+        const logisticsSchemaReady = await tx.select({ name: sql<string>`name` }).from(sql`sqlite_master`).where(sql`type='table' AND name='logistics_reservations'`).get();
+        if (logisticsSchemaReady) {
+          const activeReservations = await tx.select().from(logisticsReservations).where(and(eq(logisticsReservations.costItemId, costItem.id), isNull(logisticsReservations.releasedAt))).all();
+          const reservedPackageIds = [...new Set(activeReservations.map(row => row.packageId))];
+          if (reservedPackageIds.length) {
+            const packages = await tx.select().from(logisticsPackages).where(inArray(logisticsPackages.id, reservedPackageIds)).all();
+            const affected = packages.filter(pkg => pkg.workspaceId === tracking.workspaceId && pkg.contentClosedAt === null);
+            if (affected.length) await tx.insert(logisticsEvents).values(affected.map(pkg => ({
+              id: crypto.randomUUID(), workspaceId: pkg.workspaceId, resourceId: pkg.id, action: "cost_item_updated",
+              reason: "Custos ou divisão de um produto do pacote foram atualizados.",
+              before: { costItemId: costItem.id, effectivePriceState: costItem.effectivePriceState, effectivePriceUnitCents: costItem.effectivePriceUnitCents, chinaFreightState: costItem.chinaFreightState, chinaFreightUnitCents: costItem.chinaFreightUnitCents },
+              after: { costItemId: costItem.id, effectivePriceState: value.effectivePriceState, effectivePriceUnitCents: value.effectivePriceUnitCents, chinaFreightState: value.chinaFreightState, chinaFreightUnitCents: value.chinaFreightUnitCents },
+              actorId: userId, createdAt: now,
+            }))).run();
+          }
+        } else if (legacyPackageIds.length) await tx.update(purchasePackages).set({ updatedAt: now }).where(inArray(purchasePackages.id, legacyPackageIds)).run();
       }
       return undefined;
     });

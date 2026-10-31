@@ -1,5 +1,5 @@
 import {it,expect} from "vitest";
-import {eq} from "drizzle-orm";
+import {and,eq} from "drizzle-orm";
 import {migrate} from "drizzle-orm/libsql/migrator";
 import {fixture} from "./helpers";
 import * as s from "@/lib/db/schema";
@@ -72,6 +72,79 @@ it.each(["sent","received"] as const)("confirms %s legacy content with unknown d
   }finally{f.client.close();}
 });
 
+it("records a confirmed one-step logistics regression without changing costs or payments",async()=>{
+  const f=await legacy("sent");try{
+    const packageId=f.pkg.pkg.id;
+    const detail=await f.packages.get(packageId);
+    const chargesBefore=await f.db.select().from(s.purchaseCostCharges).all();
+    const summaryBefore=await readWorkflowFinancialSummary(f.db,"alice");
+    await f.packages.execute(packageId,"regress-to-preparing",{
+      operation:"regress_stage",targetStage:"preparing",expectedRevision:detail.pkg.revision,
+      reason:"Correção logística confirmada",confirmed:true,regressionConfirmed:true,
+    });
+
+    const after=await f.packages.get(packageId);
+    const event=await f.db.select().from(s.logisticsEvents).where(and(eq(s.logisticsEvents.resourceId,packageId),eq(s.logisticsEvents.action,"regress_stage"))).get();
+    const list=await listLogisticsPackages(f.db,"alice",{filter:"all"});
+    expect(after.pkg.stage).toBe("preparing");
+    expect(after.pkg.dispatchedAt).toBeNull();
+    expect(after.pkg.receivedAt).toBeNull();
+    expect(event).toMatchObject({
+      reason:"Correção logística confirmada",actorId:"alice",
+      before:expect.objectContaining({stage:"sent"}),
+      after:expect.objectContaining({stage:"preparing",command:expect.objectContaining({regressionConfirmed:true})}),
+    });
+    expect(list.rows[0].pkg.id).toBe(packageId);
+    expect(list.rows[0].lastActivityAt?.toISOString()).toBe(event?.createdAt?.toISOString());
+    expect(await f.db.select().from(s.purchaseCostCharges).all()).toEqual(chargesBefore);
+    expect(await readWorkflowFinancialSummary(f.db,"alice")).toEqual(summaryBefore);
+  }finally{f.client.close();}
+});
+
+it("rejects unconfirmed and non-adjacent regressions without writing movement",async()=>{
+  const f=await legacy("sent");try{
+    const before=await f.packages.get(f.pkg.pkg.id);
+    await expect(f.packages.execute(before.pkg.id,"regress-without-confirmation",{
+      operation:"regress_stage",targetStage:"preparing",expectedRevision:before.pkg.revision,
+      reason:"Regressão sem confirmação",confirmed:true,regressionConfirmed:false,
+    })).rejects.toThrow();
+    await expect(f.packages.execute(before.pkg.id,"regress-wrong-direction",{
+      operation:"regress_stage",targetStage:"received",expectedRevision:before.pkg.revision,
+      reason:"Pular etapa logística",confirmed:true,regressionConfirmed:true,
+    })).rejects.toMatchObject({status:409});
+
+    const after=await f.packages.get(before.pkg.id);
+    const regressions=await f.db.select().from(s.logisticsEvents).where(and(eq(s.logisticsEvents.resourceId,before.pkg.id),eq(s.logisticsEvents.action,"regress_stage"))).all();
+    expect(after.pkg.stage).toBe("sent");
+    expect(after.pkg.revision).toBe(before.pkg.revision);
+    expect(regressions).toHaveLength(0);
+  }finally{f.client.close();}
+});
+
+it("keeps A caminho blocked until freight payment even after content confirmation",async()=>{
+  const f=await legacy();try{
+    let detail=await f.packages.get(f.pkg.pkg.id);
+    await f.packages.execute(detail.pkg.id,"confirm-content-before-dispatch",{
+      operation:"confirm_legacy_content",expectedRevision:detail.pkg.revision,
+      reason:"Conteúdo legado conferido",confirmed:true,
+    });
+    detail=await f.packages.get(detail.pkg.id);
+    expect(detail.pkg.contentClosedAt).toBeInstanceOf(Date);
+    expect(detail.inPackage).toBe(false);
+    await expect(f.packages.execute(detail.pkg.id,"dispatch-before-freight-payment",{
+      operation:"dispatch",expectedRevision:detail.pkg.revision,
+      reason:"Tentativa sem frete pago",confirmed:true,
+    })).rejects.toMatchObject({status:409});
+
+    const after=await f.packages.get(detail.pkg.id);
+    const dispatches=await f.db.select().from(s.logisticsEvents).where(and(eq(s.logisticsEvents.resourceId,detail.pkg.id),eq(s.logisticsEvents.action,"dispatch"))).all();
+    expect(after.pkg.stage).toBe("preparing");
+    expect(after.pkg.dispatchedAt).toBeNull();
+    expect(after.pkg.freightPaidAt).toBeNull();
+    expect(dispatches).toHaveLength(0);
+  }finally{f.client.close();}
+});
+
 it("pages package candidates and package summaries without workspace reservations in each response",async()=>{
   const f=await legacy();try{
     await f.db.insert(s.logisticsPackages).values(Array.from({length:105},(_,i)=>({id:`qa-package-${String(i).padStart(3,"0")}`,workspaceId:"workspace",accountId:f.accountId,name:`Pacote QA ${i}`,reviewState:"confirmed" as const,createdAt:new Date()}))).run();
@@ -89,6 +162,48 @@ it("pages package candidates and package summaries without workspace reservation
     await expect(listLogisticsPackages(f.db,"outsider",{page:0,filter:"preparing"})).rejects.toMatchObject({status:403});
     await f.db.update(s.logisticsPackages).set({name:"Renamed"}).where(eq(s.logisticsPackages.id,first.rows[0].pkg.id));
     expect((await listLogisticsPackages(f.db,"alice",{page:0,filter:"preparing"})).rows.map(r=>r.pkg.id)).toEqual(first.rows.map(r=>r.pkg.id));
+  }finally{f.client.close();}
+});
+
+it("derives package pendencies from executable commands and sorts cost/payment movement",async()=>{
+  const f=await legacy();
+  try{
+    const packageId=f.pkg.pkg.id,costItemId=f.pkg.reservations[0].costItemId;
+    const originalCost=await f.db.select().from(s.purchaseItemCosts).where(eq(s.purchaseItemCosts.id,costItemId)).get();
+    expect(originalCost).not.toBeNull();
+    const laterLogistics=new Date("2099-01-01T12:00:00.000Z");
+    await f.db.insert(s.logisticsPackages).values({id:"qa-package-stage-only",workspaceId:"workspace",accountId:f.accountId,name:"Pacote só em montagem",reviewState:"confirmed",stage:"preparing",createdAt:new Date("2020-01-01T12:00:00.000Z")}).run();
+    await f.db.insert(s.logisticsEvents).values({id:"qa-package-stage-only-event",workspaceId:"workspace",resourceId:"qa-package-stage-only",action:"note",reason:"Movimento sintético de teste",before:null,after:null,actorId:"alice",createdAt:laterLogistics}).run();
+
+    const initial=await listLogisticsPackages(f.db,"alice",{filter:"all"});
+    expect(initial.counts).toMatchObject({all:2,pending:1,preparing:2});
+    expect(initial.rows[0].pkg.id).toBe("qa-package-stage-only");
+    expect(initial.rows.find(row=>row.pkg.id==="qa-package-stage-only")?.pendingActions).toEqual([]);
+    expect(initial.rows.find(row=>row.pkg.id===packageId)?.pendingActions.length).toBeGreaterThan(0);
+    expect((await listLogisticsPackages(f.db,"alice",{filter:"pending"})).rows.map(row=>row.pkg.id)).toEqual([packageId]);
+    expect((await listLogisticsPackages(f.db,"alice",{filter:"all",pendingOnly:"true"})).rows.map(row=>row.pkg.id)).toEqual([packageId]);
+    expect((await listLogisticsPackages(f.db,"alice",{search:"só em montagem"})).rows.map(row=>row.pkg.id)).toEqual(["qa-package-stage-only"]);
+
+    const cost=await f.db.select().from(s.purchaseItemCosts).where(eq(s.purchaseItemCosts.id,costItemId)).get();
+    const tracking=cost&&await f.db.select().from(s.purchaseCostTrackings).where(eq(s.purchaseCostTrackings.id,cost.trackingId)).get();
+    expect(cost).not.toBeNull();expect(tracking).not.toBeNull();
+    const costs=packageCostServices(f.db,"alice");
+    await costs.saveItemCosts(tracking!.id,{
+      expectedRevision:tracking!.revision,itemId:costItemId,
+      effectivePriceState:cost!.effectivePriceState,effectivePriceUnitCents:(cost!.effectivePriceUnitCents??0)+1,
+      chinaFreightState:cost!.chinaFreightState,chinaFreightUnitCents:cost!.chinaFreightUnitCents,confirmPaymentReset:true,
+    });
+    const costActivity=await f.db.select().from(s.logisticsEvents).where(and(eq(s.logisticsEvents.resourceId,packageId),eq(s.logisticsEvents.action,"cost_item_updated"))).get();
+    expect(costActivity?.createdAt).toBeInstanceOf(Date);
+
+    const productCharge=await f.db.select().from(s.purchaseCostCharges).where(and(eq(s.purchaseCostCharges.orderId,cost!.orderId),eq(s.purchaseCostCharges.chargeType,"products"))).get();
+    expect(productCharge).not.toBeNull();
+    const paymentMovement=new Date("2100-01-01T12:00:00.000Z");
+    await f.db.update(s.purchaseCostCharges).set({updatedAt:paymentMovement}).where(eq(s.purchaseCostCharges.id,productCharge!.id));
+    const after=await listLogisticsPackages(f.db,"alice",{filter:"all"});
+    expect(after.rows[0].pkg.id).toBe(packageId);
+    expect(after.rows[0].lastActivityAt?.toISOString()).toBe(paymentMovement.toISOString());
+    expect(after.rows[0].pendingActions.map(action=>action.key)).toContain(`products-payment:${cost!.orderId}`);
   }finally{f.client.close();}
 });
 
@@ -123,13 +238,9 @@ it("keeps package list and detail unit counts aligned for active, partially rele
     expect(detailBefore.unitCount).toBe(2);
     expect(detailBefore.reservations).toHaveLength(2);
 
-    const firstPage=await listLogisticsPackages(f.db,"alice",{page:0,filter:"preparing"});
-    const secondPage=await listLogisticsPackages(f.db,"alice",{page:1,filter:"preparing"});
-    expect(firstPage.rows).toHaveLength(20);
-    expect(firstPage.pagination.hasMore).toBe(true);
-    const packageOnSecondPage=secondPage.rows.find(row=>row.pkg.id===packageId);
-    expect(packageOnSecondPage?.unitCount).toBe(detailBefore.unitCount);
-    expect(secondPage.pagination.hasMore).toBe(false);
+    const packagePage=await listLogisticsPackages(f.db,"alice",{filter:"preparing",search:detailBefore.pkg.name});
+    expect(packagePage.rows).toHaveLength(1);
+    expect(packagePage.rows[0].unitCount).toBe(detailBefore.unitCount);
 
     const releasedReservation=detailBefore.reservations[0];
     await f.warehouse.execute("workspace","release-one-unit",{
@@ -137,7 +248,7 @@ it("keeps package list and detail unit counts aligned for active, partially rele
       reservationIds:[releasedReservation.id],reason:"Retirada parcial sintética",
     });
     const partialDetail=await packages.get(packageId);
-    const partialList=await listLogisticsPackages(f.db,"alice",{page:1,filter:"preparing"});
+    const partialList=await listLogisticsPackages(f.db,"alice",{filter:"preparing",search:detailBefore.pkg.name});
     expect(partialDetail.unitCount).toBe(1);
     expect(partialDetail.reservations).toHaveLength(1);
     expect(partialList.rows.find(row=>row.pkg.id===packageId)?.unitCount).toBe(1);
@@ -148,7 +259,7 @@ it("keeps package list and detail unit counts aligned for active, partially rele
       reservationIds:partialDetail.reservations.map(row=>row.id),reason:"Retirada integral sintética",
     });
     const releasedDetail=await packages.get(packageId);
-    const releasedList=await listLogisticsPackages(f.db,"alice",{page:1,filter:"preparing"});
+    const releasedList=await listLogisticsPackages(f.db,"alice",{filter:"preparing",search:detailBefore.pkg.name});
     expect(releasedDetail.unitCount).toBe(0);
     expect(releasedDetail.reservations).toHaveLength(0);
     expect(releasedList.rows.find(row=>row.pkg.id===packageId)?.unitCount).toBe(0);
