@@ -310,3 +310,7 @@ As seis pendencias do handoff foram tratadas: rateio dos encargos na UI, proprie
 Evidencias, limites, matriz G0-G7 e ambiente concreto: [relatorio de finalizacao](testing/ORDERS_TRANSITION_FINALIZATION.md). Typecheck/lint/build isolados, comparacao/upgrade da baseline, auditoria operacional e quatro jornadas Chromium passaram. A regressao final teve 507 testes aprovados e sete ignorados, em 78 arquivos aprovados e um ignorado, com saida zero.
 
 Aceite humano da simulacao e autorizacao do reviewer continuam pendentes. O novo cenario inicial e `data/orders-transition-finalization-human-01.sqlite`, independente dos bancos alterados pelos testes. Nenhum commit, PR, deploy, migration de producao, dado financeiro real ou configuracao externa foi realizado. Alteracoes independentes do checkout foram preservadas.
+
+## Pacotes — P6/P7, regressão e handoff — 30/10/2026
+
+P6 passou a suíte de integração, a regressão completa, o typecheck, o lint e a revisão visual no navegador interno com o preview em `:3000`. P7 foi mapeado à Fase 7 do plano 39, pois o handoff específico de Pacotes termina em P6. O build isolado passou com saída `.next-p6-p7` e chave efêmera local; as alterações automáticas do Next nos arquivos de configuração foram revertidas. Evidências, cobertura, skips e pendências humanas estão em [Pacotes P6/P7 — regressão e handoff](testing/PACKAGES_P6_P7_FINALIZATION.md). Nenhuma migration manual em banco compartilhado, publicação ou deploy foi executado.
