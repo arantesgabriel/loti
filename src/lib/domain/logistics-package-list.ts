@@ -105,7 +105,7 @@ function makeActions(
     activePositions.every(position => position.reviewState === "confirmed" && position.accountId === account.id));
 
   if (pkg.reviewState === "pending_review" && reviewReadyAccount) {
-    addAction(actions, { key: "review", label: "Conferir pacote", kind: "logistics", href: detailHref });
+    addAction(actions, { key: "review", label: "Confirmar pacote", kind: "logistics", href: detailHref });
   }
 
   const trackingById = new Map(trackings.map(row => [row.id, row]));
@@ -120,7 +120,7 @@ function makeActions(
     }
     const shares = participantsByCost.get(cost.id) ?? [];
     if (tracking?.status === "open" && (!shares.length || shares.reduce((sum, person) => sum + person.weight, 0) === 0)) {
-      addAction(actions, { key: `item-share:${cost.id}`, label: "Conferir divisão dos custos", kind: "order", href: orderHref });
+      addAction(actions, { key: `item-share:${cost.id}`, label: "Revisar divisão dos custos", kind: "order", href: orderHref });
     }
     const productCharge = costChargeByOrder.get(cost.orderId);
     if (tracking?.status === "open" && productCharge?.paymentStatus === "pending") {
@@ -151,7 +151,7 @@ function makeActions(
       addAction(actions, { key: "close-content", label: "Fechar conteúdo", kind: "logistics", href: detailHref });
     }
     if (pkg.legacyPackageId && !pkg.contentClosedAt && pkg.stage !== "preparing" && activeReservations.length) {
-      addAction(actions, { key: "confirm-legacy-content", label: "Confirmar conteúdo legado", kind: "logistics", href: detailHref });
+      addAction(actions, { key: "confirm-legacy-content", label: "Confirmar fechamento do conteúdo", kind: "logistics", href: detailHref });
     }
     if (pkg.stage === "preparing" && pkg.contentClosedAt && detail.inPackage) {
       addAction(actions, { key: "dispatch", label: "Registrar despacho", kind: "logistics", href: detailHref });
@@ -185,14 +185,14 @@ function makeCostSummary(pkg: typeof s.logisticsPackages.$inferSelect, detail: P
   const freight = detail ? getChargeState(detail, "freight") : null;
   const customs = detail ? getChargeState(detail, "customs") : null;
   const paymentStatus = [
-    freight?.paid ? "Frete Brasil pago" : freight?.noCharge ? "Frete sem cobrança" : freight?.state === "pending" ? "Frete a conferir" : freight?.known ? "Frete sem pagamento" : null,
-    customs?.paid ? "Receita paga" : customs?.noCharge ? "Receita sem cobrança" : customs?.state === "pending" ? "Receita a conferir" : customs?.known ? "Receita sem pagamento" : null,
+    freight?.paid ? "Frete Brasil pago" : freight?.noCharge ? "Frete sem cobrança" : freight?.state === "pending" ? "Frete sem valor informado" : freight?.known ? "Frete sem pagamento" : null,
+    customs?.paid ? "Receita paga" : customs?.noCharge ? "Receita sem cobrança" : customs?.state === "pending" ? "Receita sem valor informado" : customs?.known ? "Receita sem pagamento" : null,
   ].filter((value): value is string => !!value);
   const pendingDescription = unresolvedFinancialActions[0]?.label ?? financialActions[0]?.label ?? actions[0]?.label;
   const description = pkg.financialClosedAt && unresolvedFinancialActions.length === 0
     ? "Sem pendências"
     : knownCents > 0 && unresolvedFinancialActions.length > 0
-      ? `Parcial · ${paymentStatus.find(value => value.includes("a conferir") || value.includes("sem pagamento")) ?? pendingDescription ?? "custos a conferir"}`
+      ? `Parcial · ${paymentStatus.find(value => value.includes("sem valor informado") || value.includes("sem pagamento")) ?? pendingDescription ?? "custos sem valor informado"}`
       : unresolvedFinancialActions.length > 0
         ? pendingDescription ?? "Encargos pendentes"
         : paymentStatus[0] ?? (actions.length ? actions[0].label : "Sem pendências");
@@ -205,7 +205,7 @@ function makeCostSummary(pkg: typeof s.logisticsPackages.$inferSelect, detail: P
         : knownCents > 0
           ? "known"
           : "empty";
-  const title = state === "closed" ? "Custos encerrados" : state === "pending" ? "Encargos pendentes" : state === "empty" ? (actions.length ? "Ações pendentes" : "Custos a conferir") : "";
+  const title = state === "closed" ? "Custos encerrados" : state === "pending" ? "Encargos pendentes" : state === "empty" ? (actions.length ? "Ações pendentes" : "Custos sem valor informado") : "";
   return { knownCents, state, title, description } as const;
 }
 

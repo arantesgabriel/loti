@@ -15,6 +15,8 @@ export type OrdersPanel = {
   state: Exclude<OrdersPanelState, { kind: "closed" }>;
   title: string;
   description: string;
+  subtitle?: string;
+  headingIcon?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
 };
@@ -76,7 +78,7 @@ export function OrdersWorkspace({
       </div>
       {panel && !compact && <DesktopPanel panel={panel} onClose={onPanelClose} />}
       {compact && (
-        <OrdersBottomSheet className="orders-workspace-sheet" open={!!panel} onOpenChange={open => { if (!open) onPanelClose?.(); }} title={presentedPanel?.title ?? "Pedidos"} description={presentedPanel?.description} returnFocusTo={returnFocus}>
+        <OrdersBottomSheet className="orders-workspace-sheet" open={!!panel} onOpenChange={open => { if (!open) onPanelClose?.(); }} title={presentedPanel?.title ?? "Pedidos"} subtitle={presentedPanel?.subtitle} headingIcon={presentedPanel?.headingIcon} description={presentedPanel?.description} returnFocusTo={returnFocus}>
           <div className="orders-panel-content">{presentedPanel?.children}</div>
           {presentedPanel?.footer && <footer className="orders-panel-footer">{presentedPanel.footer}</footer>}
         </OrdersBottomSheet>
@@ -104,9 +106,12 @@ function DesktopPanel({ panel, onClose }: { panel: OrdersPanel; onClose: () => v
     };
   }, []);
   return (
-    <aside className="orders-desktop-panel" aria-labelledby={titleId} aria-describedby={descriptionId}>
+    <aside className="orders-desktop-panel" aria-labelledby={titleId} aria-describedby={panel.subtitle || panel.description ? descriptionId : undefined}>
       <header className="orders-panel-heading">
-        <div><h2 id={titleId} ref={heading} tabIndex={-1}>{panel.title}</h2><p id={descriptionId}>{panel.description}</p></div>
+        <div className={panel.headingIcon ? "surface-heading-with-icon" : undefined}>
+          {panel.headingIcon}
+          <div><h2 id={titleId} ref={heading} tabIndex={-1}>{panel.title}</h2>{(panel.subtitle || panel.description) && <p id={descriptionId}>{panel.subtitle || panel.description}</p>}</div>
+        </div>
         <Button type="button" variant="ghost" size="icon" aria-label="Fechar painel" onClick={onClose}><X size={20} aria-hidden="true" /></Button>
       </header>
       <div className="orders-panel-content">{panel.children}</div>

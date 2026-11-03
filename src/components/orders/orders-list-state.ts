@@ -21,7 +21,7 @@ export function ordersView(value: string): OrdersView {
 
 /** Stage labels describe physical units, never infer receipt from QC/payment. */
 export function orderStage(row: WarehouseData["rows"][number], packages: WarehouseData["packages"]) {
-  if (row.reviewState === "pending_review") return { label: "A conferir", tone: "warning" as const, detail: "Conferência legada pendente" };
+  if (row.reviewState === "pending_review") return { label: "Chegada sem registro", tone: "warning" as const, detail: "" };
   const cancelled = new Set(row.cancelledUnits);
   const received = row.receivedUnits.filter(unit => !cancelled.has(unit)).length;
   const awaiting = Math.max(0, row.quantity - cancelled.size - received);
@@ -43,5 +43,5 @@ export function orderStage(row: WarehouseData["rows"][number], packages: Warehou
   ].filter(stage => stage.count > 0);
   if (stages.length > 1) return { label: "Etapas diferentes", tone: "neutral" as const, detail: stages.map(stage => `${stage.count} ${stage.detail}`).join(" · ") };
   if (stages.length) return { label: stages[0].label, tone: stages[0].tone, detail: stages[0].label === "Recebido" ? "No armazém" : "" };
-  return { label: cancelled.size === row.quantity ? "Cancelado" : "A conferir", tone: "neutral" as const, detail: "" };
+  return { label: cancelled.size === row.quantity ? "Cancelado" : "Etapa indefinida", tone: "neutral" as const, detail: "" };
 }

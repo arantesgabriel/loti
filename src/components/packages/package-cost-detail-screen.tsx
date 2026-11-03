@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingState } from "@/components/ui/loading-state";
+
 import Link from "next/link";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -301,7 +303,7 @@ export function PackageCostDetailScreen({
   const totalUnits = detail?.calculation.summary.unitCount ?? 0;
 
   if (loading)
-    return <p className="muted cost-loading">Carregando acompanhamento…</p>;
+    return <LoadingState label="Carregando acompanhamento…" rows={3} />;
   if (!detail)
     return (
       <>

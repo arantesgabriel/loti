@@ -23,4 +23,21 @@
 .orders-action-surface fieldset { min-width: 0; }
 .orders-action-surface .form-actions { flex-wrap: wrap; }
 .orders-action-surface :is(label, input, textarea, select) { max-width: 100%; }
+.orders-arrival-surface .orders-arrival-form { gap: 16px; }
+.orders-arrival-surface .orders-arrival-product h3 { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.35; }
+.orders-arrival-surface .orders-arrival-product p { margin: 3px 0 0; color: var(--orders-muted); font-size: 12px; }
+.orders-arrival-surface .orders-arrival-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); background: var(--orders-surface-muted); }
+.orders-arrival-surface .orders-arrival-summary > div { background: var(--orders-surface-muted); }
+.orders-arrival-summary dd > small { color: var(--orders-muted); font-size: 11px; font-weight: 400; }
+.orders-arrival-form > label { min-width: 0; }
+.orders-arrival-form .orders-arrival-quantity > input { font-weight: 600; font-variant-numeric: tabular-nums; }
+.orders-arrival-form textarea { resize: vertical; }
+.orders-arrival-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--orders-border);
+}
+.orders-arrival-actions > .button { min-height: 44px; }
 @media (max-width: 1199px) { .sheet.orders-qc-import-surface { width: 100%; } }

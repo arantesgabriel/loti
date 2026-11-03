@@ -80,7 +80,7 @@ export function logisticsPackageServices(db:AppDatabase,userId:string) {
       }
       if (pkg.revision !== command.expectedRevision) throw new DomainError("O pacote mudou. Atualize a página.",409);
       if (pkg.financialClosedAt && !["dispatch","receive","regress_stage","weight","reopen_financial"].includes(command.operation)) throw new DomainError("Este pacote está encerrado financeiramente.",409);
-      if (command.operation !== "review" && pkg.reviewState !== "confirmed") throw new DomainError("Confira o legado antes de alterar o pacote.",409);
+      if (command.operation !== "review" && pkg.reviewState !== "confirmed") throw new DomainError("Confirme o pacote antes de fazer alterações.",409);
       const now = new Date(), patch:Partial<typeof s.logisticsPackages.$inferInsert>={revision:pkg.revision+1};
       const current = await detail(tx,pkg);
       const legacyFreight=current.legacyCharges.find(c=>c.chargeType==="brazil_freight");
@@ -92,7 +92,7 @@ export function logisticsPackageServices(db:AppDatabase,userId:string) {
         const account = await tx.select().from(s.hubbuyAccounts).where(and(eq(s.hubbuyAccounts.id,command.accountId),eq(s.hubbuyAccounts.workspaceId,pkg.workspaceId),isNull(s.hubbuyAccounts.deletedAt))).get();
         if (!account || account.status !== "active") throw new DomainError("A conta precisa estar ativa e conferida.",409);
         const positions = current.reservations.length ? await tx.select().from(s.orderWarehousePositions).where(inArray(s.orderWarehousePositions.costItemId,[...new Set(current.reservations.map(r=>r.costItemId))])).all() : [];
-        if (positions.some(p => p.reviewState !== "confirmed" || p.accountId !== account.id)) throw new DomainError("Confira primeiro a chegada e conta de todos os itens reservados.",409);
+        if (positions.some(p => p.reviewState !== "confirmed" || p.accountId !== account.id)) throw new DomainError("Registre a chegada e a conta de todos os itens do pacote em Pedidos.",409);
         patch.accountId=account.id; patch.reviewState="confirmed";
         if(command.confirmClosedContent && !pkg.contentClosedAt){
           if(!current.reservations.length)throw new DomainError("Confira um conteúdo não vazio antes de confirmar seu fechamento.",409);
@@ -101,7 +101,7 @@ export function logisticsPackageServices(db:AppDatabase,userId:string) {
           patch.contentClosedAt=now; // Current explicit confirmation, never an inferred historical occurrence.
         }
       } else if(command.operation==="confirm_legacy_content"){
-        if(!pkg.legacyPackageId || pkg.contentClosedAt || !current.reservations.length)throw new DomainError("Este pacote não precisa de confirmação legada de conteúdo.",409);
+        if(!pkg.legacyPackageId || pkg.contentClosedAt || !current.reservations.length)throw new DomainError("O fechamento do conteúdo já está resolvido ou o pacote está vazio.",409);
         const snapshot=await manifest(tx,pkg,current.reservations);
         await tx.insert(s.logisticsManifests).values({id:crypto.randomUUID(),packageId,revision:pkg.revision+1,snapshot,createdBy:userId,createdAt:now}).run();
         patch.contentClosedAt=now;

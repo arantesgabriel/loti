@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingState } from "@/components/ui/loading-state";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Archive, ArrowDown, ArrowUp, ChevronDown, ChevronRight, Coins, Info, Plus, Search, Trash2 } from "lucide-react";
@@ -356,7 +358,7 @@ export function HubBuyAccountsPanel({ workspaceId, actorId, members, initialAcco
                   <td className="hubbuy-entry-amount">{entry.direction === "credit" ? "+" : "−"} {formatCnyMinor(entry.amountCnyMinor)}</td>
                   <td>{entry.historicalBrlCents === null ? "Não informada" : formatBrlCents(entry.historicalBrlCents)}</td><td className="hubbuy-entry-amount">{formatCnyMinor(entry.balanceAfterCnyMinor)}</td>
                 </tr>)}
-                {!statement?.entries.length && <tr><td colSpan={6} className="hubbuy-statement-empty">{statementLoading[account.id] || !statement && !statementErrors[account.id] ? "Carregando movimentações…" : statementErrors[account.id] ? "Extrato indisponível." : "Nenhuma movimentação registrada nesta conta."}</td></tr>}
+                {!statement?.entries.length && <tr><td colSpan={6} className="hubbuy-statement-empty">{statementLoading[account.id] || !statement && !statementErrors[account.id] ? <LoadingState label="Carregando movimentações…" /> : statementErrors[account.id] ? "Extrato indisponível." : "Nenhuma movimentação registrada nesta conta."}</td></tr>}
               </tbody></table>
             </div>
             <p className="hubbuy-statement-mobile-hint muted">Deslize a tabela para ver os valores e o saldo após.</p>

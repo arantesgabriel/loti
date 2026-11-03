@@ -502,6 +502,16 @@ p {
     font-size: 21px;
 }
 
+.surface-heading-with-icon {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+}
+.surface-heading-with-icon > div { min-width: 0; overflow-wrap: anywhere; }
+.surface-heading-with-icon > .category-marker { flex: 0 0 40px; width: 40px; height: 40px; }
+.surface-heading-with-icon .surface-subtitle { color: var(--muted); font-size: 12px; font-weight: 400; }
+
 .surface-head p {
     font-size: 13px;
 }

@@ -34,6 +34,25 @@
 .orders-product-button > .category-marker svg { width: 22px; height: 22px; }
 .orders-product-button > span:last-child { min-width: 0; }
 .orders-product-button strong { display: block; font-size: 14px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
+.orders-catalog-qc .cost-compact-identity {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px 12px;
+}
+.orders-catalog-qc .cost-compact-identity > .qc-product-photos-desktop {
+  grid-column: 2;
+  flex-wrap: wrap;
+  margin: 0;
+}
+.orders-catalog-qc .cost-compact-identity > .orders-product-button {
+  grid-column: 2;
+  grid-row: 1;
+}
+.orders-catalog-qc .cost-compact-identity > .qc-product-photos-mobile {
+  grid-column: 1;
+  grid-row: 1;
+  margin: 0;
+}
 .orders-catalog-row small, .orders-product-button small { display: block; margin-top: 6px; color: var(--orders-muted); font-size: 11px; line-height: 1.45; font-weight: 400; }
 .orders-catalog-stage .orders-badge { max-width: 100%; }
 .orders-catalog-units, .orders-catalog-cost { text-align: right; }

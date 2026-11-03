@@ -28,5 +28,7 @@ export default async function OrdersPage({
     view: ordersView(first(params.view)),
     page: Number.isSafeInteger(page) && page >= 0 ? Math.min(page, 10000) : 0,
   };
-  return <OrdersScreen key={JSON.stringify(initialFilters)} initialFilters={initialFilters} />;
+  const item = first(params.item);
+  const initialItemId = item && item.length <= 200 && !item.includes(",") ? item : undefined;
+  return <OrdersScreen key={JSON.stringify([initialFilters, initialItemId])} initialFilters={initialFilters} initialItemId={initialItemId} />;
 }

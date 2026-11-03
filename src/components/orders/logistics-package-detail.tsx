@@ -1,8 +1,12 @@
 "use client";
 
+import { LoadingState } from "@/components/ui/loading-state";
+
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { MoreHorizontal } from "lucide-react";
+import { ProductCategoryMarker } from "@/components/product-category-icons";
+import { QcGalleryButton } from "@/components/qc/qc-components";
 import { Button } from "@/components/ui/button";
 import { Surface as DialogSurface } from "@/components/ui/surface";
 import { PackageSurface as Surface } from "@/components/packages/package-surface";
@@ -10,8 +14,10 @@ import { costRequest, parseCostCents } from "@/components/packages/package-cost-
 import { formatMoney } from "@/lib/domain/money";
 import type { logisticsPackageServices } from "@/lib/domain/logistics-package-services";
 import type { WarehouseData } from "./orders-screen";
+import { OrderDetailPanel } from "./order-detail-panel";
 import { useWorkspace } from "@/components/workspace-provider";
 import "./orders.css";
+import "@/components/packages/product-costs.css";
 
 type Detail = Awaited<ReturnType<ReturnType<typeof logisticsPackageServices>["get"]>>;
 type LogisticsStage = "preparing" | "sent" | "received";
@@ -35,14 +41,14 @@ type Action =
   | "release";
 
 const titles: Record<Action, string> = {
-  review: "Conferir pacote legado",
+  review: "Confirmar pacote",
   close_content: "Fechar conteúdo",
   reopen_content: "Reabrir conteúdo",
   dispatch: "Registrar despacho",
   receive: "Registrar recebimento",
   close_financial: "Encerrar custos do pacote",
   reopen_financial: "Reabrir custos do pacote",
-  confirm_legacy_content: "Confirmar conteúdo legado fechado",
+  confirm_legacy_content: "Confirmar fechamento do conteúdo",
   freight: "Confirmar frete",
   customs: "Confirmar Receita",
   record_freight: "Informar frete",
@@ -68,7 +74,7 @@ const eventLabels: Record<string, string> = {
   regress_stage: "Etapa logística regredida",
   close_financial: "Custos encerrados",
   reopen_financial: "Custos reabertos",
-  confirm_legacy_content: "Conteúdo legado confirmado",
+  confirm_legacy_content: "Fechamento confirmado",
   pay_charge: "Pagamento confirmado",
   record_charge: "Valor informado",
   correct_charge: "Cobrança corrigida",
@@ -231,11 +237,10 @@ export function LogisticsPackageDetail({
   const [actionsOpen, setActionsOpen] = useState(false);
   const [allocationsOpen, setAllocationsOpen] = useState(false);
   const [moreActionsOpen, setMoreActionsOpen] = useState(false);
+  const [productDetailId, setProductDetailId] = useState<string | null>(null);
   const [stageDialogOpen, setStageDialogOpen] = useState(false);
   const [selectedLogisticsStage, setSelectedLogisticsStage] = useState<LogisticsStage>("preparing");
   const [regressionConfirmed, setRegressionConfirmed] = useState(false);
-  const actionsPanelRef = useRef<HTMLElement | null>(null);
-  const allocationsPanelRef = useRef<HTMLDivElement | null>(null);
 
   const url = "/api/logistics/packages/" + encodeURIComponent(packageId);
   const warehouseUrl = "/api/warehouse?packageId=" + encodeURIComponent(packageId) + "&pageSize=100";
@@ -265,14 +270,6 @@ export function LogisticsPackageDetail({
       active = false;
     };
   }, [url, warehouseUrl]);
-
-  useEffect(() => {
-    if (actionsOpen) actionsPanelRef.current?.scrollIntoView({ block: "start", behavior: "auto" });
-  }, [actionsOpen]);
-
-  useEffect(() => {
-    if (allocationsOpen) allocationsPanelRef.current?.scrollIntoView({ block: "start", behavior: "auto" });
-  }, [allocationsOpen]);
 
   function openLogisticsStageDialog() {
     if (!data || data.pkg.reviewState !== "confirmed") return;
@@ -435,7 +432,7 @@ export function LogisticsPackageDetail({
     return (
       <div className="orders-package-detail orders-package-detail--loading">
         <Link className="orders-package-detail-back" href={returnTo}>‹ Voltar aos pacotes</Link>
-        <p role={error ? "alert" : "status"}>{error || "Carregando pacote…"}</p>
+        {error ? <p role="alert">{error}</p> : <LoadingState label="Carregando pacote…" rows={3} />}
       </div>
     );
   }
@@ -514,10 +511,10 @@ export function LogisticsPackageDetail({
       ? "Pendente"
       : "Sem pendências";
   const freightSummary = freight === null || fee === null
-    ? "a conferir"
+    ? "sem valor informado"
     : formatMoney(freight + fee);
   const customsSummary = customs === null
-    ? "a conferir (cobrança independente)"
+    ? "sem valor informado"
     : formatMoney(customs) + " (cobrança independente)";
   const financialTotal = (inherited ?? 0) + (freight ?? 0) + (fee ?? 0) + (customs ?? 0);
   const packageItems = [...new Set(data.reservations.map((reservation) => reservation.costItemId))]
@@ -530,11 +527,7 @@ export function LogisticsPackageDetail({
         count: data.reservations.filter((reservation) => reservation.costItemId === costItemId).length,
       };
     });
-  const orderIds = [...new Set(packageItems.flatMap((item) => item.row ? [item.row.order.id] : []))];
-  const productNameLines: string[] = [];
-  for (let index = 0; index < packageItems.length; index += 2) {
-    productNameLines.push(packageItems.slice(index, index + 2).map((item) => item.name).join(" · "));
-  }
+  const productDetail = warehouse?.rows.find(row => row.costItemId === productDetailId);
   const personName = (id: string) =>
     workspace.members.find((member) => member.id === id)?.name ?? "Membro";
   const recordChargeAvailable = editable && hasUnits;
@@ -547,7 +540,6 @@ export function LogisticsPackageDetail({
   const freightActionLabel = freightAction === "correct_freight" ? "Corrigir frete" : "Informar frete";
   const canCloseFinancial = contentClosed && freightPaid && customsResolved;
   const canDispatch = pkg.reviewState === "confirmed" && contentClosed && freightPaid && data.inPackage;
-  const allocationLinkLabel = allocationsOpen ? "Rateios por participante  ▾" : "Rateios por participante  ▸";
   const mobileCostParts = [
     freight === null ? "Frete" : null,
     fee === null ? "taxa" : null,
@@ -556,7 +548,7 @@ export function LogisticsPackageDetail({
   const mobileCostNote = mobileCostParts.length
     ? `${mobileCostParts.length > 1
       ? mobileCostParts.slice(0, -1).join(", ") + " e " + mobileCostParts.at(-1)
-      : mobileCostParts[0]} a conferir`
+      : mobileCostParts[0]} sem valor informado`
     : freightPaymentPending || customsPaymentPending
       ? [freightPaymentPending ? "pagamento do frete" : null, customsPaymentPending ? "pagamento da Receita" : null]
         .filter((part): part is string => part !== null)
@@ -570,9 +562,9 @@ export function LogisticsPackageDetail({
     : pkg.stage === "sent"
       ? `${data.unitCount} ${data.unitCount === 1 ? "unidade a caminho" : "unidades a caminho"}`
       : `${data.unitCount} ${data.unitCount === 1 ? "unidade recebida" : "unidades recebidas"}`;
-  const mobileContentSummary = orderIds.length
+  const mobileContentSummary = packageItems.length
     ? `${packageItems.length} ${packageItems.length === 1 ? "produto vinculado" : "produtos vinculados"} ao pacote`
-    : "Itens do pacote sem pedido vinculado";
+    : "Nenhum produto vinculado ao pacote";
   const mobileFinanceChecks = [
     freight === null || fee === null ? "Frete, taxa" : null,
     customs === null ? "Receita" : null,
@@ -582,7 +574,7 @@ export function LogisticsPackageDetail({
     customsPaymentPending ? "Receita não paga" : null,
   ].filter((part): part is string => part !== null);
   const mobileFinanceSummary = [
-    mobileFinanceChecks.length ? `${mobileFinanceChecks.join(" e ")} a conferir` : null,
+    mobileFinanceChecks.length ? `${mobileFinanceChecks.join(" e ")} sem valor informado` : null,
     ...mobileFinancePayments,
   ].filter((part): part is string => part !== null).join(" · ") || "Custos e pagamentos conferidos";
 
@@ -613,7 +605,7 @@ export function LogisticsPackageDetail({
             Informar frete
           </Button>
         )}
-        <Button
+        {freightAction && <Button
           type="button"
           variant="outline"
           size="icon"
@@ -622,13 +614,13 @@ export function LogisticsPackageDetail({
           onClick={() => setMoreActionsOpen(true)}
         >
           <MoreHorizontal size={20} aria-hidden="true" />
-        </Button>
+        </Button>}
       </header>
 
       {error && <p role="alert" className="form-error">{error}</p>}
       {pkg.reviewState === "pending_review" && (
         <p className="orders-package-review-notice">
-          Conferência legada pendente. Confira primeiro a conta e chegada dos itens em{" "}
+          Para confirmar o pacote, registre a chegada e a conta dos itens em{" "}
           <Link href="/orders">Pedidos</Link>.
         </p>
       )}
@@ -655,6 +647,7 @@ export function LogisticsPackageDetail({
                   className={
                     "orders-package-tracker-line"
                     + (index < stageIndex ? " is-complete" : "")
+                    + (index === stageIndex ? " is-progressing" : "")
                   }
                   aria-hidden="true"
                 />
@@ -672,7 +665,7 @@ export function LogisticsPackageDetail({
             {[0, 1, 2].map((index) => (
               <span
                 key={index}
-                className={index <= stageIndex ? "is-active" : undefined}
+                className={index <= stageIndex ? "is-active" : index === stageIndex + 1 ? "is-progressing" : undefined}
               />
             ))}
           </div>
@@ -689,13 +682,12 @@ export function LogisticsPackageDetail({
             <button
               type="button"
               className="orders-package-text-action orders-package-allocation-toggle"
-              aria-controls="orders-package-rateios"
-              aria-expanded={allocationsOpen}
-              onClick={() => setAllocationsOpen((open) => !open)}
+              aria-haspopup="dialog"
+              onClick={() => setAllocationsOpen(true)}
             >
-              <span className="orders-package-allocation-desktop">{allocationLinkLabel}</span>
+              <span className="orders-package-allocation-desktop">Rateios por participante ›</span>
               <span className="orders-package-allocation-mobile">
-                {allocationsOpen ? "Ocultar rateios" : "Ver rateios ›"}
+                Ver rateios ›
               </span>
             </button>
           </div>
@@ -717,25 +709,25 @@ export function LogisticsPackageDetail({
             <div>
               <dt>Itens herdados</dt>
               <dd className={inherited === undefined ? "is-pending" : undefined}>
-                {inherited === undefined ? "A conferir" : formatMoney(inherited)}
+                {inherited === undefined ? "Custo indefinido" : formatMoney(inherited)}
               </dd>
             </div>
             <div>
               <dt>Frete Brasil</dt>
               <dd className={freight === null ? "is-pending" : undefined}>
-                {freight === null ? "A conferir" : formatMoney(freight)}
+                {freight === null ? "Sem valor" : formatMoney(freight)}
               </dd>
             </div>
             <div>
               <dt>Taxa do frete</dt>
               <dd className={fee === null ? "is-pending" : undefined}>
-                {fee === null ? "A conferir" : formatMoney(fee)}
+                {fee === null ? "Sem valor" : formatMoney(fee)}
               </dd>
             </div>
             <div>
               <dt>Receita</dt>
               <dd className={customs === null ? "is-pending" : undefined}>
-                {customs === null ? "A conferir" : formatMoney(customs)}
+                {customs === null ? "Sem valor" : formatMoney(customs)}
               </dd>
             </div>
           </dl>
@@ -801,30 +793,38 @@ export function LogisticsPackageDetail({
                 </span>
                 <span className="orders-package-step-summary-mobile">{mobileContentSummary}</span>
               </p>
-              <p className="orders-package-product-names">
-                {productNameLines.length
-                  ? productNameLines.map((line, index) => <span key={index}>{line}</span>)
-                  : "Sem unidades neste pacote."}
-              </p>
-              <div className="orders-package-order-links">
-                {orderIds.length === 1 ? (
-                  <Link href={"/orders/" + encodeURIComponent(orderIds[0])}>
-                    <span className="orders-package-order-link-desktop">Ver pedido, custos e QC</span>
-                    <span className="orders-package-order-link-mobile">Ver produtos e QC</span>
-                    <span aria-hidden="true"> →</span>
-                  </Link>
-                ) : orderIds.length > 1 ? (
-                  orderIds.map((orderId, index) => (
-                    <Link key={orderId} href={"/orders/" + encodeURIComponent(orderId)}>
-                      <span className="orders-package-order-link-desktop">{"Ver pedido " + (index + 1) + ", custos e QC"}</span>
-                      <span className="orders-package-order-link-mobile">{"Pedido " + (index + 1) + " · produtos e QC"}</span>
-                      <span aria-hidden="true"> →</span>
-                    </Link>
-                  ))
-                ) : (
-                  <span>Pedido e QC indisponíveis</span>
-                )}
-              </div>
+              {packageItems.length > 0 && (
+                <details className="orders-package-content-list">
+                  <summary>Ver produtos do pacote ({packageItems.length})</summary>
+                  <ul>
+                    {packageItems.map((item) => {
+                      const row = item.row;
+                      const purchaseId = row && warehouse?.origins.find(origin => origin.trackingId === row.cost.trackingId)?.purchaseId;
+                      const qcItemId = row?.cost.purchaseItemId ? `purchase:${row.cost.purchaseItemId}`
+                        : row?.cost.additionalOrderItemId ? `additional:${row.cost.additionalOrderItemId}` : null;
+                      const marker = <ProductCategoryMarker visualKey={row?.source.visualKey ?? "generic"} />;
+                      const content = <>
+                        <span className="orders-package-product-identity">
+                          <strong>{item.name}</strong>
+                          {item.row && <small>{item.row.source.variant || (item.row.order.kind === "additional" ? "Pedido adicional" : "Pedido original")}</small>}
+                        </span>
+                        <span className="orders-package-product-quantity">{item.count} un.</span>
+                      </>;
+                      const openProduct = () => setProductDetailId(item.costItemId);
+                      return <li key={item.costItemId}>
+                        {row && row.qcCount > 0 && purchaseId && qcItemId ? (
+                          <div className="orders-package-product-qc">
+                            <QcGalleryButton purchaseId={purchaseId} itemId={qcItemId} itemName={item.name} costThumbnails="mobile"
+                              costIdentity={{ marker, label: <button type="button" className="orders-package-product-copy" aria-haspopup="dialog" onClick={openProduct}>{content}</button> }} />
+                          </div>
+                        ) : row ? <button type="button" className="orders-package-product-row" aria-haspopup="dialog" onClick={openProduct}>
+                          {marker}<span className="orders-package-product-copy">{content}</span>
+                        </button> : <div className="orders-package-product-row">{marker}<span className="orders-package-product-copy">{content}</span></div>}
+                      </li>;
+                    })}
+                  </ul>
+                </details>
+              )}
             </div>
           </section>
 
@@ -850,22 +850,20 @@ export function LogisticsPackageDetail({
               <button
                 type="button"
                 className="orders-package-step-link orders-package-step-link-desktop"
-                aria-controls="orders-package-actions"
-                aria-expanded={actionsOpen}
-                onClick={() => setActionsOpen((open) => !open)}
+                aria-haspopup="dialog"
+                onClick={() => setActionsOpen(true)}
               >
-                {financePending ? "Conferir pendências" : "Ver ações do pacote"}
+                {financePending ? "Ver pendências" : "Ver ações do pacote"}
                 {" "}
                 <span aria-hidden="true">→</span>
               </button>
               <button
                 type="button"
                 className="orders-package-step-link orders-package-step-link-mobile"
-                aria-controls="orders-package-actions"
-                aria-expanded={actionsOpen}
-                onClick={() => setActionsOpen((open) => !open)}
+                aria-haspopup="dialog"
+                onClick={() => setActionsOpen(true)}
               >
-                Revisar custos <span aria-hidden="true">→</span>
+                {financePending ? "Ver pendências" : "Ver ações do pacote"} <span aria-hidden="true">→</span>
               </button>
             </div>
           </section>
@@ -873,12 +871,12 @@ export function LogisticsPackageDetail({
         </div>
       </div>
 
-      <div
-        id="orders-package-rateios"
-        className="orders-package-allocation-panel"
-        ref={allocationsPanelRef}
-        hidden={!allocationsOpen}
-        aria-label="Rateios por participante"
+      <Surface
+        title="Rateios por participante"
+        open={allocationsOpen}
+        onOpenChange={setAllocationsOpen}
+        sheet
+        className="orders-package-review-sheet orders-package-rateio-sheet"
       >
         {data.valuation && (
           <section className="orders-package-section orders-inherited-distribution" aria-labelledby="orders-inherited-heading">
@@ -966,8 +964,8 @@ export function LogisticsPackageDetail({
               <summary>
                 <span>
                   {charge.chargeType === "brazil_freight"
-                    ? "Encargo legado · frete e taxa"
-                    : "Encargo legado · Receita"}
+                    ? "Frete e taxa já registrados"
+                    : "Receita já registrada"}
                 </span>
                 <strong>
                   {formatMoney(charge.knownCents)}
@@ -975,7 +973,7 @@ export function LogisticsPackageDetail({
                 </strong>
               </summary>
               <p className="muted">
-                Parcelas preservadas da cobrança legada. Não são cobradas novamente nem possuem rateio físico por unidade.
+                Valores da cobrança original, divididos por participante.
               </p>
               {charge.items.map((item) => (
                 <article className="orders-legacy-allocation-item" key={item.costItemId}>
@@ -1000,19 +998,23 @@ export function LogisticsPackageDetail({
           {data.valuation?.charges.length === 0 && data.legacyProjections.every((charge) => !charge.active) && (
             <p>Nenhum encargo alocado neste pacote.</p>
           )}
-          {!data.valuation && <p>{data.valuationError ?? "Bases e parcelas a conferir antes da prévia."}</p>}
-          {freight === null && <p>Frete Brasil: pendente</p>}
-          {fee === null && <p>Taxa do frete: pendente</p>}
-          {customs === null && <p>Receita: pendente</p>}
+          {!data.valuation && <p className="orders-package-review-note">{data.valuationError ?? "Complete os custos dos produtos para ver a divisão."}</p>}
+          {(freight === null || fee === null || customs === null) && (
+            <dl className="orders-package-review-statuses">
+              {freight === null && <div><dt>Frete Brasil</dt><dd>Pendente</dd></div>}
+              {fee === null && <div><dt>Taxa do frete</dt><dd>Pendente</dd></div>}
+              {customs === null && <div><dt>Receita</dt><dd>Pendente</dd></div>}
+            </dl>
+          )}
         </section>
-      </div>
+      </Surface>
 
-      <section
-        id="orders-package-actions"
-        className="orders-package-action-panel"
-        ref={actionsPanelRef}
-        hidden={!actionsOpen}
-        aria-label="Ações disponíveis do pacote"
+      <Surface
+        title={financePending ? "Pendências do pacote" : "Ações do pacote"}
+        open={actionsOpen}
+        onOpenChange={setActionsOpen}
+        sheet
+        className="orders-package-review-sheet"
       >
         <section className="orders-package-section orders-package-financial" aria-labelledby="orders-costs-heading">
           <div className="orders-package-section-heading">
@@ -1031,7 +1033,7 @@ export function LogisticsPackageDetail({
             <article className="orders-charge-control">
               <div>
                 <h3>Frete Brasil</h3>
-                <p>{freight === null ? "A conferir" : formatMoney(freight)} · taxa {fee === null ? "a conferir" : formatMoney(fee)}</p>
+                <p>{freight === null ? "Sem valor" : formatMoney(freight)} · taxa {fee === null ? "sem valor informado" : formatMoney(fee)}</p>
                 {pkg.weightGrams && <p className="muted">Peso: {pkg.weightGrams} g</p>}
               </div>
               <div className="orders-context-actions">
@@ -1049,7 +1051,7 @@ export function LogisticsPackageDetail({
             <article className="orders-charge-control">
               <div>
                 <h3>Receita</h3>
-                <p>{customs === null ? "A conferir" : formatMoney(customs)}</p>
+                <p>{customs === null ? "Sem valor" : formatMoney(customs)}</p>
               </div>
               <div className="orders-context-actions">
                 {recordChargeAvailable && !customsPaid && (
@@ -1066,19 +1068,22 @@ export function LogisticsPackageDetail({
           </div>
           {data.legacyCharges.length > 0 && (
             <details className="orders-legacy-charges">
-              <summary>Encargos legados preservados</summary>
-              {data.legacyCharges.map((charge) => (
-                <p key={charge.id}>
-                  {charge.chargeType === "brazil_freight" ? "Frete" : "Receita"}:{" "}
-                  {charge.valueState === "pending"
-                    ? "Pendente"
-                    : charge.valueState === "no_charge"
-                      ? "Sem cobrança"
-                      : formatMoney(charge.amountCents ?? 0)}
-                  {" · "}
-                  {charge.paymentStatus === "paid" ? "Pago" : "Não confirmado"}
-                </p>
-              ))}
+              <summary>Cobranças já registradas</summary>
+              <dl className="orders-package-review-statuses">
+                {data.legacyCharges.map((charge) => (
+                  <div key={charge.id}>
+                    <dt>{charge.chargeType === "brazil_freight" ? "Frete" : "Receita"}</dt>
+                    <dd>
+                      {charge.valueState === "pending"
+                        ? "Pendente"
+                        : charge.valueState === "no_charge"
+                          ? "Sem cobrança"
+                          : formatMoney(charge.amountCents ?? 0)}
+                      <small>{charge.paymentStatus === "paid" ? "Pago" : "Não confirmado"}</small>
+                    </dd>
+                  </div>
+                ))}
+              </dl>
             </details>
           )}
         </section>
@@ -1123,11 +1128,11 @@ export function LogisticsPackageDetail({
             </div>
             <div className="orders-context-actions">
               {pkg.reviewState === "pending_review" && (
-                <Button onClick={() => setAction("review")}>Conferir legado</Button>
+                <Button onClick={() => setAction("review")}>Confirmar pacote</Button>
               )}
               {editable && pkg.legacyPackageId && !contentClosed && pkg.stage !== "preparing" && (
                 <Button onClick={() => setAction("confirm_legacy_content")}>
-                  Confirmar conteúdo legado fechado
+                  Confirmar fechamento do conteúdo
                 </Button>
               )}
               {pkg.reviewState === "confirmed" && (
@@ -1139,7 +1144,18 @@ export function LogisticsPackageDetail({
             </div>
           </div>
         </section>
-      </section>
+      </Surface>
+
+      <DialogSurface
+        open={!!productDetail}
+        onOpenChange={open => { if (!open) setProductDetailId(null); }}
+        title={productDetail?.name ?? "Detalhe do produto"}
+        subtitle={productDetail?.source.variant || (productDetail?.order.kind === "additional" ? "Pedido adicional" : "Pedido original")}
+        headingIcon={productDetail && <ProductCategoryMarker visualKey={productDetail.source.visualKey} />}
+        className="orders-foundation orders-package-product-dialog"
+      >
+        {productDetail && warehouse && <OrderDetailPanel row={productDetail} data={warehouse} members={workspace.members} readOnly />}
+      </DialogSurface>
 
       <details className="orders-package-history">
         <summary>
@@ -1208,27 +1224,6 @@ export function LogisticsPackageDetail({
               {freightActionLabel}
             </Button>
           )}
-          {orderIds.length === 1 ? (
-            <Link
-              className="orders-package-action-option is-secondary"
-              href={"/orders/" + encodeURIComponent(orderIds[0])}
-              onClick={() => setMoreActionsOpen(false)}
-            >
-              Ver produtos e QC
-            </Link>
-          ) : orderIds.length > 1 ? (
-            <Button
-              type="button"
-              variant="soft"
-              className="orders-package-action-option is-secondary"
-              onClick={() => {
-                setMoreActionsOpen(false);
-                document.getElementById("orders-package-content-title")?.scrollIntoView({ behavior: "smooth", block: "center" });
-              }}
-            >
-              Ver produtos e QC
-            </Button>
-          ) : null}
           <Button
             type="button"
             variant="outline"
@@ -1371,7 +1366,7 @@ export function LogisticsPackageDetail({
         >
           {action === "review" && (
             <>
-              <p>A confirmação registra a conferência de agora. Não cria chegada, pagamento ou despacho histórico.</p>
+              <p>Confirme a conta dos itens e informe se o conteúdo já está fechado.</p>
               <label>
                 Conta
                 <select name="account" required defaultValue={pkg.accountId ?? ""}>
@@ -1385,7 +1380,7 @@ export function LogisticsPackageDetail({
                 <label>
                   <span>
                     <input type="checkbox" name="closedContent" />
-                    {" "}Confirmei por evidência que o conteúdo legado está fechado agora.
+                    {" "}O conteúdo do pacote já está fechado.
                   </span>
                 </label>
               )}
@@ -1523,7 +1518,7 @@ export function LogisticsPackageDetail({
             <p>O manifesto anterior permanece no histórico. A reabertura não estorna pagamentos.</p>
           )}
           <label>
-            Evidência e motivo
+            Motivo do registro
             <textarea name="reason" required minLength={3} maxLength={1000} />
           </label>
           <Button

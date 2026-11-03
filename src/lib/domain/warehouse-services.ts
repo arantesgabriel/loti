@@ -95,7 +95,7 @@ export function warehouseServices(db: AppDatabase, userId: string) {
 
   async function account(tx: CostTransaction, workspaceId: string, accountId: string) {
     const row = await tx.select().from(s.hubbuyAccounts).where(and(eq(s.hubbuyAccounts.id,accountId),eq(s.hubbuyAccounts.workspaceId,workspaceId),isNull(s.hubbuyAccounts.deletedAt))).get();
-    if (!row || row.status !== "active") throw new DomainError("Selecione uma conta HubBuy ativa e conferida deste espaço.",409);
+    if (!row || row.status !== "active") throw new DomainError("Escolha uma conta HubBuy ativa neste grupo.",409);
   }
   async function event(tx: CostTransaction, workspaceId: string, resourceId: string, command: Command, before: unknown, after: unknown) {
     await tx.insert(s.logisticsEvents).values({id:crypto.randomUUID(),workspaceId,resourceId,action:command.operation,reason:command.reason,before,after,actorId:userId,createdAt:new Date()}).run();

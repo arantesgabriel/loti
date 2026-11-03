@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
+import { LoadingState } from "@/components/ui/loading-state";
 import { PackageSurfaceProvider } from "@/components/packages/package-surface";
 import { AdditionalProductEditor } from "@/components/packages/additional-product-editor";
 import { ItemCostSurface, type ItemCostDraft } from "@/components/packages/item-cost-surface";
@@ -76,17 +77,24 @@ export function OrderItemActions({ row, data, disabled, returnTo, children, onRe
   const originHref = `/orders/${encodeURIComponent(row.order.id)}?${new URLSearchParams({ item: row.costItemId, returnTo })}`;
   const blocked = disabled || busy || loading;
   return <PackageSurfaceProvider orders error={error} intro={action === "edit" && row.order.kind === "original" ? <p className="orders-action-notice">Nome, variação e quantidade pertencem à compra finalizada e permanecem no histórico. Aqui você corrige somente custos e divisão permitidos.</p> : undefined}>
-    <Button type="button" variant="ghost" className="orders-item-origin" aria-label={`Compra de origem de ${row.name}`} onClick={() => open("origin")}>Compra de origem{origin ? ` · ${origin.name}` : ""}</Button>
-    <section aria-label="Ações do item"><h3>Ações do item</h3>{children}
-      <div className="orders-item-context-actions"><Button type="button" variant="outline" disabled={disabled || busy} onClick={() => onReceive(row)} aria-label={`Conferir chegada de ${row.name}`}>Conferir chegada</Button><Button type="button" variant="ghost" disabled={blocked || !canEdit} title={!canEdit ? closed ? "Custos encerrados ou dados indisponíveis" : "Bases protegidas por reembolso" : undefined} onClick={() => open("edit")}>Editar item</Button>{canRefund && <Button type="button" variant="ghost" disabled={blocked} onClick={() => open("refund")}>Registrar reembolso</Button>}{refunds.length > 0 && <Button type="button" variant="ghost" disabled={blocked} onClick={() => open("refunds")}>Ver reembolsos · {refunds.length}</Button>}</div>
-      {loading && <p role="status">Conferindo ações disponíveis…</p>}
-      {!loading && !closed && !canRefund && freeUnits > 0 && <p>Para solicitar reembolso, confira a posição, as bases e o pagamento dos produtos na compra de origem.</p>}
-      {freeUnits <= 0 && !closed && <p>Retire unidades do pacote explicitamente antes de solicitar reembolso.</p>}
+    <div className="orders-item-primary-actions" role="group" aria-label="Ações do item">
+      <Button type="button" variant={row.reviewState === "pending_review" ? "default" : "outline"} disabled={disabled || busy} onClick={() => onReceive(row)} aria-label={`Registrar chegada de ${row.name}`}>Registrar chegada</Button>
+      <Button type="button" variant="outline" disabled={blocked || !canEdit} title={!canEdit ? loading ? "Carregando item" : closed ? "Custos encerrados ou indisponíveis" : "Edição indisponível para este item" : undefined} onClick={() => open("edit")}>Editar item</Button>
+    </div>
+    {children}
+    <details className="orders-item-more orders-item-other-actions">
+      <summary>Mais ações</summary>
+      <div className="orders-item-context-actions">
+        <Button type="button" variant="ghost" aria-label={`Compra de origem de ${row.name}`} onClick={() => open("origin")}>Compra de origem</Button>
+        {canRefund && <Button type="button" variant="ghost" disabled={blocked} onClick={() => open("refund")}>Registrar reembolso</Button>}
+        {refunds.length > 0 && <Button type="button" variant="ghost" disabled={blocked} onClick={() => open("refunds")}>Reembolsos ({refunds.length})</Button>}
+      </div>
+      {loading && <LoadingState label="Carregando ações…" />}
       {error && <p role="alert" className="orders-item-action-error">{error}</p>}
       {!loading && !detail && <Button variant="outline" onClick={() => { setLoading(true); setVersion(current => current + 1); }}>Atualizar ações</Button>}
-    </section>
+    </details>
     <OrdersContextSurface open={action === "origin"} onOpenChange={value => { if (!value) close(); }} title="Compra de origem" description="Resumo da origem do item selecionado.">
-      <div className="orders-origin-summary"><h3>{origin?.name ?? "Compra registrada"}</h3><dl><div><dt>Produto</dt><dd>{row.name}</dd></div><div><dt>Variação</dt><dd>{row.source.variant || "Sem variação"}</dd></div><div><dt>Origem</dt><dd>{row.order.kind === "additional" ? "Pedido adicional" : "Compra original"}</dd></div><div><dt>Conta HubBuy</dt><dd>{data.accounts.find(account => account.id === row.accountId)?.label ?? "A conferir"}</dd></div><div><dt>Pagamento</dt><dd>{row.paymentStatus === "paid" ? "Confirmado" : "Não confirmado"}</dd></div></dl><Link href={originHref}>Ver compra completa</Link><Button variant="outline" onClick={close}>Voltar ao item</Button></div>
+      <div className="orders-origin-summary"><h3>{origin?.name ?? "Compra registrada"}</h3><dl><div><dt>Produto</dt><dd>{row.name}</dd></div><div><dt>Variação</dt><dd>{row.source.variant || "Sem variação"}</dd></div><div><dt>Origem</dt><dd>{row.order.kind === "additional" ? "Pedido adicional" : "Compra original"}</dd></div><div><dt>Conta HubBuy</dt><dd>{data.accounts.find(account => account.id === row.accountId)?.label ?? "Sem conta"}</dd></div><div><dt>Pagamento</dt><dd>{row.paymentStatus === "paid" ? "Confirmado" : "Não confirmado"}</dd></div></dl><Link href={originHref}>Ver compra completa</Link><Button variant="outline" onClick={close}>Voltar ao item</Button></div>
     </OrdersContextSurface>
     {detail && action === "edit" && (row.order.kind === "additional" ? <AdditionalProductEditor key={row.costItemId} detail={detail} itemId={row.costItemId} busy={busy} onClose={close} mutate={mutate}/> : <ItemCostSurface key={row.costItemId} detail={detail} editor={{ id: row.costItemId, name: row.name }} initialInput={editDraft} busy={busy} onClose={close} onSave={async input => { await mutate("item.save", { input }); }}/>) }
     {detail && action === "refund" && <OrderRefundForm key={row.costItemId} detail={detail} itemId={row.costItemId} reservedUnits={row.reservations.map(reservation => reservation.unitIndex)} busy={busy} onClose={close} onSubmit={async input => { await mutate("refund.request", { input }); }}/>}

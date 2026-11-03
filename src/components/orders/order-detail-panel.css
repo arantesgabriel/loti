@@ -37,12 +37,57 @@
 }
 
 .orders-item-detail { gap: 16px; }
+.orders-item-primary-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.orders-item-primary-actions > .button { flex: 1 1 auto; min-height: 44px; font-size: 12px; }
+.orders-item-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--orders-border);
+  border-radius: var(--orders-radius);
+  background: var(--orders-surface-muted);
+}
+.orders-item-metrics section + section { padding-left: 12px; border-left: 1px solid var(--orders-border); }
+.orders-item-detail .orders-item-metric { margin: 0; color: var(--orders-foreground); font-size: 17px; font-weight: 650; overflow-wrap: anywhere; }
+.orders-item-metrics small { color: var(--orders-muted); }
+.orders-item-secondary > details + details { border-top: 1px solid var(--orders-border); }
+.orders-item-other-actions { border-top: 1px solid var(--orders-border); }
 .orders-item-detail h3 { font-size: 12px; margin-bottom: 8px; }
+.orders-item-detail .orders-item-identity h3 { margin: 0 0 3px; font-size: 15px; overflow-wrap: anywhere; }
 .orders-item-detail .orders-item-available { font-size: 25px; }
 .orders-item-detail .orders-item-total { color: var(--orders-foreground); font-size: 24px; font-weight: 700; line-height: 1.2; letter-spacing: -.03em; }
 .orders-item-total small { display: block; margin-top: 6px; color: var(--orders-muted); font-size: 11px; font-weight: 400; }
 .orders-item-more { margin-top: 8px; }
 .orders-item-more summary { cursor: pointer; min-height: 32px; padding: 8px 0; color: var(--orders-muted); font-size: 11px; }
+.orders-item-breakdown > summary { color: var(--orders-foreground); font-size: 12px; font-weight: 600; }
+.orders-item-breakdown .orders-item-quantities {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 4px 0 12px;
+  padding: 10px 12px;
+  border-radius: var(--orders-radius);
+  background: var(--orders-surface-muted);
+}
+.orders-item-quantities dt { font-size: 11px; }
+.orders-item-quantities dd { color: var(--orders-foreground); font-size: 15px; font-variant-numeric: tabular-nums; }
+.orders-item-quantities dd[data-missing="true"] { color: var(--orders-muted); font-size: 11px; font-weight: 400; }
+.orders-item-package-meta { display: grid; gap: 8px; margin: 0; }
+.orders-item-package-meta > div { display: grid; grid-template-columns: minmax(80px, 28%) minmax(0, 1fr); gap: 8px; }
+.orders-item-package-meta dt { color: var(--orders-muted); font-size: 11px; }
+.orders-item-package-meta dd { margin: 0; overflow-wrap: anywhere; }
+.orders-item-breakdown .orders-item-packages { list-style: none; padding: 0; margin: 10px 0 0; }
+.orders-item-breakdown .orders-item-packages a {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  border-top: 1px solid var(--orders-border);
+  font-weight: 500;
+  text-decoration: none;
+}
+.orders-item-breakdown .orders-item-packages a:hover > span { text-decoration: underline; }
+.orders-item-breakdown .orders-item-packages small { color: var(--orders-muted); font-size: 11px; font-weight: 400; }
 .orders-item-costs > div:last-child { margin-top: 10px; padding-top: 0; border: 0; font-weight: 400; }
 .orders-item-costs > div:last-child dd { font-size: 12px; }
 .orders-item-selection { display: flex; justify-content: space-between; align-items: center; gap: 12px; }

@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingState } from "@/components/ui/loading-state";
+
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ArrowDown, ChevronDown, ChevronRight, ListFilter, Package, Plus, Search } from "lucide-react";
@@ -197,7 +199,7 @@ export function LogisticsPackagesScreen({ initialQuery }: { initialQuery: Packag
           <Button type="button" variant="outline" onClick={() => { setError(""); setRetryKey(value => value + 1); }}>Tentar novamente</Button>
         </div>
       )}
-      {loading && <p className="orders-package-loading" role="status">Carregando pacotes…</p>}
+      {loading && <LoadingState label="Carregando pacotes…" rows={3} />}
 
       {!loading && !error && data && !rows.length && (
         <div className="orders-package-empty">
@@ -230,7 +232,7 @@ export function LogisticsPackagesScreen({ initialQuery }: { initialQuery: Packag
                   <div>
                     <Link className="orders-package-name" href={detailHref}>{row.pkg.name}</Link>
                     <p>{secondary}</p>
-                    {row.pkg.reviewState === "pending_review" && <p className="orders-package-review">Conferência legada pendente</p>}
+                    {row.pkg.reviewState === "pending_review" && <p className="orders-package-review">Pacote precisa de confirmação</p>}
                   </div>
                 </div>
                 <div className="orders-package-logistics">
