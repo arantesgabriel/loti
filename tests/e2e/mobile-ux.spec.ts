@@ -52,7 +52,8 @@ test("the global empty Favorites state keeps one mobile creation action", async 
   await page.goto("/favorites");
   await expect(page.locator(".favorites-browser")).toBeHidden();
   await expect(page.locator(".favorites-toolbar")).toBeHidden();
-  await expect(page.locator(".mobile-collections")).toBeHidden();
+  await expect(page.locator(".mobile-collections")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Nova coleção", exact: true })).toBeVisible();
   await expect(page.locator(".favorites-mobile-add")).toBeVisible();
   await expect(page.locator(".favorites-empty-create")).toBeHidden();
 });
@@ -62,7 +63,7 @@ test("collection editor fills mobile viewports, stays compact on desktop, and re
   const origin = test.info().project.use.baseURL ?? "http://localhost:3100";
   const favorite = await page.request.post("/api/app", {
     headers: { Origin: origin },
-    data: { operation: "favorite.save", input: { name: "Mobile UX favorite", variant: null, priceCents: 12345678, platform: "weidian", url: "https://weidian.com/item.html?itemID=mobile-ux" } },
+    data: { operation: "favorite.save", workspaceId: (await (await page.request.get("/api/app")).json()).workspaceId, input: { name: "Mobile UX favorite", variant: null, priceCents: 12345678, platform: "weidian", url: "https://weidian.com/item.html?itemID=mobile-ux" } },
   });
   expect(favorite.ok()).toBeTruthy();
 

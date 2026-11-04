@@ -97,9 +97,9 @@ export function createAuth(db: AuthDatabase, operator = false, options: AuthOpti
         const session = await getAuthoritativeSessionFromCtx(ctx);
         if (!session) throw APIError.from("UNAUTHORIZED", { code: "PROFILE_SESSION_REQUIRED", message: "Entre na sua conta para continuar." });
         try {
-          await authorization(db as AppDatabase, session.user.id).requireWorkspaceMember();
+          await authorization(db as AppDatabase, session.user.id).requireWorkspaceAccess();
         } catch {
-          throw APIError.from("FORBIDDEN", { code: "PROFILE_MEMBERSHIP_REQUIRED", message: "Você não faz parte deste espaço." });
+          throw APIError.from("FORBIDDEN", { code: "PROFILE_WORKSPACE_REQUIRED", message: "Você não tem acesso a um espaço." });
         }
 
         if (ctx.path === "/update-user") {

@@ -2,12 +2,13 @@ import { describe, expect, it } from "vitest";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import { legacyMigrationsFolder } from "../fixtures/orders-transition/legacy-migrations";
 import { openDatabase } from "@/lib/db/connection";
-import { user, workspaceMembers, workspaces } from "@/lib/db/schema";
+import { user, workspaceMembers } from "@/lib/db/schema";
 import { buildLegacyScenario } from "../fixtures/orders-transition/scenario";
 import { compareLegacyScenario } from "../fixtures/orders-transition/compare";
 import { seedScenarioQc } from "../fixtures/orders-transition/qc";
 import { qcServices } from "@/lib/domain/qc-services";
 import type { QcStorage } from "@/lib/qc/storage";
+import { insertSharedWorkspaces } from "./helpers";
 
 describe("orders transition legacy contract", () => {
   it("reproduces exact anchors through real services, FIFO, corrections and private synthetic QC", async () => {
@@ -16,7 +17,7 @@ describe("orders transition legacy contract", () => {
       await migrate(db, { migrationsFolder: legacyMigrationsFolder() });
       const people = ["qa-a", "qa-b", "qa-c", "qa-d"], now = new Date();
       await db.insert(user).values([...people, "qa-outsider", "qa-foreign"].map(id => ({ id, name: id, email: `${id}@loti.test`, emailVerified: true, createdAt: now, updatedAt: now }))).run();
-      await db.insert(workspaces).values([{ id: "loti", name: "Loti QA", createdAt: now }, { id: "foreign", name: "Foreign QA", createdAt: now }]).run();
+      await insertSharedWorkspaces({ db, client }, [{ id: "loti", name: "Loti QA", createdAt: now }, { id: "foreign", name: "Foreign QA", createdAt: now }]);
       await db.insert(workspaceMembers).values([...people.map(userId => ({ workspaceId: "loti", userId, createdAt: now })), { workspaceId: "foreign", userId: "qa-foreign", createdAt: now }]).run();
       const identity = await buildLegacyScenario(db, people);
       const before = await compareLegacyScenario(db, identity, { mode: "capture" });

@@ -5,6 +5,7 @@ test("favorite cards keep price, metadata and footer aligned across content vari
   const auth = await page.request.post("/api/auth/sign-in/email", { headers: { Origin: "http://localhost:3100" }, data: { email: "gabriel@loti.test", password: "Loti-Dev-Only-2026!" } });
   expect(auth.ok()).toBe(true);
   await page.goto("/favorites");
+  const workspaceId = (await (await page.request.get("/api/app")).json()).workspaceId as string;
   const longName = "Alinhamento QA · Tênis para caminhada com acabamento especial e descrição muito longa para testar a leitura da grade de favoritos";
   const favorites = [
     { name: "Alinhamento QA · Tênis", variant: null, priceCents: 9500, platform: "hubbuy" },
@@ -16,10 +17,10 @@ test("favorite cards keep price, metadata and footer aligned across content vari
   ];
   const headers = { Origin: "http://localhost:3100" };
   for (const [index, fields] of favorites.entries()) {
-    const response = await page.request.post("/api/app", { headers, data: { operation: "favorite.save", input: { ...fields, url: `https://weidian.com/item.html?itemID=layout-${index}` } } });
+    const response = await page.request.post("/api/app", { headers, data: { operation: "favorite.save", workspaceId, input: { ...fields, url: `https://weidian.com/item.html?itemID=layout-${index}` } } });
     expect(response.ok()).toBe(true);
   }
-  await page.request.post("/api/app", { headers, data: { operation: "preference.view", input: "cards" } });
+  await page.request.post("/api/app", { headers, data: { operation: "preference.view", workspaceId, input: "cards" } });
   await page.reload();
   await page.getByLabel("Buscar favoritos").fill("Alinhamento QA");
   const cards = page.getByTestId("favorite");
@@ -58,6 +59,6 @@ test("favorite cards keep price, metadata and footer aligned across content vari
   await expect(page.getByRole("dialog").getByRole("heading", { name: longName, exact: true })).toBeVisible();
   const updated = await (await page.request.get("/api/app")).json();
   for (const favorite of updated.favorites.filter((f: { name: string }) => f.name.startsWith("Alinhamento QA"))) {
-    expect((await page.request.post("/api/app", { headers, data: { operation: "favorite.delete", id: favorite.id } })).ok()).toBe(true);
+    expect((await page.request.post("/api/app", { headers, data: { operation: "favorite.delete", workspaceId, id: favorite.id } })).ok()).toBe(true);
   }
 });

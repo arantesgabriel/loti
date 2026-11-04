@@ -43,6 +43,8 @@ Authentication email extension: [`31_AUTH_EMAIL_SECURITY_PLAN.md`](31_AUTH_EMAIL
 | `37_HUBBUY_MANUAL_BALANCE_ADJUSTMENTS_PLAN.md` | Implementation handoff for manual CNY credits/debits, promotional bonuses, audited reversals, individual ownership and zero-BRL refund compatibility |
 | `38_HUBBUY_BALANCE_TRACEABILITY_PLAN.md` | Implementation plan for historical balance origins, paid costs, received credits, consumption destinations, exhausted lots and audited restorations per person |
 | `39_ORDERS_WAREHOUSE_AND_PACKAGES_PLAN.md` | Complete handoff for Orders/warehouse, packages across purchases in the same account, restricted refunds, conservative legacy migration and a mandatory synthetic development rehearsal |
+| `40_PERSONAL_WORKSPACES_PLAN.md` | Approved owner-only personal workspace foundation, migration/provisioning, active-context resolution and server authorization boundaries |
+| `41_PERSONAL_PURCHASES_AND_HISTORY_HANDOFF.md` | Frente 3 implementation handoff for personal purchases and History, changed files, validation and explicit dependencies for Frente 4 |
 | `audits/2026-10-17_HUBBUY_BALANCE_AND_MIXED_PAYMENTS.md` | Technical and functional investigation supporting the HubBuy balance and mixed-payment proposal |
 | `design/REFERENCES.md` | Figma and palette inspiration URLs |
 | `design/PACKAGES_AND_COSTS_REFERENCES.md` | Approved A/B/C/D visual references, images and acceptance for Pacotes e custos |

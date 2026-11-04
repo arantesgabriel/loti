@@ -19,7 +19,14 @@ export const account = sqliteTable("account", {
 export const verification = sqliteTable("verification", {
   id: text("id").primaryKey(), identifier: text("identifier").notNull(), value: text("value").notNull(), expiresAt: timestamp("expires_at"), ...dates(),
 }, t => [index("verification_identifier_idx").on(t.identifier)]);
-export const workspaces = sqliteTable("workspaces", { id: text("id").primaryKey(), name: text("name").notNull(), createdAt: timestamp("created_at") });
+export const workspaces = sqliteTable("workspaces", {
+  id: text("id").primaryKey(), name: text("name").notNull(),
+  kind: text("kind", { enum: ["personal", "shared"] }).notNull().default("shared"),
+  ownerUserId: text("owner_user_id").references(() => user.id),
+  createdAt: timestamp("created_at"),
+}, t => [
+  uniqueIndex("workspace_personal_owner_idx").on(t.ownerUserId).where(sql`${t.kind} = 'personal'`),
+]);
 export const workspaceMembers = sqliteTable("workspace_members", {
   workspaceId: text("workspace_id").notNull().references(() => workspaces.id), userId: text("user_id").notNull().references(() => user.id), createdAt: timestamp("created_at"),
 }, t => [primaryKey({ columns: [t.workspaceId, t.userId] })]);

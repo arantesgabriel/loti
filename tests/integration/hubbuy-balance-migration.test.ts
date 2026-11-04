@@ -5,8 +5,9 @@ import { describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import { openDatabase } from "@/lib/db/connection";
-import { financialOperations, hubbuyBalanceCreditShares, hubbuyBalanceEntries, hubbuyExternalItems, user, workspaceMembers, workspaces } from "@/lib/db/schema";
+import { financialOperations, hubbuyBalanceCreditShares, hubbuyBalanceEntries, hubbuyExternalItems, user, workspaceMembers } from "@/lib/db/schema";
 import { hubbuyBalanceServices } from "@/lib/domain/hubbuy-balance-services";
+import { insertSharedWorkspaces } from "./helpers";
 
 describe("HubBuy ledger migration", () => {
   it("preserves a reconciled credit and its individual shares across the ledger constraint rebuild", async () => {
@@ -26,7 +27,7 @@ describe("HubBuy ledger migration", () => {
         { id: "alice", name: "Alice", email: "alice@ledger-migration.test", emailVerified: true, createdAt: now, updatedAt: now },
         { id: "bob", name: "Bob", email: "bob@ledger-migration.test", emailVerified: true, createdAt: now, updatedAt: now },
       ]).run();
-      await db.insert(workspaces).values({ id: "workspace", name: "Loti", createdAt: now }).run();
+      await insertSharedWorkspaces({ db, client }, [{ id: "workspace", name: "Loti", createdAt: now }]);
       await db.insert(workspaceMembers).values([
         { workspaceId: "workspace", userId: "alice", createdAt: now },
         { workspaceId: "workspace", userId: "bob", createdAt: now },

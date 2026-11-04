@@ -5,10 +5,11 @@ import { describe, expect, it } from "vitest";
 import { getTableColumns, sql } from "drizzle-orm";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import { openDatabase } from "@/lib/db/connection";
-import { hubbuyExternalItems, purchaseCostCharges, purchaseCostRefundEvents, purchaseCostRefundParticipants, purchaseCostRefunds, purchaseCostTrackings, purchaseItemCosts, purchaseItems, purchases, qcEvents, qcImagePreviews, qcImageSources, qcImages, qcImports, qcPresentations, user, workspaceMembers, workspaces } from "@/lib/db/schema";
+import { hubbuyExternalItems, purchaseCostCharges, purchaseCostRefundEvents, purchaseCostRefundParticipants, purchaseCostRefunds, purchaseCostTrackings, purchaseItemCosts, purchaseItems, purchases, qcEvents, qcImagePreviews, qcImageSources, qcImages, qcImports, qcPresentations, user, workspaceMembers } from "@/lib/db/schema";
 import { packageCostServices } from "@/lib/domain/package-cost-services";
 import {initializeLegacyPurchaseCosts} from "@/lib/domain/purchase-cost-initialization";
 import {legacyMigrationsFolder} from "../fixtures/orders-transition/legacy-migrations";
+import { insertSharedWorkspaces } from "./helpers";
 
 describe("QC migration from the refund baseline", () => {
   it("preserves an open tracking, a closed tracking, snapshots, paid fees and received refund events", async () => {
@@ -30,7 +31,7 @@ describe("QC migration from the refund baseline", () => {
       await migrate(db, { migrationsFolder: legacyMigrationsFolder() });
       const now = new Date("2026-10-14T12:00:00.000Z");
       await db.insert(user).values([{ id: "alice", name: "Alice", email: "alice@qc-migration.test", emailVerified: true, createdAt: now, updatedAt: now }, { id: "bob", name: "Bob", email: "bob@qc-migration.test", emailVerified: true, createdAt: now, updatedAt: now }]).run();
-      await db.insert(workspaces).values({ id: "workspace", name: "Loti", createdAt: now }).run();
+      await insertSharedWorkspaces({ db, client }, [{ id: "workspace", name: "Loti", createdAt: now }]);
       await db.insert(workspaceMembers).values([{ workspaceId: "workspace", userId: "alice", createdAt: now }, { workspaceId: "workspace", userId: "bob", createdAt: now }]).run();
       await db.insert(purchases).values([
         { id: "refund-history", workspaceId: "workspace", name: "Refund history", status: "finalized", createdBy: "alice", createdAt: now, finalizedAt: now },

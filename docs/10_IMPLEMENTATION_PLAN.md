@@ -167,6 +167,10 @@ Do not stop for approval between phases. Stop only for a genuine human-only bloc
 
 Implementation order: additive schema → atomic invitation services and integration/race tests → Meu grupo API/UI → public acceptance and login return → browser journeys and existing regression checks → migrations and build. Detailed decisions and acceptance criteria: `18_WORKSPACE_INVITATIONS_PLAN.md`.
 
+## Personal workspace foundation — approved extension
+
+See `40_PERSONAL_WORKSPACES_PLAN.md`. Implementation order: additive schema/migration → owner-aware centralized authorization and idempotent provisioning → explicit operator command → private `getData()` and favorite/collection writes → shared-only invitation guard → migration, isolation, cross-space and concurrency tests. Signup, selector UI and adapting purchase, logistics and finance flows remain later fronts.
+
 ## HubBuy balance and mixed-payment extension
 
 The user approved the scoped post-MVP implementation in `26_HUBBUY_BALANCE_AND_MIXED_PAYMENTS_PLAN.md` on 17 October 2026, resolving individual credit rights, explicit CNY advances and same-tracking/same-account package admission. Follow its G0–G10 gates, preserve the legacy BRL calculation path, and keep real account reconciliation and production migration separate from synthetic local validation.

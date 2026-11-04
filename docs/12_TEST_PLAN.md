@@ -78,6 +78,10 @@ Cover:
 - atomic item + participant creation/update/removal, membership validation, global status, finalized immutability and concurrent finalization;
 - legacy input compatibility and rejection of ambiguous mixed payloads.
 
+### Personal workspace foundation
+
+Use isolated libSQL databases to verify empty and populated migration, repeated migration, shared classification, preservation of IDs/references/invitations/preferences and `PRAGMA foreign_key_check`. Cover idempotent and concurrent `ensurePersonalWorkspace`, preference preservation/fallback, owner-only `getData`/favorite/collection access, personal participant validation, shared-only invitation guards, and rejection of personal-favorite/shared-purchase mixing before writes. The focused suites are `tests/integration/personal-workspaces.test.ts` and `tests/integration/personal-workspace-migration.test.ts`.
+
 ## E2E — Playwright
 
 ### E2E 01: Favorite lifecycle

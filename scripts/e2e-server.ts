@@ -57,6 +57,8 @@ try {
   const manager = await qcManagerFixture.db.select({ id: user.id }).from(user).where(eq(user.email, "gabriel@loti.test")).get();
   if (!manager) throw new Error("The isolated QC E2E manager could not be provisioned.");
   process.env.LOTI_QC_MANAGER_USER_ID = manager.id;
+  const { ensurePersonalWorkspace } = await import("../src/lib/domain/personal-workspaces");
+  await ensurePersonalWorkspace(qcManagerFixture.db, manager.id);
 } finally { qcManagerFixture.client.close(); }
 // An existing credential account without group membership exercises invitation login.
 const { createAuth } = await import("../src/lib/auth/config");

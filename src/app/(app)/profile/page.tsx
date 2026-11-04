@@ -33,7 +33,7 @@ const categoryCopy: Record<SettingsCategory, { title: string; description: strin
 
 export default function Profile() {
   const router = useRouter();
-  const { data } = useWorkspace();
+  const { data, registerWorkspaceDraft } = useWorkspace();
   const [activeCategory, setActiveCategory] = useState<SettingsCategory>("profile");
   const [formPending, setFormPending] = useState(false);
   const [logoutBusy, setLogoutBusy] = useState(false);
@@ -42,6 +42,8 @@ export default function Profile() {
   const [compactTabs, setCompactTabs] = useState(false);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const busy = formPending || logoutBusy;
+
+  useEffect(() => registerWorkspaceDraft("profile", hasUnsavedChanges), [hasUnsavedChanges, registerWorkspaceDraft]);
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 900px)");
@@ -100,7 +102,9 @@ export default function Profile() {
     }
   }
 
-  const copy = categoryCopy[activeCategory];
+  const copy = activeCategory === "account" && data.workspaceKind === "personal"
+    ? { title: "Ações da conta", description: "Gerencie sua sessão neste espaço pessoal." }
+    : categoryCopy[activeCategory];
 
   return <div className="settings-page">
     <div className="page-heading">
@@ -173,7 +177,7 @@ export default function Profile() {
         />}
 
         {activeCategory === "account" && <div className="settings-account-actions">
-          <div className="settings-action-row">
+          {data.workspaceKind === "shared" && <div className="settings-action-row">
             <span className="settings-action-icon"><Users size={27} strokeWidth={1.7} aria-hidden="true" /></span>
             <div className="settings-action-copy">
               <h3>Meu grupo</h3>
@@ -182,7 +186,7 @@ export default function Profile() {
             <Button asChild variant="outline" className="settings-action-button">
               <Link href="/group">Acessar grupo</Link>
             </Button>
-          </div>
+          </div>}
           <div className="settings-action-row">
             <span className="settings-action-icon"><LogOut size={27} strokeWidth={1.7} aria-hidden="true" /></span>
             <div className="settings-action-copy">

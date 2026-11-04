@@ -34,7 +34,7 @@ Browser code never receives a database connection or Turso credentials. Applicat
 All sensitive reads and mutations go through server-side application code that:
 
 1. resolves the current Better Auth session;
-2. verifies workspace membership;
+2. verifies owner access for personal workspaces or membership for shared workspaces;
 3. applies ownership and purchase-state rules;
 4. validates input using Zod;
 5. executes Drizzle queries against Turso.
@@ -46,13 +46,16 @@ No RLS is required because the database is not exposed as a browser data API.
 Implement and reuse helpers conceptually equivalent to:
 
 - `requireUser()`
-- `requireWorkspaceMember()`
+- `requireWorkspaceAccess()` for owner-only personal or membership-based shared access;
+- `requireWorkspaceMember()` for shared-workspace actions only;
 - `requireFavoriteOwner()`
 - `requireCollectionOwner()`
 - `requireActivePurchase()`
 - `requireEditablePurchase()`
 
 Do not duplicate authorization conditionals across random UI/actions.
+
+`ensurePersonalWorkspace(userId)` creates one personal workspace under a database-enforced partial unique index and initializes `user_preferences.active_workspace_id` in the same transaction when needed. It preserves a valid active selection; otherwise one shared membership remains active, while accounts with no group or ambiguous multiple groups use the personal space. `scripts/provision-personal-workspaces.ts` is an explicit idempotent operator command. Signup is not implemented by this foundation.
 
 ## Better Auth
 
@@ -64,7 +67,7 @@ Email extension, 20 October 2026: the detailed contract in `31_AUTH_EMAIL_SECURI
 - operator tooling creates users;
 - production passwords/emails are human input, never hardcoded;
 - the Drizzle adapter remains configured with `provider: "sqlite"`.
-- profile edits reuse Better Auth's `/update-user` and `/change-password` endpoints, with path-scoped server hooks that validate trusted origin, authoritative session, workspace membership and strict payloads;
+- profile edits reuse Better Auth's `/update-user` and `/change-password` endpoints, with path-scoped server hooks that validate trusted origin, authoritative session, authorized workspace access and strict payloads;
 - password hooks enforce 12–128 characters, reject immediate reuse and force `revokeOtherSessions: true`; Better Auth owns verification, hashing, persistence and cookie rotation.
 
 `BETTER_AUTH_URL` must equal the deployed HTTPS origin. Keep `BETTER_AUTH_SECRET` server-only. Vercel preview environments should use the development database and matching preview URL configuration where sign-in is needed.

@@ -3,9 +3,12 @@
 ## Workspace and users
 
 1. Every application record belongs to a workspace, directly or through its parent.
-2. The MVP UI exposes one workspace only.
+2. The current UI exposes one active workspace context at a time; the personal-workspace foundation does not add a selector or multi-workspace navigation.
 3. All initial members have equal collaborative rights in purchases; there is no admin/editor/viewer role system.
 4. User identity comes from Better Auth.
+- A personal workspace has exactly one owner, has no `workspace_members` rows, and is accessible only to its owner. Each user can have at most one personal workspace.
+- A shared workspace has no owner field; access requires a `workspace_members` row. Group invitations and collaborative purchase actions are restricted to shared workspaces.
+- The active workspace preference is only a hint. Central authorization validates owner access or shared membership before selecting it; an invalid preference is discarded and fallback resolution never grants access.
 
 ## Favorites
 
@@ -117,7 +120,7 @@
 3. Name changes preserve the Better Auth user ID and every workspace, favorite, collection, purchase and preference relationship.
 4. Password changes require the current password and a new password of 12–128 characters. Password contents are never trimmed or normalized, and the confirmation is an exact client-side check.
 5. A password change rejects immediate reuse of the current password, revokes every other session, and rotates the session for the current device.
-6. Profile mutations require a valid session, workspace membership, and a trusted request origin. Request payloads cannot select another user or change email/image.
+6. Profile mutations require a valid session, access through personal ownership or shared-workspace membership, and a trusted request origin. Request payloads cannot select another user or change email/image.
 7. Historical purchase items remain product snapshots; identity labels continue to resolve from the current member record.
 
 ## Packages and costs extension

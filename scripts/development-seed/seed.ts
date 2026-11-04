@@ -242,7 +242,7 @@ export async function seedDevelopmentWorkspace(db: AppDatabase, password: string
     });
   }
   for (const email of ["mariana.ferreira@loti.test", "lucas.oliveira@loti.test"]) {
-    await step(`invitation-${email}`, async tx => { await invitationService(tx).issue(actor, email); return email; });
+    await step(`invitation-${email}`, async tx => { await invitationService(tx).issue(actor, email, seedWorkspaceId); return email; });
   }
   const activePurchaseId = await step("active-purchase", async tx => (await createServices(tx, actor).savePurchase({ name: "Próxima compra coletiva", hubbuyAccount: "Eletrônicos e acessórios" })).id);
   for (let index = 0; index < 10; index++) {

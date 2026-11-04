@@ -143,6 +143,18 @@
 - browser cannot directly query DB;
 - critical authorization is server-enforced.
 
+## Personal workspace foundation — approved extension
+
+- Every account can have at most one personal workspace with a required owner; every existing workspace remains shared after migration.
+- A personal workspace has no `workspace_members` rows and only its owner can read/write its favorites and collections.
+- An account with no group can load its personal data and save a private favorite through server services.
+- Provisioning is repeatable and parallel calls converge on the same workspace; an existing valid group selection and other user preferences remain intact.
+- A stale or foreign active-workspace preference cannot grant access and is discarded before authorized fallback resolution.
+- One shared group remains the legacy fallback; multiple groups without a valid preference resolve to the personal workspace once provisioned.
+- Group invitations and collaborative purchase actions reject a personal context on the server.
+- A user who has personal and shared workspaces can access each valid context, while mixing a personal favorite with a shared purchase is rejected before any write.
+- Upgrade preserves workspace IDs, references, memberships, invitations, active preferences, and foreign-key integrity. Empty installation and repeated migration also pass.
+
 ## HubBuy account deletion
 
 For HubBuy account deletion, an authorized member can remove an unused local account record with confirmation and reason. The record and audit remain retained; deleted accounts disappear from management and financial selectors. Balance, any ledger history (even net zero), started reconciliation, draft/voided orders, packages, payment sources, refunds including zero receipts, and historical audit references block deletion. Stale revisions, foreign workspaces, late writers and conflicting idempotency payloads are rejected. A lost response can be retried with the same key without duplicate deletion. External HubBuy accounts are unaffected. Full contract: [28](28_HUBBUY_ACCOUNT_DELETION_PLAN.md).

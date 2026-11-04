@@ -16,7 +16,7 @@ test("favorite lifecycle: create, search, edit with category marker", async ({ p
 test("another member sees the favorite and cannot mutate it", async ({ page }) => {
   await login(page, "brunna"); await page.getByLabel("Buscar favoritos").fill("E2E Gabriel"); await page.getByRole("button", { name: "Tênis E2E Gabriel editado", exact: true }).click(); await expect(page.getByRole("button", { name: "Editar favorito", exact: true })).toHaveCount(0);
   const data = await (await page.request.get("/api/app")).json(); const favorite = data.favorites.find((f: { name: string }) => f.name === "Tênis E2E Gabriel editado");
-  for (const operation of ["favorite.save", "favorite.delete"]) { const r = await page.request.post("/api/app", { headers: { Origin: "http://localhost:3100" }, data: { operation, id: favorite.id, input: { name: "Changed", url: favorite.url, priceCents: 100 } } }); expect(r.status()).toBe(403); }
+  for (const operation of ["favorite.save", "favorite.delete"]) { const r = await page.request.post("/api/app", { headers: { Origin: "http://localhost:3100" }, data: { operation, workspaceId: data.workspaceId, id: favorite.id, input: { name: "Changed", url: favorite.url, priceCents: 100 } } }); expect(r.status()).toBe(403); }
 });
 test("view preference survives reload and a new login", async ({ page }) => {
   await login(page); await page.getByRole("button", { name: "Cards", exact: true }).click(); await expect(page.getByTestId("favorites-content")).toHaveClass(/cards/); await page.reload(); await expect(page.getByRole("button", { name: "Cards", exact: true })).toHaveAttribute("aria-pressed", "true");

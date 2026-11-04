@@ -6,6 +6,8 @@
 
 Approved extension (20 October 2026): self-service email password recovery, mandatory native email verification before each new invitation membership, Resend transactional delivery and persistent distributed authentication/mail limits. Existing memberships keep access without marking legacy addresses verified. Public signup remains disabled. This supersedes older manual-only recovery/invitation-email exclusions. See `31_AUTH_EMAIL_SECURITY_PLAN.md`.
 
+Approved server foundation (3 November 2026): each account may have one owner-only personal workspace alongside any shared group workspaces. The personal workspace supports private favorites and collections; the current front adds no workspace selector or new navigation. Existing group data remains in its shared workspace. Provision existing accounts with `npm run workspace:provision-personal` after applying the reviewed migration. See `40_PERSONAL_WORKSPACES_PLAN.md`.
+
 - private email/password login;
 - no public signup screen;
 - one shared workspace in the UI;

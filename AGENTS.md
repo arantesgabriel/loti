@@ -29,6 +29,8 @@ For approved post-MVP extensions that are in scope for the current task, also re
 
 The approved Pedidos → Armazém → Pacotes extension is documented in `docs/39_ORDERS_WAREHOUSE_AND_PACKAGES_PLAN.md`; read its full handoff when it is in scope for the current task.
 
+The approved personal-workspace foundation is documented in `docs/40_PERSONAL_WORKSPACES_PLAN.md`; read its full handoff when workspace ownership, active-context resolution or authorization is in scope.
+
 The execution prompt is `PROMPT_ONE_SHOT.md`.
 
 ## Source of truth priority
@@ -54,6 +56,7 @@ Do **not** revive discarded architecture decisions such as Supabase, Neon, Postg
 - Migrations are applied explicitly to the target database; never run them inside a request lifecycle or automatically per request.
 - Browser code must never access SQLite directly.
 - Authorization is enforced server-side with centralized helpers.
+- Personal workspaces are owner-only with no `workspace_members` rows; shared workspaces require membership. Use `requireWorkspaceAccess()` for either kind and retain `requireWorkspaceMember()` for shared-only actions. See `docs/40_PERSONAL_WORKSPACES_PLAN.md`.
 - No public signup UI. Token-gated private invitations are approved: Profile → Meu grupo → email → generated link → acceptance → Favorites. See `docs/18_WORKSPACE_INVITATIONS_PLAN.md`.
 - Only one active purchase per workspace.
 - Favorites are personal but visible to the workspace.

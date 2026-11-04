@@ -3,12 +3,13 @@ import { eq } from "drizzle-orm";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import { legacyMigrationsFolder } from "../fixtures/orders-transition/legacy-migrations";
 import { openDatabase } from "@/lib/db/connection";
-import { hubbuyExternalItems, purchaseCostRefunds, purchaseItems, qcEvents, qcImages, qcImports, session, user, workspaceMembers, workspaces } from "@/lib/db/schema";
+import { hubbuyExternalItems, purchaseCostRefunds, purchaseItems, qcEvents, qcImages, qcImports, session, user, workspaceMembers } from "@/lib/db/schema";
 import { qcServices } from "@/lib/domain/qc-services";
 import type { QcStorage } from "@/lib/qc/storage";
 import { buildLegacyScenario } from "../fixtures/orders-transition/scenario";
 import { seedScenarioQc } from "../fixtures/orders-transition/qc";
 import { compareLegacyScenario, type ScenarioIdentity } from "../fixtures/orders-transition/compare";
+import { insertSharedWorkspaces } from "./helpers";
 
 describe("orders transition preservation comparison", () => {
   const { db, client } = openDatabase(":memory:");
@@ -28,7 +29,7 @@ describe("orders transition preservation comparison", () => {
     await migrate(db, { migrationsFolder: legacyMigrationsFolder() });
     const people = ["preserve-a", "preserve-b", "preserve-c", "preserve-d"], now = new Date();
     await db.insert(user).values(people.map(id => ({ id, name: id, email: `${id}@loti.test`, emailVerified: true, createdAt: now, updatedAt: now }))).run();
-    await db.insert(workspaces).values({ id: "loti", name: "Loti preservation QA", createdAt: now }).run();
+    await insertSharedWorkspaces({ db, client }, [{ id: "loti", name: "Loti preservation QA", createdAt: now }]);
     await db.insert(workspaceMembers).values(people.map(userId => ({ workspaceId: "loti", userId, createdAt: now }))).run();
     identity = await buildLegacyScenario(db, people, { beforeCorrections: async value => { await seedScenarioQc(db, value, storage); } });
     baseline = await compareLegacyScenario(db, identity, { mode: "capture" });
