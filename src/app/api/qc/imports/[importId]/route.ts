@@ -15,20 +15,21 @@ const choice = z.object({ externalKey: z.string().min(1).max(500), targetKey: z.
 const postSchema = z.discriminatedUnion("operation", [
   z.object({ operation: z.literal("confirm"), expectedRevision: revision, choices: z.array(choice).max(500) }).strict(),
   z.object({ operation: z.literal("batch"), expectedRevision: revision }).strict(),
-]);
+]).and(z.object({ workspaceId: z.string().min(1) }));
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   try {
-    const user = await requireUser(), { importId } = await context.params;
-    return NextResponse.json({ data: await qcServices(db, user.id).getImport(importId) }, { headers: qcPrivateHeaders });
+    const user = await requireUser(), { importId } = await context.params, workspaceId = new URL(request.url).searchParams.get("workspaceId") ?? undefined;
+    return NextResponse.json({ data: await qcServices(db, user.id, {}, workspaceId).getImport(importId) }, { headers: qcPrivateHeaders });
   } catch (error) { return qcFailure(error); }
 }
 
 export async function POST(request: Request, context: RouteContext) {
   try {
     requireQcOrigin(request);
-    const user = await requireUser(), { importId } = await context.params, service = qcServices(db, user.id, { signal: request.signal });
+    const user = await requireUser(), { importId } = await context.params;
     const body = postSchema.parse(await readBoundedJson(request));
+    const service = qcServices(db, user.id, { signal: request.signal }, body.workspaceId);
     const data = body.operation === "confirm" ? await service.confirmImport(importId, body.expectedRevision, body.choices) : await service.runImportBatch(importId, body.expectedRevision);
     return NextResponse.json({ data }, { headers: qcPrivateHeaders });
   } catch (error) { return qcFailure(error); }

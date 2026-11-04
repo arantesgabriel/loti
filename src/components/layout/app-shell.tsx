@@ -55,16 +55,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname(), params = useSearchParams();
   const { data, busy, switching, switchWorkspace } = useWorkspace();
   const personal = data.workspaceKind === "personal";
-  const personalNav = [nav[0], nav[1], nav[4]];
-  const desktopNav = personal ? personalNav : nav;
-  const mobileNav = personal ? personalNav : [...nav.slice(0, 4), moreNav];
+  const desktopNav = nav;
+  const mobileNav = [...nav.slice(0, 4), moreNav];
   const mobileNavRef = useRef<HTMLElement>(null), mobileNavItems = useRef(new Map<string, HTMLAnchorElement>());
   const [mobileNavSelection, setMobileNavSelection] = useState<{ left: number; width: number } | null>(null);
   const [pendingWorkspaceId, setPendingWorkspaceId] = useState<string | null>(null);
   const previousWorkspaceId = useRef(data.workspaceId);
   const selectedCollection = params.get("collection");
   const activeNav = path === hubbuyAccountsNav.href ? hubbuyAccountsNav : nav.find(item => path.startsWith(item.href));
-  const activeNavHref = personal ? activeNav?.href ?? "" : path === "/more" || path === "/history" || path === hubbuyAccountsNav.href ? moreNav.href : activeNav?.href ?? "";
+  const activeNavHref = path === "/more" || path === "/history" || path === hubbuyAccountsNav.href ? moreNav.href : activeNav?.href ?? "";
   const mine = data.collections.filter(collection => collection.ownerId === data.currentUser.id);
   const otherOwners = data.members.filter(member => member.id !== data.currentUser.id && data.collections.some(collection => collection.ownerId === member.id));
 
@@ -75,14 +74,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       router.replace("/history");
       return;
     }
-    if (personal && (path.startsWith("/orders") || path.startsWith("/packages") || path === "/more")) {
-      router.replace("/favorites");
+    if (changed && (path.startsWith("/orders/") || path.startsWith("/packages/detail/") || /^\/packages\/[^/]+$/.test(path))) {
+      router.replace(path.startsWith("/orders/") ? "/orders" : "/packages");
       return;
     }
     if (changed && path === "/favorites" && selectedCollection && selectedCollection !== "none" && !data.collections.some(collection => collection.id === selectedCollection)) {
       router.replace("/favorites");
     }
-  }, [data.workspaceId, data.collections, personal, path, selectedCollection, router]);
+  }, [data.workspaceId, data.collections, path, selectedCollection, router]);
 
   useLayoutEffect(() => {
     const updateSelection = () => {
@@ -130,7 +129,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <WorkspaceContextControl data={data} busy={busy} switching={switching} onChange={requestWorkspaceChange} compact={collapsed}/>
       <nav aria-label="Principal">{desktopNav.map(item => <Fragment key={item.href}>
         <Link className={"nav-item" + (path.startsWith(item.href) && !(item.href === "/packages" && path === "/packages/accounts") ? " selected" : "")} href={item.href} aria-label={item.label} title={collapsed ? item.label : undefined} aria-current={path.startsWith(item.href) && !(item.href === "/packages" && path === "/packages/accounts") ? "page" : undefined}><item.icon size={19} aria-hidden="true"/><span className="sidebar-label">{item.label}</span></Link>
-        {!personal && item.href === "/packages" && <Link className={"nav-item nav-item-accounts" + (path === hubbuyAccountsNav.href ? " selected" : "")} href={hubbuyAccountsNav.href} aria-label={hubbuyAccountsNav.label} title={collapsed ? hubbuyAccountsNav.label : undefined} aria-current={path === hubbuyAccountsNav.href ? "page" : undefined}><WalletCards size={19} aria-hidden="true"/><span className="sidebar-label">{hubbuyAccountsNav.label}</span></Link>}
+        {item.href === "/packages" && <Link className={"nav-item nav-item-accounts" + (path === hubbuyAccountsNav.href ? " selected" : "")} href={hubbuyAccountsNav.href} aria-label={hubbuyAccountsNav.label} title={collapsed ? hubbuyAccountsNav.label : undefined} aria-current={path === hubbuyAccountsNav.href ? "page" : undefined}><WalletCards size={19} aria-hidden="true"/><span className="sidebar-label">{hubbuyAccountsNav.label}</span></Link>}
       </Fragment>)}</nav>
       {!collapsed && path === "/favorites" && <nav className="sidebar-collections" aria-label="Coleções">
         <span className="section-label">Minhas coleções</span>{collectionLinks(data.currentUser.id)}{!mine.length && <p className="collection-empty muted">Organize seus favoritos em coleções.</p>}

@@ -25,6 +25,6 @@ export default async function OrderPage({params,searchParams}:{params:Promise<{o
   const order=await db.select().from(purchaseCostOrders).where(eq(purchaseCostOrders.id,orderId)).get();
   const tracking=await db.select().from(purchaseCostTrackings).where(eq(purchaseCostTrackings.id,order?.trackingId??orderId)).get();
   if(!tracking)notFound();
-  await authorization(db,user.id).requireWorkspaceMember(tracking.workspaceId);
+  await authorization(db,user.id).requireActiveWorkspaceContext(tracking.workspaceId);
   return <PackageCostDetailScreen trackingId={tracking.id} orders returnTo={safeOrdersReturnTo(first(query.returnTo))} focusItemId={first(query.item).slice(0,200)}/>;
 }

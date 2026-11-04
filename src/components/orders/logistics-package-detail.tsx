@@ -228,7 +228,7 @@ export function LogisticsPackageDetail({
   packageId: string;
   returnTo?: string;
 }) {
-  const { data: workspace } = useWorkspace();
+  const { data: workspace, registerWorkspaceDraft } = useWorkspace();
   const [data, setData] = useState<Detail | null>(null);
   const [warehouse, setWarehouse] = useState<WarehouseData | null>(null);
   const [error, setError] = useState("");
@@ -242,24 +242,26 @@ export function LogisticsPackageDetail({
   const [selectedLogisticsStage, setSelectedLogisticsStage] = useState<LogisticsStage>("preparing");
   const [regressionConfirmed, setRegressionConfirmed] = useState(false);
 
+  useEffect(() => registerWorkspaceDraft("logistics-package-editor", action !== null || stageDialogOpen), [registerWorkspaceDraft, action, stageDialogOpen]);
+
   const url = "/api/logistics/packages/" + encodeURIComponent(packageId);
   const warehouseUrl = "/api/warehouse?packageId=" + encodeURIComponent(packageId) + "&pageSize=100";
 
   const load = useCallback(async () => {
     const [result, warehouseResult] = await Promise.all([
-      costRequest<Detail>(url),
-      costRequest<WarehouseData>(warehouseUrl),
+      costRequest<Detail>(url, undefined, workspace.workspaceId),
+      costRequest<WarehouseData>(warehouseUrl, undefined, workspace.workspaceId),
     ]);
     if (result.ok && result.data) setData(result.data);
     else setError(result.error ?? "Não foi possível carregar o pacote.");
     if (warehouseResult.ok && warehouseResult.data) setWarehouse(warehouseResult.data);
-  }, [url, warehouseUrl]);
+  }, [url, warehouseUrl, workspace.workspaceId]);
 
   useEffect(() => {
     let active = true;
     void Promise.all([
-      costRequest<Detail>(url),
-      costRequest<WarehouseData>(warehouseUrl),
+      costRequest<Detail>(url, undefined, workspace.workspaceId),
+      costRequest<WarehouseData>(warehouseUrl, undefined, workspace.workspaceId),
     ]).then(([result, warehouseResult]) => {
       if (!active) return;
       if (result.ok && result.data) setData(result.data);
@@ -269,7 +271,7 @@ export function LogisticsPackageDetail({
     return () => {
       active = false;
     };
-  }, [url, warehouseUrl]);
+  }, [url, warehouseUrl, workspace.workspaceId]);
 
   function openLogisticsStageDialog() {
     if (!data || data.pkg.reviewState !== "confirmed") return;
@@ -350,8 +352,8 @@ export function LogisticsPackageDetail({
             packageId,
             reservationIds: form.getAll("reservation").map(String),
           },
-        })
-      : await costRequest(url, { idempotencyKey: crypto.randomUUID(), command });
+        }, workspace.workspaceId)
+      : await costRequest(url, { idempotencyKey: crypto.randomUUID(), command }, workspace.workspaceId);
     setBusy(false);
 
     if (!result.ok) {
@@ -408,10 +410,10 @@ export function LogisticsPackageDetail({
     const result = await costRequest<Detail>(url, {
       idempotencyKey: crypto.randomUUID(),
       command,
-    });
+    }, workspace.workspaceId);
     setBusy(false);
     if (!result.ok || !result.data) {
-      const refresh = await costRequest<Detail>(url);
+      const refresh = await costRequest<Detail>(url, undefined, workspace.workspaceId);
       if (refresh.ok && refresh.data) {
         setData(refresh.data);
         setSelectedLogisticsStage(refresh.data.pkg.stage);
@@ -529,7 +531,7 @@ export function LogisticsPackageDetail({
     });
   const productDetail = warehouse?.rows.find(row => row.costItemId === productDetailId);
   const personName = (id: string) =>
-    workspace.members.find((member) => member.id === id)?.name ?? "Membro";
+    workspace.members.find((member) => member.id === id)?.name ?? (workspace.workspaceKind === "personal" ? "Você" : "Membro");
   const recordChargeAvailable = editable && hasUnits;
   const recordFreightAvailable = recordChargeAvailable && !freightPaid;
   const freightAction: Action | null = recordFreightAvailable

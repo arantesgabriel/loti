@@ -67,7 +67,7 @@ const nowDate = (fn: () => number) => new Date(fn());
 const internalError = (error: unknown) => error instanceof DomainError ? error : error instanceof DOMException && error.name === "AbortError" ? new DomainError("A solicitação QC foi cancelada.", 503, "QC_REQUEST_ABORTED") : new DomainError("Não foi possível concluir a operação QC.", 500, "QC_INTERNAL");
 const uniqueError = (error: unknown) => /UNIQUE constraint failed|SQLITE_CONSTRAINT_UNIQUE/i.test(error instanceof Error ? error.message : String(error));
 
-export function qcServices(db: AppDatabase, userId: string, config: ManagerConfig = {}) {
+export function qcServices(db: AppDatabase, userId: string, config: ManagerConfig = {}, expectedWorkspaceId?: string) {
   const now = config.now ?? Date.now;
   const metrics = config.metrics ?? noopQcMetrics;
   const configuredConcurrency = config.pipelineConcurrency ?? (process.env.LOTI_QC_PIPELINE_CONCURRENCY ? Number(process.env.LOTI_QC_PIPELINE_CONCURRENCY) : 3);
@@ -107,7 +107,9 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
   }
 
   async function authorizedPurchase(purchaseId: string, manage = false) {
-    const purchase = await authorization(db, userId).requirePurchase(purchaseId);
+    const purchase = await authorization(db, userId).requirePurchaseAccess(purchaseId);
+    if (expectedWorkspaceId && expectedWorkspaceId !== purchase.workspaceId) throw new DomainError("A compra pertence a outro espaço. Atualize a página antes de continuar.", 409, "WORKSPACE_CONTEXT_CHANGED");
+    await authorization(db, userId).requireActiveWorkspaceContext(purchase.workspaceId);
     if (purchase.status !== "finalized") throw new DomainError("O QC só pode ser gerenciado em compras finalizadas.", 409, "QC_PURCHASE_NOT_FINALIZED");
     if (manage && (!managerId || userId !== managerId)) throw new DomainError("Você não pode administrar QC.", 403, "QC_FORBIDDEN");
     return purchase;
@@ -422,7 +424,8 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
     if (!validImage) throw new DomainError("Escolha uma foto QC disponível deste produto.", 422, "QC_COVER_IMAGE_INVALID");
     const stamp = nowDate(now);
     await db.transaction(async tx => {
-      await authorization(tx, userId).requirePurchase(purchaseId);
+      if (expectedWorkspaceId && expectedWorkspaceId !== purchase.workspaceId) throw new DomainError("A compra pertence a outro espaço. Atualize a página antes de continuar.", 409, "WORKSPACE_CONTEXT_CHANGED");
+      await authorization(tx, userId).requireActiveWorkspaceContext(purchase.workspaceId);
       const item = await resolveTarget(tx, purchaseId, target.key);
       if (!item) throw new DomainError("Produto não encontrado nesta compra.", 404, "QC_ITEM_NOT_FOUND");
       const current = target.origin === "purchase"
@@ -594,7 +597,8 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
       if (activeLock?.ownerId !== lock.ownerId || activeLock.version !== lock.version || activeLock.leaseUntil <= now()) throw new DomainError("A operação QC perdeu sua concessão antes de confirmar os vínculos.", 409, "QC_TRANSFER_LEASE_LOST");
       const fresh = await tx.select().from(qcImports).where(eq(qcImports.id, importId)).get();
       if (!fresh || fresh.revision !== expectedRevision || fresh.status !== "prepared") throw new DomainError("A prévia foi alterada em outra solicitação.", 409, "QC_REVISION_CONFLICT");
-      await authorization(tx, userId).requirePurchase(row.purchaseId);
+      if (expectedWorkspaceId && expectedWorkspaceId !== purchase.workspaceId) throw new DomainError("A compra pertence a outro espaço. Atualize a página antes de continuar.", 409, "WORKSPACE_CONTEXT_CHANGED");
+      await authorization(tx, userId).requireActiveWorkspaceContext(purchase.workspaceId);
       const requestedTargetKeys = manifest.rows.flatMap(entry => {
         const choice = choicesByKey.get(entry.occurrence.externalKey);
         const raw = choice ? choice.targetKey : normalizeQcMatch(entry.match).targetItemId;
@@ -767,7 +771,8 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
       return await db.transaction(async tx => {
         const activeLock = await tx.select().from(qcTransferLocks).where(eq(qcTransferLocks.scope, lock.scope)).get();
         if (activeLock?.ownerId !== lock.ownerId || activeLock.version !== lock.version || activeLock.leaseUntil <= now()) throw new DomainError("A operação QC perdeu sua concessão antes de confirmar o vínculo.", 409, "QC_TRANSFER_LEASE_LOST");
-        await authorization(tx, userId).requirePurchase(purchaseId);
+        if (expectedWorkspaceId && expectedWorkspaceId !== purchase.workspaceId) throw new DomainError("A compra pertence a outro espaço. Atualize a página antes de continuar.", 409, "WORKSPACE_CONTEXT_CHANGED");
+        await authorization(tx, userId).requireActiveWorkspaceContext(purchase.workspaceId);
         const external = await tx.select().from(hubbuyExternalItems).where(and(eq(hubbuyExternalItems.id, externalItemId), eq(hubbuyExternalItems.purchaseId, purchaseId))).get();
         if (!external) throw new DomainError("Ocorrência HubBuy não encontrada nesta compra.", 404, "QC_EXTERNAL_NOT_FOUND");
         if (external.revision !== expectedRevision || targetKeyForExternal(external) !== null) throw new DomainError("A ocorrência mudou desde que as pendências foram carregadas.", 409, "QC_REVISION_CONFLICT");

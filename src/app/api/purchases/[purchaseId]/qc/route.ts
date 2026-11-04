@@ -16,11 +16,11 @@ const postSchema = z.discriminatedUnion("operation", [
   z.object({ operation: z.literal("resolve"), externalItemId: z.string().min(1).max(200), expectedRevision: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER), targetKey: z.string().min(1).max(220) }).strict(),
   z.object({ operation: z.literal("batch"), externalItemId: z.string().min(1).max(200).optional() }).strict(),
   z.object({ operation: z.literal("reconcile") }).strict(),
-]);
+]).and(z.object({ workspaceId: z.string().min(1) }));
 
 export async function GET(request: Request, context: RouteContext) {
   try {
-    const user = await requireUser(), { purchaseId } = await context.params, service = qcServices(db, user.id, { signal: request.signal });
+    const user = await requireUser(), { purchaseId } = await context.params, workspaceId = new URL(request.url).searchParams.get("workspaceId") ?? undefined, service = qcServices(db, user.id, { signal: request.signal }, workspaceId);
     const params = new URL(request.url).searchParams;
     const itemIdsRaw = params.get("itemIds");
     if (itemIdsRaw !== null) {
@@ -40,8 +40,9 @@ export async function GET(request: Request, context: RouteContext) {
 export async function POST(request: Request, context: RouteContext) {
   try {
     requireQcOrigin(request);
-    const user = await requireUser(), { purchaseId } = await context.params, service = qcServices(db, user.id);
-    const body = postSchema.parse(await readBoundedJson(request));
+    const user = await requireUser(), { purchaseId } = await context.params, raw = z.object({ workspaceId: z.string().min(1) }).passthrough().parse(await readBoundedJson(request));
+    const { workspaceId, ...command } = raw, service = qcServices(db, user.id, {}, workspaceId);
+    const body = postSchema.parse({ ...command, workspaceId });
     const data = body.operation === "prepare"
       ? await service.prepare(purchaseId, body.data)
       : body.operation === "resolve"

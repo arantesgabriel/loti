@@ -82,6 +82,10 @@ Cover:
 
 Use isolated libSQL databases to verify empty and populated migration, repeated migration, shared classification, preservation of IDs/references/invitations/preferences and `PRAGMA foreign_key_check`. Cover idempotent and concurrent `ensurePersonalWorkspace`, preference preservation/fallback, owner-only `getData`/favorite/collection access, personal participant validation, shared-only invitation guards, and rejection of personal-favorite/shared-purchase mixing before writes. The focused suites are `tests/integration/personal-workspaces.test.ts` and `tests/integration/personal-workspace-migration.test.ts`.
 
+### Personal operational workflows
+
+`tests/integration/personal-orders-workflow.test.ts` covers finalization to personal cost tracking, owner-only participant reads, personal HubBuy account creation, unit receipt, reservation/package listing, isolation from another user, and stale-context rejection without changing package state. Exercise the same operational routes at desktop and mobile widths in `tests/e2e/workspaces.spec.ts`; preserve the five destinations in the mobile island and access History/HubBuy accounts through Mais. Run `tests/e2e/packages.spec.ts` to guard shared package navigation while the island changes.
+
 ## E2E — Playwright
 
 ### E2E 01: Favorite lifecycle

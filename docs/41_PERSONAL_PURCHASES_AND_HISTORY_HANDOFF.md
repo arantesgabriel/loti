@@ -47,6 +47,8 @@ O espaço pessoal permite criar e editar uma compra ativa, adicionar favoritos o
 
 ## Dependências para a Frente 4 — Pedidos, Armazém, Pacotes e custos
 
+Status atualizado: a integração pessoal descrita nas dependências abaixo foi concluída na Frente 4; veja [`42_PERSONAL_ORDERS_WAREHOUSE_PACKAGES_HANDOFF.md`](42_PERSONAL_ORDERS_WAREHOUSE_PACKAGES_HANDOFF.md) para as decisões, arquivos e validações.
+
 - A base de workspaces pessoais da Frente 1 precisa estar aplicada e provisionada nos ambientes de destino antes de publicar código que dependa dela. Esta entrega não aplica a migration `0029` nem provisiona usuários fora da base local descartável.
 - Os acompanhamentos de custo originados ao finalizar uma compra pessoal já têm `workspaceId`; portanto, consultas da Frente 4 devem continuar isolando tracking, pedido, itens, participante, custos, eventos e auditoria por esse mesmo workspace.
 - Nesta entrega, as rotas de Pacotes, Pedidos e Armazém continuam compartilhadas e protegidas por membership; os serviços de custos/logística/refundos/QC também preservam suas guardas compartilhadas. A Frente 4 deve decidir e implementar o suporte pessoal de forma explícita nas rotas, carregamento de dados e autorização, sem presumir que a existência de um tracking pessoal autoriza acesso aos fluxos compartilhados.

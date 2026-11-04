@@ -1,2 +1,2 @@
-import { SharedWorkspaceOnly } from "@/components/layout/shared-workspace-only";
-export default SharedWorkspaceOnly;
+import { WorkspaceAccessOnly } from "@/components/layout/shared-workspace-only";
+export default WorkspaceAccessOnly;

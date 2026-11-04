@@ -9,21 +9,23 @@ import { EmptyState } from "@/components/shared";
 import { Button } from "@/components/ui/button";
 import { costRequest, type CostTrackingSummary } from "./package-cost-client";
 import { formatMoney } from "@/lib/domain/money";
+import { useWorkspace } from "@/components/workspace-provider";
 
 type Filter = "open" | "closed";
 
 export function PackagesScreen() {
+  const { data: workspace } = useWorkspace();
   const [rows, setRows] = useState<CostTrackingSummary[]>([]), [filter, setFilter] = useState<Filter>("open"), [loading, setLoading] = useState(true), [error, setError] = useState("");
   useEffect(() => {
     let active = true;
-    void costRequest<CostTrackingSummary[]>("/api/packages").then(result => {
+    void costRequest<CostTrackingSummary[]>("/api/packages", undefined, workspace.workspaceId).then(result => {
       if (!active) return;
       if (result.ok && result.data) setRows(result.data);
       else setError(result.error ?? "Não foi possível carregar os acompanhamentos.");
       setLoading(false);
     });
     return () => { active = false; };
-  }, []);
+  }, [workspace.workspaceId]);
   const counts = useMemo(() => ({ open: rows.filter(row => row.tracking.status === "open").length, closed: rows.filter(row => row.tracking.status === "closed").length }), [rows]);
   const visible = rows.filter(row => row.tracking.status === filter).sort((a, b) => new Date(b.tracking.updatedAt ?? 0).getTime() - new Date(a.tracking.updatedAt ?? 0).getTime());
 

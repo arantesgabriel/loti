@@ -171,6 +171,10 @@ Implementation order: additive schema → atomic invitation services and integra
 
 See `40_PERSONAL_WORKSPACES_PLAN.md`. Implementation order: additive schema/migration → owner-aware centralized authorization and idempotent provisioning → explicit operator command → private `getData()` and favorite/collection writes → shared-only invitation guard → migration, isolation, cross-space and concurrency tests. Signup, selector UI and adapting purchase, logistics and finance flows remain later fronts.
 
+### Personal operational workflows — Frente 4
+
+See `39_ORDERS_WAREHOUSE_AND_PACKAGES_PLAN.md` and implementation handoff `42_PERSONAL_ORDERS_WAREHOUSE_PACKAGES_HANDOFF.md`. Pedidos, Armazém, Pacotes, costs, HubBuy accounts and the approved QC gallery work in both shared and owner-only personal workspaces. Enforce active context on reads and inside write transactions, keep memberships absent from personal workspaces, and retain group-only cross-person actions. No schema change is needed for this front.
+
 ## HubBuy balance and mixed-payment extension
 
 The user approved the scoped post-MVP implementation in `26_HUBBUY_BALANCE_AND_MIXED_PAYMENTS_PLAN.md` on 17 October 2026, resolving individual credit rights, explicit CNY advances and same-tracking/same-account package admission. Follow its G0–G10 gates, preserve the legacy BRL calculation path, and keep real account reconciliation and production migration separate from synthetic local validation.

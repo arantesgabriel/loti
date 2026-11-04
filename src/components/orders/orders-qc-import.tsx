@@ -7,6 +7,7 @@ import { costRequest } from "@/components/packages/package-cost-client";
 import { invalidateQcPurchase } from "@/components/qc/qc-components";
 import type { QcTransferSnapshot } from "@/components/qc/qc-import-progress";
 import type { ordersQcImport } from "@/lib/domain/orders-qc-import";
+import { useWorkspace } from "@/components/workspace-provider";
 import { OrdersIconButton } from "./orders-workspace";
 import { OrdersContextSurface } from "./orders-context-surface";
 import "./orders-actions.css";
@@ -15,20 +16,22 @@ type Preview = Awaited<ReturnType<ReturnType<typeof ordersQcImport>["preview"]>>
 type Prepared = Awaited<ReturnType<ReturnType<typeof ordersQcImport>["prepare"]>>["groups"][number];
 type Group = Omit<Prepared, "error"> & { error: string | null; complete?: boolean; ready?: number; total?: number };
 const endpoint = "/api/warehouse/qc-import";
-async function request<T>(url: string, body?: Record<string, unknown>) {
-  const result = await costRequest<T>(url, body);
+async function request<T>(url: string, body?: Record<string, unknown>, workspaceId?: string) {
+  const result = await costRequest<T>(url, body, workspaceId);
   if (!result.ok || !result.data) throw new Error(result.error ?? "Não foi possível confirmar a resposta. Retome a operação.");
   return result.data;
 }
 
 export function OrdersQcImport({ onChanged }: { onChanged: () => void }) {
+  const { data: workspace, registerWorkspaceDraft } = useWorkspace();
   const [allowed, setAllowed] = useState(false), [open, setOpen] = useState(false), [raw, setRaw] = useState("");
   const [fileName, setFileName] = useState("JSON colado"), [preview, setPreview] = useState<Preview | null>(null);
   const [choices, setChoices] = useState<Record<string, string>>({}), [groups, setGroups] = useState<Group[]>([]);
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const active = useRef(false), mounted = useRef(true);
   const groupsRef = useRef<Group[]>([]);
-  useEffect(() => { mounted.current = true; void costRequest<{ canManage: boolean }>(endpoint).then(result => { if (mounted.current) setAllowed(!!result.data?.canManage); }); return () => { mounted.current = false; }; }, []);
+  useEffect(() => registerWorkspaceDraft("orders-qc-import", busy || !!raw.trim() || !!preview), [registerWorkspaceDraft, busy, raw, preview]);
+  useEffect(() => { mounted.current = true; void costRequest<{ canManage: boolean }>(endpoint, undefined, workspace.workspaceId).then(result => { if (mounted.current) setAllowed(!!result.data?.canManage); }); return () => { mounted.current = false; }; }, [workspace.workspaceId]);
   function updateGroups(next: Group[]) { groupsRef.current = next; if (mounted.current) setGroups([...next]); }
   async function readFile(file: File) {
     setError("");
@@ -41,7 +44,7 @@ export function OrdersQcImport({ onChanged }: { onChanged: () => void }) {
     if (active.current) return; active.current = true; setBusy(true); setError("");
     try {
       if (new TextEncoder().encode(raw).byteLength > 1024 * 1024) throw new Error("O JSON excede 1 MiB.");
-      const data = await request<Preview>(endpoint, { operation: "preview", data: JSON.parse(raw) });
+      const data = await request<Preview>(endpoint, { operation: "preview", data: JSON.parse(raw) }, workspace.workspaceId);
       if (!mounted.current) return;
       setPreview(data); setChoices(Object.fromEntries(data.rows.map(row => [row.externalKey, row.targetKey ?? ""]))); updateGroups([]);
     } catch (cause) { if (mounted.current) setError(cause instanceof SyntaxError ? "O arquivo precisa conter um JSON válido." : cause instanceof Error ? cause.message : "Confira o JSON."); }
@@ -54,7 +57,7 @@ export function OrdersQcImport({ onChanged }: { onChanged: () => void }) {
       if (!work.length || work.some(group => !group.importId)) {
         const retryKeys = work.length ? new Set(work.filter(group => !group.importId).flatMap(group => group.choices.map(choice => choice.externalKey))) : null;
         const selected = preview.rows.filter(row => !retryKeys || retryKeys.has(row.externalKey)).map(row => ({ externalKey: row.externalKey, targetKey: choices[row.externalKey] || null }));
-        const prepared = await request<{ groups: Prepared[] }>(endpoint, { operation: "prepare", data: JSON.parse(raw), choices: selected });
+        const prepared = await request<{ groups: Prepared[] }>(endpoint, { operation: "prepare", data: JSON.parse(raw), choices: selected }, workspace.workspaceId);
         work = [...work.filter(group => !!group.importId), ...prepared.groups]; updateGroups(work);
       }
       for (const group of work) {
@@ -63,23 +66,23 @@ export function OrdersQcImport({ onChanged }: { onChanged: () => void }) {
         group.error = null; updateGroups(work);
         try {
           const url = `/api/qc/imports/${encodeURIComponent(group.importId)}`;
-          let snapshot = await request<QcTransferSnapshot>(url);
+          let snapshot = await request<QcTransferSnapshot>(url, undefined, workspace.workspaceId);
           if (snapshot.status === "prepared") {
-            try { await request(url, { operation: "confirm", expectedRevision: snapshot.revision, choices: group.choices }); }
+            try { await request(url, { operation: "confirm", expectedRevision: snapshot.revision, choices: group.choices }, workspace.workspaceId); }
             catch (cause) {
               // A lost response may already have confirmed the original manifest.
-              snapshot = await request<QcTransferSnapshot>(url);
+              snapshot = await request<QcTransferSnapshot>(url, undefined, workspace.workspaceId);
               if (snapshot.status !== "confirmed") throw cause;
             }
-            snapshot = await request<QcTransferSnapshot>(url);
+            snapshot = await request<QcTransferSnapshot>(url, undefined, workspace.workspaceId);
           }
           if (snapshot.status !== "confirmed") throw new Error("A prévia expirou. Analise o JSON novamente; fotos concluídas serão preservadas.");
           for (let batch = 0; batch < 40 && mounted.current; batch++) {
             group.ready = snapshot.photos.filter(photo => photo.state === "ready").length;
             group.total = snapshot.photos.length; updateGroups(work);
             if (!snapshot.nextSourceId) { group.complete = snapshot.photos.length > 0 && snapshot.photos.every(photo => photo.state === "ready"); break; }
-            const result = await request<{ processed: number; remaining: number; failed: number }>(url, { operation: "batch", expectedRevision: snapshot.revision });
-            snapshot = await request<QcTransferSnapshot>(url);
+            const result = await request<{ processed: number; remaining: number; failed: number }>(url, { operation: "batch", expectedRevision: snapshot.revision }, workspace.workspaceId);
+            snapshot = await request<QcTransferSnapshot>(url, undefined, workspace.workspaceId);
             if (!result.processed || result.failed) { group.error = "Parte das fotos ficou pendente. As concluídas estão salvas; use Retomar pendências."; break; }
           }
           group.ready = snapshot.photos.filter(photo => photo.state === "ready").length; group.total = snapshot.photos.length;

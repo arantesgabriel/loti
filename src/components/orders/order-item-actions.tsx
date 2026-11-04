@@ -12,6 +12,7 @@ import { costRequest } from "@/components/packages/package-cost-client";
 import type { CostTrackingView } from "@/lib/domain/package-cost-reading";
 import { formatMoney } from "@/lib/domain/money";
 import { OrdersContextSurface } from "./orders-context-surface";
+import { useWorkspace } from "@/components/workspace-provider";
 import type { WarehouseData } from "./orders-screen";
 import "./orders-actions.css";
 
@@ -22,6 +23,7 @@ export function OrderItemActions({ row, data, disabled, returnTo, children, onRe
   row: Row; data: WarehouseData; disabled: boolean; returnTo: string; children: ReactNode;
   onReceive: (row: Row) => void; onChanged: (replacement?: { previousId: string; nextId: string }) => void;
 }) {
+  const { data: workspace, registerWorkspaceDraft } = useWorkspace();
   const [detail, setDetail] = useState<CostTrackingView | null>(null), [action, setAction] = useState<Action>(null);
   const [recordAction, setRecordAction] = useState<RefundAction>(null), [busy, setBusy] = useState(false), [loading, setLoading] = useState(true);
   const [error, setError] = useState(""), [version, setVersion] = useState(0);
@@ -29,21 +31,22 @@ export function OrderItemActions({ row, data, disabled, returnTo, children, onRe
   const [editDraft, setEditDraft] = useState<ItemCostDraft | null>(null);
   const active = useRef(false), alive = useRef(true), trigger = useRef<HTMLElement | null>(null);
   const url = `/api/packages/${encodeURIComponent(row.cost.trackingId)}`;
+  useEffect(() => registerWorkspaceDraft(`order-item-action:${row.costItemId}`, (action !== null && action !== "origin") || !!recordAction || !!paymentReset || !!editDraft), [registerWorkspaceDraft, row.costItemId, action, recordAction, paymentReset, editDraft]);
   useEffect(() => {
     alive.current = true; let current = true;
-    void costRequest<CostTrackingView>(url).then(result => {
+    void costRequest<CostTrackingView>(url, undefined, workspace.workspaceId).then(result => {
       if (!current) return;
       setLoading(false);
       if (result.ok && result.data) { setDetail(result.data); setError(""); }
       else setError(result.error ?? "Não foi possível carregar as ações deste item.");
     });
     return () => { current = false; alive.current = false; };
-  }, [url, row.revision, version]);
+  }, [url, row.revision, version, workspace.workspaceId]);
   function open(next: Action) { trigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; setError(""); if (next === "edit") setEditDraft(null); setAction(next); }
   function close() { if (!active.current) { setAction(null); setRecordAction(null); setPaymentReset(null); requestAnimationFrame(() => trigger.current?.isConnected && trigger.current.focus({ preventScroll: true })); } }
   async function mutate(operation: string, rest: Record<string, unknown>) {
     if (active.current) return false; active.current = true; setBusy(true); setError("");
-    const result = await costRequest<CostTrackingView>(url, { operation, ...rest });
+    const result = await costRequest<CostTrackingView>(url, { operation, ...rest }, workspace.workspaceId);
     active.current = false;
     if (!alive.current) return false;
     setBusy(false);

@@ -19,7 +19,7 @@ export async function readCostTracking(db: CostDatabase, userId: string, trackin
   if (scope === "auto") scope = await usesOrdersWorkflow(db) ? "order" : "legacy";
   const tracking = await db.select().from(purchaseCostTrackings).where(eq(purchaseCostTrackings.id, trackingId)).get();
   if (!tracking) throw new DomainError("Acompanhamento de custos não encontrado.", 404);
-  await authorization(db, userId).requireWorkspaceMember(tracking.workspaceId);
+  const access = await authorization(db, userId).requireActiveWorkspaceContext(tracking.workspaceId);
   const purchase = await db.select().from(purchases).where(eq(purchases.id, tracking.purchaseId)).get();
   if (!purchase || purchase.workspaceId !== tracking.workspaceId) throw new DomainError("Acompanhamento de custos inválido.", 404);
 
@@ -27,7 +27,9 @@ export async function readCostTracking(db: CostDatabase, userId: string, trackin
     db.select().from(purchaseItemCosts).where(eq(purchaseItemCosts.trackingId, trackingId)).orderBy(asc(purchaseItemCosts.itemOrder)).all(),
     db.select().from(purchasePackages).where(eq(purchasePackages.trackingId, trackingId)).orderBy(asc(purchasePackages.packageOrder)).all(),
     db.select().from(purchaseCostCharges).where(eq(purchaseCostCharges.trackingId, trackingId)).orderBy(asc(purchaseCostCharges.chargeType)).all(),
-    db.select({ id: user.id, name: user.name, email: user.email }).from(user).innerJoin(workspaceMembers, eq(workspaceMembers.userId, user.id)).where(eq(workspaceMembers.workspaceId, tracking.workspaceId)).orderBy(asc(user.name)).all(),
+    access.kind === "personal"
+      ? db.select({ id: user.id, name: user.name, email: user.email }).from(user).where(eq(user.id, access.ownerUserId!)).all()
+      : db.select({ id: user.id, name: user.name, email: user.email }).from(user).innerJoin(workspaceMembers, eq(workspaceMembers.userId, user.id)).where(eq(workspaceMembers.workspaceId, tracking.workspaceId)).orderBy(asc(user.name)).all(),
     db.select().from(purchaseCostReopenings).where(eq(purchaseCostReopenings.trackingId, trackingId)).orderBy(desc(purchaseCostReopenings.reopenedAt)).all(),
     db.select().from(purchaseCostRefunds).where(eq(purchaseCostRefunds.trackingId, trackingId)).orderBy(asc(purchaseCostRefunds.requestedAt), asc(purchaseCostRefunds.id)).all(),
     db.select().from(purchaseCostOrders).where(eq(purchaseCostOrders.trackingId, trackingId)).orderBy(asc(purchaseCostOrders.createdAt), asc(purchaseCostOrders.id)).all(),
@@ -380,8 +382,9 @@ function safeEventDetails(value: string) {
 
 export type CostTrackingView = Awaited<ReturnType<typeof readCostTracking>>;
 
-export async function listCostTrackings(db: CostReadDatabase, userId: string) {
-  const membership = await authorization(db, userId).requireWorkspaceMember();
-  const rows = await db.select().from(purchaseCostTrackings).where(eq(purchaseCostTrackings.workspaceId, membership.workspaceId)).orderBy(desc(purchaseCostTrackings.updatedAt)).all();
+export async function listCostTrackings(db: CostReadDatabase, userId: string, workspaceId?: string) {
+  const access = await authorization(db, userId).requireWorkspaceAccess(workspaceId);
+  await authorization(db, userId).requireActiveWorkspaceContext(access.workspaceId);
+  const rows = await db.select().from(purchaseCostTrackings).where(eq(purchaseCostTrackings.workspaceId, access.workspaceId)).orderBy(desc(purchaseCostTrackings.updatedAt)).all();
   return Promise.all(rows.map(row => readCostTracking(db, userId, row.id)));
 }

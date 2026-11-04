@@ -14,12 +14,12 @@ export const ordersQcInput = z.discriminatedUnion("operation", [
 ]);
 
 /** Routing only. Parsing, manifests, association, covers and transfer stay in QC. */
-export function ordersQcImport(db: AppDatabase, userId: string, config: Parameters<typeof qcServices>[2] = {}) {
-  const qc = qcServices(db, userId, config);
+export function ordersQcImport(db: AppDatabase, userId: string, config: Parameters<typeof qcServices>[2] = {}, expectedWorkspaceId?: string) {
+  const qc = qcServices(db, userId, config, expectedWorkspaceId);
   async function scope() {
-    const membership = await authorization(db, userId).requireWorkspaceMember();
+    const access = await authorization(db, userId).requireActiveWorkspaceContext(expectedWorkspaceId ?? (await authorization(db, userId).resolveActiveWorkspace()).id);
     if (!qc.managerId || qc.managerId !== userId) throw new DomainError("Você não pode administrar QC.", 403, "QC_FORBIDDEN");
-    return membership.workspaceId;
+    return access.workspaceId;
   }
   async function capabilities() { await scope(); return { canManage: true }; }
 

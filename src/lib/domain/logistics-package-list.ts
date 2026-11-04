@@ -11,6 +11,7 @@ const filters = ["all", "pending", "preparing", "sent", "received", "content_clo
 const sorts = ["recent", "oldest", "name_asc", "name_desc"] as const;
 
 export const packageListQuerySchema = z.object({
+  workspaceId: z.string().min(1).max(200).optional(),
   page: z.coerce.number().int().min(0).max(10000).default(0),
   filter: z.enum(filters).default("all"),
   pendingOnly: z.enum(["true", "false"]).default("false").transform(value => value === "true"),
@@ -237,7 +238,9 @@ function compareRows(left: PackageRow, right: PackageRow, sort: PackageListQuery
 export async function listLogisticsPackages(db: AppDatabase, userId: string, input: unknown) {
   const query = packageListQuerySchema.parse(input);
   return readDatabaseSnapshot(db, async tx => {
-    const { workspaceId } = await authorization(tx, userId).requireWorkspaceMember();
+    const auth = authorization(tx, userId);
+    const activeWorkspace = await auth.resolveActiveWorkspace();
+    const { workspaceId } = await auth.requireActiveWorkspaceContext(query.workspaceId ?? activeWorkspace.id);
     const packages = await tx.select().from(s.logisticsPackages).where(eq(s.logisticsPackages.workspaceId, workspaceId)).orderBy(asc(s.logisticsPackages.id)).all();
     const packageIds = packages.map(row => row.id);
     if (!packageIds.length) return { rows: [], counts: { all: 0, pending: 0, preparing: 0, sent: 0, received: 0 }, pagination: { page: query.page, total: 0, hasMore: false } };

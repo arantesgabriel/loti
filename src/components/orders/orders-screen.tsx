@@ -45,7 +45,7 @@ export function OrdersScreen({
   initialFilters: OrdersFilters;
   initialItemId?: string;
 }) {
-  const { data: workspace } = useWorkspace();
+  const { data: workspace, registerWorkspaceDraft } = useWorkspace();
   const compact = useOrdersCompact();
   const [checking, setChecking] = useState(false);
   const [notice, setNotice] = useState("");
@@ -63,8 +63,8 @@ export function OrdersScreen({
   const [error, setError] = useState("");
   const [loadedRequestKey, setLoadedRequestKey] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [filters, setFilters] = useState(initialFilters);
-  const [draftFilters, setDraftFilters] = useState(initialFilters);
+  const [filters, setFilters] = useState(() => workspace.workspaceKind === "personal" ? { ...initialFilters, person: "" } : initialFilters);
+  const [draftFilters, setDraftFilters] = useState(() => workspace.workspaceKind === "personal" ? { ...initialFilters, person: "" } : initialFilters);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [panel, setPanel] = useState<OrdersPanelState>(initialItemId ? { kind: "item-detail", itemId: initialItemId } : { kind: "closed" });
   const [linkedItem, setLinkedItem] = useState(initialItemId);
@@ -87,6 +87,15 @@ export function OrdersScreen({
   const receiveReasonRef = useRef<HTMLTextAreaElement>(null);
   const reserveErrorRef = useRef<HTMLParagraphElement>(null);
 
+  useEffect(() => registerWorkspaceDraft("orders-warehouse-editor", reserve || !!receive || !!packageName.trim() || !!reason.trim()), [registerWorkspaceDraft, reserve, receive, packageName, reason]);
+
+  useEffect(() => {
+    if (workspace.workspaceKind === "personal" && initialFilters.person) {
+      const next = { ...initialFilters, person: "", page: 0 };
+      window.history.replaceState(window.history.state, "", filtersUrl(next));
+    }
+  }, [initialFilters, workspace.workspaceKind, workspace.workspaceId]);
+
   const query = useMemo(
     () =>
       new URLSearchParams({
@@ -102,14 +111,14 @@ export function OrdersScreen({
   const loading = loadedRequestKey !== requestKey;
   const advancedCount =
     Number(Boolean(filters.account)) +
-    Number(Boolean(filters.person)) +
+    Number(workspace.workspaceKind !== "personal" && Boolean(filters.person)) +
     Number(Boolean(filters.origin)) +
     Number(Boolean(filters.trackingId)) + Number(Boolean(filters.status));
   const hasAnyFilter = filterKeys.some((key) => key === "view" ? filters.view !== "all" : Boolean(filters[key]));
 
   useEffect(() => {
     let active = true;
-    void costRequest<WarehouseData>(`/api/warehouse?${query}`)
+    void costRequest<WarehouseData>(`/api/warehouse?${query}`, undefined, workspace.workspaceId)
       .then((result) => {
         if (!active) return;
         if (result.ok && result.data) {
@@ -134,7 +143,7 @@ export function OrdersScreen({
     return () => {
       active = false;
     };
-  }, [query, requestKey, filters]);
+  }, [query, requestKey, filters, workspace.workspaceId]);
 
   useEffect(() => {
     if (draftFilters.search.trim() === filters.search) return;
@@ -177,7 +186,7 @@ export function OrdersScreen({
       const fresh: Row[] = [];
       for (let offset = 0; offset < ids.length; offset += 20) {
         const query = new URLSearchParams({ itemIds: ids.slice(offset, offset + 20).join(","), pageSize: "100" });
-        const result = await costRequest<WarehouseData>(`/api/warehouse?${query}`);
+        const result = await costRequest<WarehouseData>(`/api/warehouse?${query}`, undefined, workspace.workspaceId);
         if (!result.ok || !result.data) throw new Error(result.error ?? "Não foi possível conferir a disponibilidade. Tente novamente.");
         fresh.push(...result.data.rows);
       }
@@ -271,7 +280,7 @@ export function OrdersScreen({
     busyRef.current = true; setBusy(true);
     const isReserve = command.operation === "reserve";
     const payload = isReserve ? (attempt.current ??= { idempotencyKey: crypto.randomUUID(), command }) : { idempotencyKey: crypto.randomUUID(), command };
-    const result = await costRequest<{ id: string }>("/api/warehouse", { workspaceId: workspace.workspaceId, ...payload });
+    const result = await costRequest<{ id: string }>("/api/warehouse", { workspaceId: workspace.workspaceId, ...payload }, workspace.workspaceId);
     busyRef.current = false; setBusy(false);
     if (!result.ok) {
       if (isReserve) {
@@ -320,7 +329,7 @@ export function OrdersScreen({
     filters.account
       ? `Conta: ${data?.accounts.find((account) => account.id === filters.account)?.label ?? "selecionada"}`
       : "",
-    filters.person
+    workspace.workspaceKind !== "personal" && filters.person
       ? `Pessoa: ${workspace.members.find((member) => member.id === filters.person)?.name ?? "selecionada"}`
       : "",
     filters.origin
@@ -410,11 +419,11 @@ export function OrdersScreen({
       {!loading && !error && total > 0 && <footer className="orders-list-footer"><span>Mostrando {filters.page * 20 + 1}–{Math.min((filters.page + 1) * 20, total)} de {total} {total === 1 ? "item" : "itens"}</span>{totalPages > 1 && <nav aria-label="Páginas de pedidos" className="orders-list-pagination"><Button type="button" variant="ghost" aria-label="Página anterior" disabled={filters.page === 0 || busy} onClick={() => movePage(filters.page - 1)}><ChevronLeft size={16} aria-hidden="true" /></Button><span aria-current="page">{filters.page + 1} / {totalPages}</span><Button type="button" variant="ghost" aria-label="Próxima página" disabled={!data?.pagination.hasMore || busy} onClick={() => movePage(filters.page + 1)}><ChevronRight size={16} aria-hidden="true" /></Button></nav>}</footer>}
       {selection.length > 0 && <div className="orders-selection-summary" aria-live="polite"><span>{selection.length} {selection.length === 1 ? "produto" : "produtos"} · {selectedUnitCount} {selectedUnitCount === 1 ? "unidade selecionada" : "unidades selecionadas"} · {selectedBase === null ? "Custo indefinido" : formatMoney(selectedBase)}</span><Button type="button" variant="ghost" disabled={locked} onClick={() => { replaceSelection({}); setSelectionError(""); }}>Limpar seleção</Button>{selectionError && <p role="alert">{selectionError}</p>}</div>}
       {selection.length > 0 && <div className="orders-preparation-mobile"><div><strong>{selection.length} {selection.length === 1 ? "produto" : "produtos"}</strong><small>{selectedUnitCount} {selectedUnitCount === 1 ? "unidade" : "unidades"}</small></div><Button type="button" disabled={prepareDisabled} onClick={prepareSelection}>Preparar pacote<ArrowRight size={14} aria-hidden="true" /></Button></div>}
-      <OrdersFilterSurface open={filtersOpen} onOpenChange={setFiltersOpen}>
+      <OrdersFilterSurface open={filtersOpen} onOpenChange={setFiltersOpen} description={workspace.workspaceKind === "personal" ? "Combine etapa, conta e origem." : "Combine etapa, conta, pessoa e origem."}>
         <form className="orders-filter-form" onSubmit={applyFilters}>
           <label>Etapa<select value={draftFilters.status} onChange={event => updateDraft("status", event.target.value)}>{stages.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
           <label>Conta<select value={draftFilters.account} onChange={event => updateDraft("account", event.target.value)}><option value="">Todas as contas</option>{data?.accounts.map(account => <option key={account.id} value={account.id}>{account.label}</option>)}</select></label>
-          <label>Pessoa<select value={draftFilters.person} onChange={event => updateDraft("person", event.target.value)}><option value="">Todas as pessoas</option>{workspace.members.map(person => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label>
+          {workspace.workspaceKind !== "personal" && <label>Pessoa<select value={draftFilters.person} onChange={event => updateDraft("person", event.target.value)}><option value="">Todas as pessoas</option>{workspace.members.map(person => <option key={person.id} value={person.id}>{person.name}</option>)}</select></label>}
           <label>Origem<select value={draftFilters.origin} onChange={event => updateDraft("origin", event.target.value)}><option value="">Todas as origens</option><option value="original">Compra</option><option value="additional">Adicional</option></select></label>
           <label>Compra<select value={draftFilters.trackingId} onChange={event => updateDraft("trackingId", event.target.value)}><option value="">Todas as compras</option>{data?.origins.map(origin => <option key={origin.trackingId} value={origin.trackingId}>{origin.name}</option>)}</select></label>
           <div className="orders-filter-actions"><Button type="button" variant="ghost" onClick={() => { setDraftFilters(current => ({ ...emptyOrdersFilters, search: current.search, view: current.view })); }}>Limpar campos</Button><Button type="submit">Aplicar filtros</Button></div>

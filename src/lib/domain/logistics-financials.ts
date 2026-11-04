@@ -31,7 +31,8 @@ export async function readWorkflowFinancialSummary(db:AppDatabase,userId:string)
   return readDatabaseSnapshot(db,tx=>readFinancialSnapshot(tx,userId));
 }
 async function readFinancialSnapshot(db:Pick<AppDatabase,"select">,userId:string){
-  const {workspaceId}=await authorization(db,userId).requireWorkspaceMember();
+  const auth=authorization(db,userId), active=await auth.resolveActiveWorkspace();
+  const {workspaceId}=await auth.requireActiveWorkspaceContext(active.id);
   const trackings=await db.select().from(s.purchaseCostTrackings).where(eq(s.purchaseCostTrackings.workspaceId,workspaceId)).all();
   const packages=await db.select().from(s.logisticsPackages).where(eq(s.logisticsPackages.workspaceId,workspaceId)).all();
   const [bridgeRows,manifestRows]=await Promise.all([

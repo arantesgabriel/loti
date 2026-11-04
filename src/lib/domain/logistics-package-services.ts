@@ -39,7 +39,7 @@ export function logisticsPackageServices(db:AppDatabase,userId:string) {
   async function getSnapshot(db:Pick<AppDatabase,"select">,packageId:string) {
     const pkg = await db.select().from(s.logisticsPackages).where(eq(s.logisticsPackages.id,packageId)).get();
     if (!pkg) throw new DomainError("Pacote não encontrado.",404);
-    await authorization(db,userId).requireWorkspaceMember(pkg.workspaceId);
+    await authorization(db,userId).requireActiveWorkspaceContext(pkg.workspaceId);
     const current=await detail(db,pkg);
     let valuation:Awaited<ReturnType<typeof manifest>>|null=null,listValuation:Awaited<ReturnType<typeof manifest>>|null=null,valuationError:string|null=null;
     try {
@@ -66,13 +66,14 @@ export function logisticsPackageServices(db:AppDatabase,userId:string) {
     const legacyFreight=legacyCharges.find(c=>c.chargeType==="brazil_freight");
     return {pkg,reservations,unitCount,manifests,events,legacyCharges,legacyProjections,ownership,inPackage:!!pkg.contentClosedAt && !!(ownership.freight?pkg.freightPaidAt:legacyFreight?.paymentStatus==="paid"?legacyFreight.paidAt:null)};
   }
-  async function execute(packageId:string,key:string,input:unknown) {
+  async function execute(packageId:string,key:string,input:unknown,expectedWorkspaceId?:string) {
     z.string().min(1).max(200).parse(key);
     const command = logisticsPackageCommandSchema.parse(input), payload=JSON.stringify({packageId,...command});
     return logisticsTransaction(() => db.transaction(async tx => {
       const pkg = await tx.select().from(s.logisticsPackages).where(eq(s.logisticsPackages.id,packageId)).get();
       if (!pkg) throw new DomainError("Pacote não encontrado.",404);
-      await authorization(tx,userId).requireWorkspaceMember(pkg.workspaceId);
+      if (expectedWorkspaceId && expectedWorkspaceId !== pkg.workspaceId) throw new DomainError("O pacote pertence a outro espaço. Atualize a página antes de salvar.",409,"WORKSPACE_CONTEXT_CHANGED");
+      await authorization(tx,userId).requireActiveWorkspaceContext(pkg.workspaceId);
       const prior = await tx.select().from(s.logisticsCommands).where(and(eq(s.logisticsCommands.workspaceId,pkg.workspaceId),eq(s.logisticsCommands.key,key))).get();
       if (prior) {
         if (prior.payload !== payload || prior.actorId !== userId) throw new DomainError("Chave de operação já utilizada.",409);

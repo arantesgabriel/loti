@@ -52,6 +52,7 @@ import {
   type FinancingPosition,
 } from "./additional-orders-panel";
 import { QcImportPanel } from "@/components/qc/qc-components";
+import { useWorkspace } from "@/components/workspace-provider";
 
 type Detail = CostTrackingView;
 type DetailPackage = Detail["packages"][number];
@@ -133,6 +134,7 @@ export function PackageCostDetailScreen({
   focusItemId?: string;
 }) {
   const router = useRouter();
+  const { data: workspace, registerWorkspaceDraft } = useWorkspace();
   const [detail, setDetail] = useState<Detail | null>(null),
     [loading, setLoading] = useState(true),
     [error, setError] = useState("");
@@ -171,7 +173,7 @@ export function PackageCostDetailScreen({
   }, []);
   useEffect(() => {
     let active = true;
-    void costRequest<Detail>(url).then((result) => {
+    void costRequest<Detail>(url, undefined, workspace.workspaceId).then((result) => {
       if (!active) return;
       if (result.status === 401)
         router.replace("/login?reason=session-expired");
@@ -187,7 +189,9 @@ export function PackageCostDetailScreen({
     return () => {
       active = false;
     };
-  }, [router, setCurrentDetail, url]);
+  }, [router, setCurrentDetail, url, workspace.workspaceId]);
+
+  useEffect(() => registerWorkspaceDraft("package-cost-editor", !!itemEditor || !!chargeEditor || !!refundItemId || !!settlement || !!additionalEditorId || !!associateItemId || !!closeConfirm || !!reopenOpen || !!resetConfirm), [registerWorkspaceDraft, itemEditor, chargeEditor, refundItemId, settlement, additionalEditorId, associateItemId, closeConfirm, reopenOpen, resetConfirm]);
 
   useEffect(() => {
     if (!focusRequestId) return;
@@ -247,7 +251,7 @@ export function PackageCostDetailScreen({
   ) {
     if (!detail || busy) return false;
     setBusy(true);
-    const result = await costRequest<Detail>(url, { operation, ...rest });
+    const result = await costRequest<Detail>(url, { operation, ...rest }, workspace.workspaceId);
     setBusy(false);
     if (result.status === 401) {
       router.replace("/login?reason=session-expired");
@@ -510,7 +514,7 @@ export function PackageCostDetailScreen({
     : "";
   const updatedByName =
     detail.members.find((person) => person.id === detail.tracking.updatedBy)
-      ?.name ?? "membro";
+      ?.name ?? (workspace?.workspaceKind === "personal" ? "você" : "membro");
   const finalizedDate = detail.purchase.finalizedAt
     ? new Date(detail.purchase.finalizedAt).toLocaleDateString("pt-BR", {
         timeZone: "America/Sao_Paulo",
@@ -881,7 +885,7 @@ export function PackageCostDetailScreen({
               </div>
               <p className="muted cost-hint">
                 O percentual fica registrado nesta cobrança mesmo se o padrão do
-                grupo mudar.
+                padrão do espaço mudar.
               </p>
             </div>
           </div>
@@ -1009,14 +1013,14 @@ export function PackageCostDetailScreen({
             Unidades individuais somam as quantidades dos itens atribuídos a uma só pessoa. Itens compartilhados contam uma linha do produto por participante, independentemente da quantidade.
           </p>
           <ul className="cost-people-list">
-            {detail.memberTotals.map((person) => (
+          {detail.memberTotals.map((person) => (
               <li key={person.personId}>
                 <Avatar name={person.name} />
                 <span>
                   <strong>{person.name}</strong>
                   <small>
-                    {unitsLabel(person.personalUnits)}{" individuais"}
-                    {person.sharedItems
+                    {workspace.workspaceKind === "personal" ? `${unitsLabel(person.personalUnits)} ${person.personalUnits === 1 ? "sua" : "suas"}` : `${unitsLabel(person.personalUnits)} individuais`}
+                    {workspace.workspaceKind !== "personal" && person.sharedItems
                       ? ` · ${person.sharedItems} ${person.sharedItems === 1 ? "item compartilhado" : "itens compartilhados"}`
                       : ""}
                     {person.receivedRefundCents > 0
@@ -1156,7 +1160,7 @@ export function PackageCostDetailScreen({
         }}
         onConfirm={() => void confirmReset()}
       />
-      {settlement && (
+      {settlement && workspace.workspaceKind !== "personal" && (
         <FinancingSettlementSurface
           orderId={settlement.orderId}
           position={settlement.position}

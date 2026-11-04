@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { OrdersBottomSheet } from "@/components/orders/orders-workspace";
 import { costRequest } from "@/components/packages/package-cost-client";
 import { formatMoney } from "@/lib/domain/money";
+import { useWorkspace } from "@/components/workspace-provider";
 import type { listLogisticsPackages, PackageListQuery } from "@/lib/domain/logistics-package-list";
 import "./orders.css";
 
@@ -44,6 +45,7 @@ function costTitle(row: PackageList["rows"][number]) {
 }
 
 export function LogisticsPackagesScreen({ initialQuery }: { initialQuery: PackageListQuery }) {
+  const { data: workspace } = useWorkspace();
   const [data, setData] = useState<PackageList | null>(null);
   const [error, setError] = useState("");
   const [loadedQuery, setLoadedQuery] = useState<string | null>(null);
@@ -59,7 +61,7 @@ export function LogisticsPackagesScreen({ initialQuery }: { initialQuery: Packag
 
   useEffect(() => {
     let active = true;
-    void costRequest<PackageList>(`/api/logistics/packages?${query}`)
+    void costRequest<PackageList>(`/api/logistics/packages?${query}`, undefined, workspace.workspaceId)
       .then(result => {
         if (!active) return;
         if (result.ok && result.data) {
@@ -76,7 +78,7 @@ export function LogisticsPackagesScreen({ initialQuery }: { initialQuery: Packag
         if (active) setLoadedQuery(requestKey);
       });
     return () => { active = false; };
-  }, [query, requestKey]);
+  }, [query, requestKey, workspace.workspaceId]);
 
   function updateQuery(next: PackageListQuery) {
     setQueryState(next);
@@ -114,7 +116,7 @@ export function LogisticsPackagesScreen({ initialQuery }: { initialQuery: Packag
       <header className="orders-package-heading">
         <div>
           <h1 id="packages-heading">Pacotes</h1>
-          <p>Envios e custos do grupo em um só lugar.</p>
+          <p>{workspace.workspaceKind === "personal" ? "Seus envios e custos em um só lugar." : "Envios e custos do grupo em um só lugar."}</p>
         </div>
         <Button asChild className="orders-package-create">
           <Link href="/orders"><Plus size={17} aria-hidden="true" /> Montar pacote</Link>
