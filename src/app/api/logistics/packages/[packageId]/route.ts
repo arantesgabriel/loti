@@ -13,9 +13,9 @@ export async function GET(_request:Request,context:Context) {
 export async function POST(request:Request,context:Context) {
   try {
     requirePackageCostOrigin(request); const user=await requireUser();
-    const body=z.object({idempotencyKey:z.string().min(1).max(200),command:z.unknown()}).strict().parse(await request.json());
+    const body=z.object({workspaceId:z.string().min(1),idempotencyKey:z.string().min(1).max(200),command:z.unknown()}).strict().parse(await request.json());
     const service=logisticsPackageServices(db,user.id),{packageId}=await context.params;
-    await service.execute(packageId,body.idempotencyKey,body.command);
+    await service.execute(packageId,body.idempotencyKey,body.command,body.workspaceId);
     return NextResponse.json({data:await service.get(packageId)},{headers:packageCostPrivateHeaders});
   }catch(error){return packageCostFailure(error);}
 }

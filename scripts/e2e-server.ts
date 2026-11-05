@@ -24,7 +24,7 @@ await new Promise<void>(resolve => mailServer.listen(3101, "localhost", resolve)
 process.env.LOTI_EMAIL_MODE = "resend";
 process.env.RESEND_API_KEY = "re_disposable_local_test_only";
 process.env.LOTI_EMAIL_TEST_API_URL = "http://localhost:3101";
-process.env.LOTI_EMAIL_TEST_RECIPIENTS = "new-invite@loti.test,session-recovery@loti.test,existing-invite@loti.test,reset-email-e2e@loti.test";
+process.env.LOTI_EMAIL_TEST_RECIPIENTS = "new-invite@loti.test,session-recovery@loti.test,existing-invite@loti.test,reset-email-e2e@loti.test,signup-front5@loti.test";
 const explicitE2eDatabaseUrl = process.env.LOTI_E2E_DATABASE_URL;
 let explicitE2eDatabasePath: string | null = null;
 if (explicitE2eDatabaseUrl) {
@@ -46,6 +46,14 @@ const requestedNextDir = process.env.LOTI_E2E_NEXT_DIR;
 if (requestedNextDir && !/^\.next(?:-[a-z0-9-]+)?$/.test(requestedNextDir)) throw new Error("Invalid isolated E2E build directory.");
 process.env.LOTI_NEXT_DIR = requestedNextDir ?? (productionE2e ? ".next" : ".next-e2e-auth-email");
 for (const name of ["R2_ACCOUNT_ID", "R2_BUCKET_NAME", "R2_WRITE_ACCESS_KEY_ID", "R2_WRITE_SECRET_ACCESS_KEY", "R2_READ_ACCESS_KEY_ID", "R2_READ_SECRET_ACCESS_KEY"]) process.env[name] = "";
+if (process.env.LOTI_E2E_MINIMAL === "signup") {
+  const { migrate } = await import("drizzle-orm/libsql/migrator");
+  const { openDatabase } = await import("../src/lib/db/connection");
+  const migrationFixture = openDatabase();
+  try { await migrate(migrationFixture.db, { migrationsFolder: "./drizzle" }); }
+  finally { migrationFixture.client.close(); }
+  process.env.LOTI_QC_MANAGER_USER_ID = "";
+} else {
 await import("./seed");
 // Configure the exact seeded Better Auth ID as the QC manager only in this
 // disposable E2E process; production/dev configuration remains untouched.
@@ -57,6 +65,8 @@ try {
   const manager = await qcManagerFixture.db.select({ id: user.id }).from(user).where(eq(user.email, "gabriel@loti.test")).get();
   if (!manager) throw new Error("The isolated QC E2E manager could not be provisioned.");
   process.env.LOTI_QC_MANAGER_USER_ID = manager.id;
+  const { ensurePersonalWorkspace } = await import("../src/lib/domain/personal-workspaces");
+  await ensurePersonalWorkspace(qcManagerFixture.db, manager.id);
 } finally { qcManagerFixture.client.close(); }
 // An existing credential account without group membership exercises invitation login.
 const { createAuth } = await import("../src/lib/auth/config");
@@ -83,6 +93,7 @@ try {
   await invitationFixture.db.insert(workspaces).values({ id: "theme-qa-workspace", name: "Temas QA", createdAt }).run();
   await invitationFixture.db.insert(workspaceMembers).values({ workspaceId: "theme-qa-workspace", userId: themeUser.id, createdAt }).run();
 } finally { invitationFixture.client.close(); }
+}
 
 const closeQcFixture = process.env.LOTI_E2E_QC_VIEWER === "1" ? await (await import("./qc-viewer-fixture")).startQcViewerFixture() : null;
 const child = spawn(process.execPath, ["node_modules/next/dist/bin/next", ...(productionE2e ? ["start"] : ["dev", "--webpack"]), "-H", "localhost", "-p", "3100"], { stdio: "inherit", env: process.env });

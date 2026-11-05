@@ -33,9 +33,10 @@ export async function POST(request: Request, { params }: Context) {
       z.object({ operation: z.literal("archive") }).passthrough(),
       z.object({ operation: z.literal("delete") }).passthrough(),
       z.object({ operation: z.literal("discard.incorrect") }).passthrough(),
-    ]).parse(await request.json());
-    const service = hubbuyBalanceServices(db, user.id);
-    const { operation: operationType, ...payload } = body;
+    ]).and(z.object({ workspaceId: z.string().min(1) })).parse(await request.json());
+    const service = hubbuyBalanceServices(db, user.id, body.workspaceId);
+    const { operation: operationType, ...rest } = body;
+    const payload = Object.fromEntries(Object.entries(rest).filter(([key]) => key !== "workspaceId"));
     const result = operationType === "adjustment.preview" ? await service.previewManualAdjustment(accountId, payload)
       : operationType === "adjustment.record" ? await service.recordManualAdjustment(accountId, payload)
       : operationType === "adjustment.reversal.preview" ? await service.previewManualAdjustmentReversal(accountId, payload)

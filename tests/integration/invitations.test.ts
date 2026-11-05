@@ -1,28 +1,46 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { randomBytes } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { fixture, type Fixture } from "./helpers";
 import { invitationService, hashInviteToken, limitInvitations } from "@/lib/domain/invitations";
 import { createAuth } from "@/lib/auth/config";
 import { user, account, workspaceInvitations, workspaceMembers, userPreferences } from "@/lib/db/schema";
+import { ensurePersonalWorkspace } from "@/lib/domain/personal-workspaces";
 let f: Fixture;
-beforeEach(async () => { f = await fixture(); });
+beforeEach(async () => { f = await fixture(":memory:", "orders"); });
 afterEach(() => f.client.close());
 const credentials = { name: "Nova pessoa", password: "Invitation-Test-2026!" };
 const session = { id: "outsider", email: "outsider@test.local" };
 describe("private group invitations", () => {
   it("creates an invitation, stores only its hash and restricts management", async () => {
     const service = invitationService(f.db);
-    const issued = await service.issue("alice", "  NEW@test.local ");
+    const issued = await service.issue("alice", "  NEW@test.local ", "workspace");
     const row = await f.db.select().from(workspaceInvitations).get();
     expect(row!.email).toBe("new@test.local"); expect(row!.tokenHash).toBe(hashInviteToken(issued.token));
     expect(JSON.stringify(await service.group("bob"))).not.toContain(issued.token);
-    await expect(service.issue("outsider", "x@test.local")).rejects.toThrow("espaço");
-    await expect(service.revoke("foreign", row!.id)).rejects.toThrow();
-    await expect(service.issue("alice", "alice@test.local")).rejects.toThrow("já faz parte");
-    await expect(service.issue("bob", "new@test.local")).rejects.toThrow("pendente");
+    await expect(service.issue("outsider", "x@test.local", "workspace")).rejects.toThrow("espaço");
+    await expect(service.revoke("foreign", row!.id, "workspace")).rejects.toThrow();
+    await expect(service.issue("alice", "alice@test.local", "workspace")).rejects.toThrow("já faz parte");
+    await expect(service.issue("bob", "new@test.local", "workspace")).rejects.toThrow("pendente");
+  });
+  it("rejects stale group context when issuing or revoking an invitation", async () => {
+    const service = invitationService(f.db);
+    await f.db.insert(workspaceMembers).values({ userId: "alice", workspaceId: "other", createdAt: new Date() }).run();
+    await f.alice.selectWorkspace("workspace");
+    const invite = await service.issue("alice", "stale-revoke@test.local", "workspace");
+    const invitation = (await f.db.select().from(workspaceInvitations).where(eq(workspaceInvitations.tokenHash, hashInviteToken(invite.token))).get())!;
+
+    await f.alice.selectWorkspace("other");
+    await expect(service.issue("alice", "stale-issue@test.local", "workspace"))
+      .rejects.toMatchObject({ status: 409, code: "WORKSPACE_CONTEXT_CHANGED" });
+    await expect(service.revoke("alice", invitation.id, "workspace"))
+      .rejects.toMatchObject({ status: 409, code: "WORKSPACE_CONTEXT_CHANGED" });
+
+    expect(await f.db.select().from(workspaceInvitations).where(eq(workspaceInvitations.email, "stale-issue@test.local")).all()).toEqual([]);
+    expect(await f.db.select().from(workspaceInvitations).where(eq(workspaceInvitations.id, invitation.id)).get()).toMatchObject({ revokedAt: null });
   });
   it("creates pending credentials, then links only an authenticated verified account", async () => {
-    const service = invitationService(f.db), issued = await service.issue("alice", "new@test.local");
+    const service = invitationService(f.db), issued = await service.issue("alice", "new@test.local", "workspace");
     await expect(service.accept(issued.token, null, { ...credentials, password: "short" })).rejects.toThrow();
     expect((await service.inspect(issued.token)).existingAccount).toBe(false);
     const result = await service.accept(issued.token, null, credentials);
@@ -40,8 +58,25 @@ describe("private group invitations", () => {
     expect(await f.db.select().from(workspaceMembers).where(eq(workspaceMembers.userId, member!.id)).get()).toBeTruthy();
     await expect(service.accept(issued.token, null, credentials)).rejects.toThrow("já foi usado");
   });
+  it("rejects an invitation to a personal workspace before creating an account", async () => {
+    const personal = await ensurePersonalWorkspace(f.db, "alice");
+    const token = randomBytes(32).toString("base64url");
+    const email = "invalid-personal-target@test.local";
+    const tokenHash = hashInviteToken(token);
+    await f.db.insert(workspaceInvitations).values({
+      id: crypto.randomUUID(), workspaceId: personal.workspace.id, email, tokenHash, createdBy: "alice",
+      createdAt: new Date(), expiresAt: new Date(Date.now() + 60_000),
+    }).run();
+
+    const service = invitationService(f.db);
+    await expect(service.inspect(token)).rejects.toThrow("espaço compartilhado");
+    await expect(service.accept(token, null, credentials)).rejects.toThrow("espaço compartilhado");
+    expect(await f.db.select().from(user).where(eq(user.email, email)).get()).toBeUndefined();
+    expect(await f.db.select().from(account).where(eq(account.accountId, email)).get()).toBeUndefined();
+    expect(await f.db.select().from(workspaceInvitations).where(eq(workspaceInvitations.tokenHash, tokenHash)).get()).toMatchObject({ acceptedAt: null, revokedAt: null });
+  });
   it("preserves the pending account and rolls back acceptance if membership fails", async () => {
-    const service = invitationService(f.db), issued = await service.issue("alice", "rollback@test.local");
+    const service = invitationService(f.db), issued = await service.issue("alice", "rollback@test.local", "workspace");
     await service.accept(issued.token, null, credentials);
     const member = (await f.db.select().from(user).where(eq(user.email, "rollback@test.local")).get())!;
     await f.db.update(user).set({ emailVerified: true }).where(eq(user.id, member.id)).run();
@@ -53,7 +88,7 @@ describe("private group invitations", () => {
     await service.accept(issued.token, { id: member.id, email: member.email }, {});
   });
   it("requires existing account login and preserves credentials and invitation after wrong email", async () => {
-    const service = invitationService(f.db), issued = await service.issue("alice", session.email);
+    const service = invitationService(f.db), issued = await service.issue("alice", session.email, "workspace");
     await expect(service.accept(issued.token, null, credentials)).rejects.toThrow("Entre");
     await expect(service.accept(issued.token, { id: "bob", email: "bob@test.local" }, credentials)).rejects.toThrow("email deste convite");
     expect((await service.inspect(issued.token)).existingAccount).toBe(true);
@@ -62,20 +97,20 @@ describe("private group invitations", () => {
     expect(await f.db.select().from(workspaceMembers).where(and(eq(workspaceMembers.userId, "outsider"), eq(workspaceMembers.workspaceId, "workspace"))).get()).toBeTruthy();
   });
   it("regenerates, revokes and expires links", async () => {
-    const service = invitationService(f.db), first = await service.issue("alice", "new@test.local");
+    const service = invitationService(f.db), first = await service.issue("alice", "new@test.local", "workspace");
     const id = (await service.group("alice")).invitations[0].id;
-    const second = await service.issue("bob", "new@test.local", id);
+    const second = await service.issue("bob", "new@test.local", "workspace", id);
     await expect(service.inspect(first.token)).rejects.toThrow("revogado");
     const newId = (await service.group("alice")).invitations.find(i => i.state === "pending")!.id;
-    await service.revoke("alice", newId);
+    await service.revoke("alice", newId, "workspace");
     await expect(service.accept(second.token, null, credentials)).rejects.toThrow("revogado");
-    const third = await service.issue("alice", "new@test.local");
+    const third = await service.issue("alice", "new@test.local", "workspace");
     await f.db.update(workspaceInvitations).set({ expiresAt: new Date(0) }).where(eq(workspaceInvitations.tokenHash, hashInviteToken(third.token))).run();
     await expect(service.accept(third.token, null, credentials)).rejects.toThrow("expirou");
-    await service.issue("alice", "new@test.local");
+    await service.issue("alice", "new@test.local", "workspace");
   });
   it("activates the invited group while preserving previous membership and view preference", async () => {
-    const service = invitationService(f.db), issued = await service.issue("alice", "foreign@test.local");
+    const service = invitationService(f.db), issued = await service.issue("alice", "foreign@test.local", "workspace");
     await f.db.insert(userPreferences).values({ userId: "foreign", favoritesView: "cards", activeWorkspaceId: "other", createdAt: new Date(), updatedAt: new Date() }).run();
     await service.accept(issued.token, { id: "foreign", email: "foreign@test.local" }, {});
     expect((await f.foreign.getData()).members.map(m => m.id)).toContain("alice");
@@ -83,7 +118,7 @@ describe("private group invitations", () => {
     expect(await f.db.select().from(workspaceMembers).where(eq(workspaceMembers.userId, "foreign")).all()).toHaveLength(2);
   });
   it("consumes the invite safely if an operator added membership before acceptance", async () => {
-    const service = invitationService(f.db), issued = await service.issue("alice", session.email);
+    const service = invitationService(f.db), issued = await service.issue("alice", session.email, "workspace");
     await f.db.insert(workspaceMembers).values({ userId: session.id, workspaceId: "workspace", createdAt: new Date() }).run();
     expect((await service.inspect(issued.token, session)).alreadyMember).toBe(true);
     await service.accept(issued.token, session, {});

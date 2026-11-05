@@ -7,6 +7,7 @@ import * as s from "../../src/lib/db/schema";
 import journal from "../../drizzle/meta/_journal.json";
 import { createAuth } from "../../src/lib/auth/config";
 import { createServices } from "../../src/lib/domain/services";
+import { ensurePersonalWorkspaceInTransaction } from "../../src/lib/domain/personal-workspaces";
 import { packageCostServices } from "../../src/lib/domain/package-cost-services";
 import { warehouseServices } from "../../src/lib/domain/warehouse-services";
 import { logisticsPackageServices } from "../../src/lib/domain/logistics-package-services";
@@ -76,6 +77,7 @@ export async function seedDevelopmentWorkspace(db: AppDatabase, password: string
       const now = new Date();
       await tx.insert(s.workspaceMembers).values({ workspaceId: seedWorkspaceId, userId: member.id, createdAt: now }).run();
       await tx.insert(s.userPreferences).values({ userId: member.id, activeWorkspaceId: seedWorkspaceId, favoritesView: index % 2 ? "cards" : "list", createdAt: now, updatedAt: now }).run();
+      await ensurePersonalWorkspaceInTransaction(tx as unknown as Parameters<Parameters<AppDatabase["transaction"]>[0]>[0], member.id);
       return member.id;
     }));
   }
@@ -242,7 +244,7 @@ export async function seedDevelopmentWorkspace(db: AppDatabase, password: string
     });
   }
   for (const email of ["mariana.ferreira@loti.test", "lucas.oliveira@loti.test"]) {
-    await step(`invitation-${email}`, async tx => { await invitationService(tx).issue(actor, email); return email; });
+    await step(`invitation-${email}`, async tx => { await invitationService(tx).issue(actor, email, seedWorkspaceId); return email; });
   }
   const activePurchaseId = await step("active-purchase", async tx => (await createServices(tx, actor).savePurchase({ name: "Próxima compra coletiva", hubbuyAccount: "Eletrônicos e acessórios" })).id);
   for (let index = 0; index < 10; index++) {

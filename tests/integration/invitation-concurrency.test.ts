@@ -3,7 +3,8 @@ import { eq } from "drizzle-orm";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import { openDatabase } from "@/lib/db/connection";
 import { invitationService } from "@/lib/domain/invitations";
-import { account, user, workspaceInvitations, workspaceMembers, workspaces } from "@/lib/db/schema";
+import { account, user, workspaceInvitations, workspaceMembers } from "@/lib/db/schema";
+import { insertSharedWorkspaces } from "./helpers";
 let first: ReturnType<typeof openDatabase>, second: ReturnType<typeof openDatabase>;
 beforeAll(async () => {
   const sharedUrl = "file::memory:?cache=shared";
@@ -12,7 +13,7 @@ beforeAll(async () => {
   second = openDatabase(sharedUrl);
   const now = new Date();
   await first.db.insert(user).values({ id: "operator", name: "Operator", email: "operator@test.local", createdAt: now, updatedAt: now }).run();
-  await first.db.insert(workspaces).values({ id: "group", name: "Loti", createdAt: now }).run();
+  await insertSharedWorkspaces(first, [{ id: "group", name: "Loti", createdAt: now }]);
   await first.db.insert(workspaceMembers).values({ userId: "operator", workspaceId: "group", createdAt: now }).run();
 });
 afterAll(() => { first.client.close(); second.client.close(); });
@@ -21,7 +22,7 @@ describe("independent connection invitation races", () => {
   it("creates only one pending account for simultaneous registration, then one membership", async () => {
     const a = invitationService(first.db), b = invitationService(second.db);
     const email = `accept-${crypto.randomUUID()}@test.local`;
-    const { token } = await a.issue("operator", email);
+    const { token } = await a.issue("operator", email, "group");
     const results = await Promise.allSettled([a.accept(token, null, input), b.accept(token, null, input)]);
     expect(results.filter(r => r.status === "fulfilled")).toHaveLength(1);
     const member = await first.db.select().from(user).where(eq(user.email, email)).all();
@@ -37,12 +38,12 @@ describe("independent connection invitation races", () => {
   it("makes acceptance and revocation mutually exclusive", async () => {
     const a = invitationService(first.db), b = invitationService(second.db);
     const email = `revoke-${crypto.randomUUID()}@test.local`;
-    const { token } = await a.issue("operator", email);
+    const { token } = await a.issue("operator", email, "group");
     await a.accept(token, null, input);
     const registered = (await first.db.select().from(user).where(eq(user.email, email)).get())!;
     await first.db.update(user).set({ emailVerified: true }).where(eq(user.id, registered.id)).run();
     const id = (await a.group("operator")).invitations.find(invitation => invitation.email === email)!.id;
-    const results = await Promise.allSettled([a.accept(token, { id: registered.id, email }, {}), b.revoke("operator", id)]);
+    const results = await Promise.allSettled([a.accept(token, { id: registered.id, email }, {}), b.revoke("operator", id, "group")]);
     expect(results.filter(r => r.status === "fulfilled")).toHaveLength(1);
     const invite = await first.db.select().from(workspaceInvitations).where(eq(workspaceInvitations.id, id)).get();
     expect(Boolean(invite!.acceptedAt)).not.toBe(Boolean(invite!.revokedAt));
@@ -52,7 +53,7 @@ describe("independent connection invitation races", () => {
   it("does not leave two pending invitations for simultaneous issuance", async () => {
     const a = invitationService(first.db), b = invitationService(second.db);
     const email = `issue-${crypto.randomUUID()}@test.local`;
-    const results = await Promise.allSettled([a.issue("operator", email), b.issue("operator", email)]);
+    const results = await Promise.allSettled([a.issue("operator", email, "group"), b.issue("operator", email, "group")]);
     expect(results.filter(r => r.status === "fulfilled")).toHaveLength(1);
     expect((await a.group("operator")).invitations.filter(i => i.email === email && i.state === "pending")).toHaveLength(1);
   });

@@ -36,7 +36,7 @@ const bodySchema = z.discriminatedUnion("operation", [
   z.object({ operation: z.literal("refund.void"), refundId: z.string().min(1), input: z.unknown() }).strict(),
   z.object({ operation: z.literal("tracking.close"), input: z.unknown() }).strict(),
   z.object({ operation: z.literal("tracking.reopen"), input: z.unknown() }).strict(),
-]);
+]).and(z.object({ workspaceId: z.string().min(1) }));
 
 export async function GET(_request: Request, context: RouteContext) {
   try {
@@ -49,7 +49,7 @@ export async function POST(request: Request, context: RouteContext) {
   try {
     requirePackageCostOrigin(request);
     const user = await requireUser(), { trackingId } = await context.params;
-    const body = bodySchema.parse(await request.json()), service = packageCostServices(db, user.id);
+    const body = bodySchema.parse(await request.json()), service = packageCostServices(db, user.id, undefined, body.workspaceId);
     if (await usesOrdersWorkflow(db) && (request.headers.get("X-Loti-Workflow") !== "orders-v2" || body.operation.startsWith("package."))) throw new DomainError("O fluxo de pedidos mudou. Atualize a página e use Pacotes para alterar a logística.",409,"ORDERS_WORKFLOW_UPGRADE_REQUIRED");
     switch (body.operation) {
       case "item.save": await service.saveItemCosts(trackingId, body.input); break;

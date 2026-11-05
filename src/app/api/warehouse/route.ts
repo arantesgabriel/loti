@@ -6,7 +6,7 @@ import { warehouseServices,warehouseQuerySchema } from "@/lib/domain/warehouse-s
 import { packageCostFailure,packageCostPrivateHeaders,requirePackageCostOrigin } from "@/lib/domain/package-cost-http";
 export const runtime="nodejs", dynamic="force-dynamic";
 export async function GET(request:Request) {
-  try {const user=await requireUser(),query=warehouseQuerySchema.parse(Object.fromEntries(new URL(request.url).searchParams));return NextResponse.json({data:await warehouseServices(db,user.id).list(query)},{headers:packageCostPrivateHeaders});}
+  try {const user=await requireUser(),query=warehouseQuerySchema.parse(Object.fromEntries(new URL(request.url).searchParams));return NextResponse.json({data:await warehouseServices(db,user.id).list(query,query.workspaceId)},{headers:packageCostPrivateHeaders});}
   catch(error){return packageCostFailure(error);}
 }
 export async function POST(request:Request) {

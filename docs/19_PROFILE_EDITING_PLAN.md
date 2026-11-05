@@ -130,7 +130,7 @@ Fluxo de nome:
 ProfileNameForm
   → authClient.updateUser({ name })
   → POST /api/auth/update-user
-  → hook Loti: sessão + membership + Zod
+  → hook Loti: sessão + acesso a espaço autorizado + Zod
   → Better Auth / adapter Drizzle
   → user.name + cookie atualizado
   → sincronização do WorkspaceProvider
@@ -142,7 +142,7 @@ Fluxo de senha:
 ProfilePasswordForm
   → authClient.changePassword({ currentPassword, newPassword, revokeOtherSessions: true })
   → POST /api/auth/change-password
-  → hook Loti: sessão + membership + política da troca
+  → hook Loti: sessão + acesso a espaço autorizado + política da troca
   → Better Auth verifica/hash/persiste
   → revoga sessões anteriores e estabelece novo cookie
   → limpa formulário e confirma sucesso
@@ -157,7 +157,7 @@ Criar schemas compartilháveis de perfil e um hook restrito aos caminhos `/updat
 - Nome: objeto estrito `{ name }`, trim e limite de 1–200. Rejeitar campos de alvo (`id`, `userId`) e alterações de email, imagem ou outros dados não previstos nesta entrega.
 - Senha: senha atual obrigatória, com máximo de 128; nova senha com 12–128; comparar igualdade sem normalização; aceitar o campo nativo opcional `revokeOtherSessions`, mas forçar seu valor para `true` antes de executar o endpoint.
 - Resolver a sessão autoritativa pelo mecanismo exportado da versão instalada (`getAuthoritativeSessionFromCtx`), sem importar `next/headers` dentro da fábrica `createAuth` usada por scripts e testes.
-- Reutilizar `authorization(db, session.user.id).requireWorkspaceMember()` para validar o contexto do membro. Pessoa vinculada a outro grupo pode editar seu próprio perfil; não pode escolher o alvo de outra conta.
+- Reutilizar a autorização central para validar o contexto do membro. Após a Frente 1 de espaços pessoais, perfil aceita o titular de um espaço pessoal ou alguém com membership em espaço compartilhado. Pessoa vinculada a outro grupo pode editar seu próprio perfil; não pode escolher o alvo de outra conta.
 - Não assumir que `ctx.context.session` já está preenchido num hook `before`; comprovar a resolução da sessão em testes do handler real.
 - Preservar proteções de origem/CSRF do Better Auth e a origem derivada de `authOrigin()`. Testar a chamada HTTP externa, não apenas `auth.api` em processo.
 - Nas chamadas HTTP desses dois caminhos, exigir o header Origin igual a `authOrigin()`, seguindo as demais mutações do Loti; origem ausente ou diferente é recusada. A checagem adicional não se aplica às chamadas internas sem Request. Testar separadamente esses dois contextos.
@@ -234,8 +234,8 @@ Critério para avançar: o contrato nativo funciona no adapter real, e estão de
 1. Criar os schemas e suas mensagens.
 2. Acrescentar os hooks específicos, usando os helpers centrais.
 3. Aplicar `revokeOtherSessions: true` no servidor e impedir senha nova igual à atual.
-4. Validar chamadas HTTP autenticadas, anônimas, sem membership, com campos de alvo e com origem externa.
-5. Confirmar que convites e conta sem grupo ainda conseguem fazer login e aceitar um convite; apenas a edição do perfil exige membership.
+4. Validar chamadas HTTP autenticadas, anônimas, sem espaço autorizado, com campos de alvo e com origem externa.
+5. Confirmar que convites e conta sem grupo ainda conseguem fazer login e aceitar um convite; edição de perfil exige acesso a um espaço pessoal ou membership compartilhado.
 
 Critério para avançar: chamadas diretas à API não contornam as regras; outras rotas de auth mantêm comportamento.
 
@@ -295,7 +295,7 @@ Usar banco isolado e fixture com contas de credenciais criadas pelo fluxo de ope
 | Cenário | Evidência esperada |
 | --- | --- |
 | Sem sessão | Ambos os endpoints recusam a mutação |
-| Sessão sem membership | Hooks recusam edição; login e convites continuam acessíveis |
+| Sessão sem espaço autorizado | Hooks recusam edição; login e convites continuam acessíveis |
 | Nome válido | Só `user.name` do titular é alterado; timestamp e leitura de sessão coerentes |
 | Nome inválido via HTTP | Rejeição antes da escrita, inclusive sem validação de navegador |
 | Tentativa de alvo B pela sessão A | Rejeição do payload; B intacto |
@@ -359,7 +359,7 @@ A suíte usa as migrações existentes no banco isolado. No caminho principal n�
 - [x] Perfil oferece edição de nome completo e troca de senha separadas.
 - [x] Nome inclui sobrenomes livremente, com 1–200 caracteres após trim.
 - [x] Validação de nome ocorre no servidor, inclusive pelos endpoints nativos.
-- [x] Apenas o titular com membership válido modifica seu perfil; payload não escolhe outra conta.
+- [x] Apenas o titular com acesso autorizado modifica seu perfil; payload não escolhe outra conta.
 - [x] Nome/iniciais atualizam sem logout; reload e login novo mantêm o valor.
 - [x] Favoritos, compra e grupo exibem a identidade atual após atualização dos dados.
 - [x] Nenhum ID, membership, preferência ou snapshot de produto é alterado pelo perfil.
@@ -423,7 +423,7 @@ Estimativa total da variante: **10–16 horas**, com esforço adicional em migra
 ## 13. Resultado da implementação — 6 de outubro de 2026
 
 - O nome completo usa `user.name`; não foi criada migração nem alterado o schema.
-- Os formulários usam os endpoints nativos Better Auth, com validação Zod, sessão autoritativa, membership e origem confiável nos hooks. A política de revogação é forçada no servidor.
+- Os formulários usam os endpoints nativos Better Auth, com validação Zod, sessão autoritativa, acesso a espaço autorizado e origem confiável nos hooks. A política de revogação é forçada no servidor.
 - A atualização do provider preserva o nome confirmado mesmo quando o refetch falha e descarta leituras antigas em voo.
 - Verificações concluídas: `npm run typecheck`, `npm run lint`, `npm test` (11 arquivos, 114 testes), `npm run test:e2e` (21 cenários Chromium) e `npm run build`.
 - O Preview não foi implantado: os CLIs `vercel` e `turso` e o vínculo local de projeto Vercel não estão disponíveis neste ambiente. Para continuar essa etapa, o operador precisa conectar o projeto Vercel e fornecer ao Preview as credenciais do banco de desenvolvimento `loti-dev` e as variáveis Better Auth correspondentes. Nenhuma publicação externa foi feita.

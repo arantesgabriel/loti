@@ -15,6 +15,8 @@ Profile/logout is accessed from the user avatar. Collections live inside Favorit
 
 ```text
 /login
+/signup
+/verify-email
 
 /favorites
 /purchase
@@ -53,6 +55,7 @@ Creation/editing should generally stay in context via Sheet/Drawer/Dialog instea
 ### Pages
 
 - Login
+- Signup and pending email activation
 - Favorites
 - Active Purchase
 - History

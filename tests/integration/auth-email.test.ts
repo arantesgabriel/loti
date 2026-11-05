@@ -5,7 +5,7 @@ import { createAuth } from "@/lib/auth/config";
 import { handleAuthRequest } from "@/lib/auth/handler";
 import { invitationService } from "@/lib/domain/invitations";
 import { createServices } from "@/lib/domain/services";
-import { account, authEmailDeliveries, user, workspaceMembers } from "@/lib/db/schema";
+import { account, accountActivationRequirements, authEmailDeliveries, user, userPreferences, workspaceMembers, workspaces } from "@/lib/db/schema";
 import type { EmailTransport } from "@/lib/email/service";
 
 const origin = "http://localhost:3000", email = "email-qa@loti.test", password = "Email-QA-Old-2026!";
@@ -22,7 +22,7 @@ async function signIn(address = email, pass = password) {
 }
 async function createAccount() { return (await createAuth(f.db, true).api.signUpEmail({ body: { name: "Email QA", email, password } })).user; }
 function messageUrl() { return new URL(messages.at(-1)!.text.match(/http:\/\/localhost:3000\/\S+/)![0]); }
-beforeEach(async () => { f = await fixture(); messages = []; vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date("2026-10-20T12:00:02Z")); });
+beforeEach(async () => { f = await fixture(":memory:", "orders"); messages = []; vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date("2026-10-20T12:00:02Z")); });
 afterEach(() => { f.client.close(); vi.useRealTimers(); vi.unstubAllEnvs(); });
 
 describe("native password recovery", () => {
@@ -76,11 +76,16 @@ describe("native password recovery", () => {
 
 describe("verified invitation membership", () => {
   it("registers without membership, verifies through native tokens, then requires authenticated acceptance", async () => {
-    const service = invitationService(f.db), { token } = await service.issue("alice", email);
+    const service = invitationService(f.db), { token } = await service.issue("alice", email, "workspace");
     const registered = await service.accept(token, null, { name: "Invited QA", password });
     expect(registered).toMatchObject({ created: true, verificationRequired: true });
     const created = (await f.db.select().from(user).where(eq(user.email, email)).get())!;
-    await expect(createServices(f.db, created.id).getData()).rejects.toThrow("espaço");
+    expect(await f.db.select().from(accountActivationRequirements).where(eq(accountActivationRequirements.userId, created.id)).get()).toMatchObject({ source: "invitation" });
+    const personal = await f.db.select().from(workspaces).where(eq(workspaces.ownerUserId, created.id)).get();
+    expect(personal).toMatchObject({ kind: "personal" });
+    expect(await f.db.select().from(workspaceMembers).where(eq(workspaceMembers.userId, created.id)).all()).toHaveLength(0);
+    expect(await f.db.select().from(userPreferences).where(eq(userPreferences.userId, created.id)).get()).toMatchObject({ activeWorkspaceId: personal!.id });
+    await expect(createServices(f.db, created.id).getData()).rejects.toMatchObject({ code: "EMAIL_ACTIVATION_REQUIRED" });
     const cookie = await signIn();
     const sent = await call("/send-verification-email", { email, callbackURL: `/invite/${token}` }, cookie);
     expect(sent.status).toBe(200); expect(messages).toHaveLength(1);
@@ -114,9 +119,9 @@ describe("verified invitation membership", () => {
     const created = await createAccount();
     await f.db.insert(workspaceMembers).values({ workspaceId: "other", userId: created.id, createdAt: new Date() }).run();
     await signIn(); expect((await createServices(f.db, created.id).getData()).currentUser.id).toBe(created.id);
-    const service = invitationService(f.db), { token } = await service.issue("alice", email);
+    const service = invitationService(f.db), { token } = await service.issue("alice", email, "workspace");
     expect(await service.accept(token, { id: created.id, email }, {})).toMatchObject({ verificationRequired: true });
-    await service.revoke("alice", (await service.group("alice")).invitations[0].id);
+    await service.revoke("alice", (await service.group("alice")).invitations[0].id, "workspace");
     await expect(service.accept(token, { id: created.id, email }, {})).rejects.toThrow("revogado");
     expect(await f.db.select().from(workspaceMembers).where(eq(workspaceMembers.userId, created.id)).all()).toHaveLength(1);
   });

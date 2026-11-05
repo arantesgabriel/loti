@@ -36,7 +36,7 @@ function databaseBusy(error: unknown, seen = new Set<unknown>()): boolean {
   return candidate.code === "SQLITE_BUSY" || /SQLITE_BUSY|database is locked/i.test(candidate.message ?? "") || databaseBusy(candidate.cause, seen);
 }
 
-export function purchaseOrderCorrectionServices(db: AppDatabase, actorId: string) {
+export function purchaseOrderCorrectionServices(db: AppDatabase, actorId: string, expectedWorkspaceId?: string) {
   async function correct(trackingId: string, orderId: string, input: unknown, preview = false, attempt = 0): Promise<Result> {
     const value = schema.parse(input);
     const payloadHash = createHash("sha256").update(JSON.stringify({ trackingId, orderId, ...value })).digest("hex");
@@ -47,7 +47,8 @@ export function purchaseOrderCorrectionServices(db: AppDatabase, actorId: string
       return await serializeDomainTransaction(() => db.transaction(async tx => {
         const tracking = await tx.select().from(purchaseCostTrackings).where(eq(purchaseCostTrackings.id, trackingId)).get();
         if (!tracking) throw new DomainError("Acompanhamento não encontrado.", 404);
-        await authorization(tx, actorId).requireWorkspaceMember(tracking.workspaceId);
+        if (expectedWorkspaceId && expectedWorkspaceId !== tracking.workspaceId) throw new DomainError("O recurso pertence a outro espaço. Atualize a página antes de salvar.", 409, "WORKSPACE_CONTEXT_CHANGED");
+        await authorization(tx, actorId).requireActiveWorkspaceContext(tracking.workspaceId);
         const prior = await tx.select().from(financialOperations).where(and(eq(financialOperations.workspaceId, tracking.workspaceId), eq(financialOperations.idempotencyKey, value.idempotencyKey))).get();
         if (prior) {
           if (prior.operationType !== "additional_order_corrected" || prior.payloadHash !== payloadHash) throw new DomainError("Esta chave já foi usada com outros dados.", 409, "IDEMPOTENCY_CONFLICT");

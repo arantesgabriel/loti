@@ -9,8 +9,8 @@ import { emailService } from "@/lib/email/service";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const bodySchema = z.discriminatedUnion("operation", [
-  z.object({ operation: z.literal("issue"), email: z.string(), previousId: z.string().min(1).optional() }),
-  z.object({ operation: z.literal("revoke"), id: z.string().min(1) }),
+  z.object({ operation: z.literal("issue"), workspaceId: z.string().min(1), email: z.string(), previousId: z.string().min(1).optional() }).strict(),
+  z.object({ operation: z.literal("revoke"), workspaceId: z.string().min(1), id: z.string().min(1) }).strict(),
 ]);
 export async function GET() {
   try { return NextResponse.json(await invitationService(db).group((await requireUser()).id), { headers: privateHeaders }); }
@@ -22,11 +22,11 @@ export async function POST(request: Request) {
     const member = await requireUser();
     await limitInvitations(db, `manage:${member.id}`, 15);
     const body = bodySchema.parse(await request.json()), service = invitationService(db);
-    if (body.operation === "revoke") { await service.revoke(member.id, body.id); return NextResponse.json({ ok: true }, { headers: privateHeaders }); }
-    const result = await service.issue(member.id, body.email, body.previousId);
+    if (body.operation === "revoke") { await service.revoke(member.id, body.id, body.workspaceId); return NextResponse.json({ ok: true }, { headers: privateHeaders }); }
+    const result = await service.issue(member.id, body.email, body.workspaceId, body.previousId);
     const origin = authOrigin();
     const link = `${origin}/invite/${result.token}`;
-    const group = await service.group(member.id);
+    const group = await service.group(member.id, body.workspaceId);
     let emailStatus: string = "unavailable";
     try { emailStatus = await emailService(db).send({ kind: "invitation", email: body.email, token: result.token, url: link, workspaceId: group.workspace!.id, groupName: group.workspace!.name }); }
     catch { /* Invitation remains valid and manual sharing remains available. */ }

@@ -19,7 +19,7 @@ Personal favorites, one collaborative purchase, no copying between sheets.
 Warm, restrained, clear. Bookmark App provides structure; Clozy provides component polish.
 
 ## Anti-references
-No analytics dashboard, ERP, glassmorphism, real product photos or public signup.
+No analytics dashboard, ERP, glassmorphism or real product photos. Public registration creates an owner-only personal workspace after email confirmation; group membership remains invitation-gated.
 
 ## Design Principles
 Fast common paths; progressive disclosure; explicit ownership; independent historical snapshots; mobile-first behavior.

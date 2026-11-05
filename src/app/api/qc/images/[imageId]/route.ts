@@ -11,8 +11,8 @@ type RouteContext = { params: Promise<{ imageId: string }> };
 export async function DELETE(request: Request, context: RouteContext) {
   try {
     requireQcOrigin(request);
-    const user = await requireUser(), { imageId } = await context.params;
-    const data = await qcServices(db, user.id).deleteImage(imageId);
+    const user = await requireUser(), { imageId } = await context.params, workspaceId = new URL(request.url).searchParams.get("workspaceId") ?? undefined;
+    const data = await qcServices(db, user.id, {}, workspaceId).deleteImage(imageId);
     return NextResponse.json({ data }, { headers: qcPrivateHeaders });
   } catch (error) { return qcFailure(error); }
 }

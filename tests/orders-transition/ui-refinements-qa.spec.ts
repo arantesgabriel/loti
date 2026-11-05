@@ -88,25 +88,25 @@ test("Stage 5 filters, arrival context, source navigation, empty state, terminol
   await expect(page.locator(".orders-selection")).toContainText("1 unidade selecionada");
 
   // UI-008: arrival counts are contextual; an incompatible correction is blocked in the UI and by the server.
-  const arrivalButton = page.getByRole("button", { name: "Conferir chegada de Camiseta retida QA" });
+  const arrivalButton = page.getByRole("button", { name: "Registrar chegada de Camiseta retida QA" });
   await arrivalButton.focus();
   await arrivalButton.click();
   let dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
-  await expect(dialog.locator(".orders-arrival-summary dd")).toHaveText(["2", "0", "2", "1", "1"]);
-  await expect(dialog).toContainText("Novo total recebido");
-  await expect(dialog).toContainText("Fotos QC não confirmam chegada");
+  await expect(dialog.locator(".orders-arrival-summary dd")).toHaveText(["2", "2", "1"]);
+  await expect(dialog).toContainText("Total recebido");
+  await expect(dialog).toContainText("Informe o total que já chegou");
   await page.keyboard.press("Escape");
   await expect(dialog).not.toBeVisible();
   await expect(arrivalButton).toBeFocused();
   await arrivalButton.click();
   dialog = page.getByRole("dialog");
-  await dialog.getByLabel("Novo total recebido").fill("0");
-  await dialog.getByLabel("Evidência e motivo").fill("Tentativa sintética sem remover reserva");
-  await dialog.getByRole("button", { name: "Confirmar conferência" }).click();
-  await expect(dialog.getByRole("alert")).toContainText("Retire as reservas");
-  await expect(dialog.getByLabel("Novo total recebido")).toHaveAttribute("aria-invalid", "true");
-  await expect(dialog.getByLabel("Novo total recebido")).toBeFocused();
+  await dialog.getByLabel("Total recebido").fill("0");
+  await dialog.getByLabel("Motivo do registro").fill("Tentativa sintética sem remover reserva");
+  await dialog.getByRole("button", { name: "Salvar chegada" }).click();
+  await expect(dialog.getByRole("alert")).toContainText("Retire as unidades do pacote");
+  await expect(dialog.getByLabel("Total recebido")).toHaveAttribute("aria-invalid", "true");
+  await expect(dialog.getByLabel("Total recebido")).toBeFocused();
   expect(warehousePosts).toBe(0);
 
   const rejected = await page.request.post("/api/warehouse", {

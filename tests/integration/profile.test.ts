@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { createAuth } from "@/lib/auth/config";
 import { account, purchaseItems, session, user, workspaceMembers } from "@/lib/db/schema";
 import { createServices } from "@/lib/domain/services";
+import { ensurePersonalWorkspace } from "@/lib/domain/personal-workspaces";
 import { fixture, type Fixture } from "./helpers";
 
 const origin = "http://localhost:3000";
@@ -33,7 +34,7 @@ async function signIn(auth: ReturnType<typeof createAuth>, email = "profile-qa@l
   return { response, cookie };
 }
 
-beforeEach(async () => { data = await fixture(); });
+beforeEach(async () => { data = await fixture(":memory:", "orders"); });
 afterEach(() => data.client.close());
 
 describe("profile auth endpoints", () => {
@@ -62,11 +63,17 @@ describe("profile auth endpoints", () => {
     expect(savedItem).toMatchObject({ id: item!.id, purchaseId: purchase!.id, sourceFavoriteId: favorite!.id, name: "Snapshot stays stable", variant: "Blue purchase", quantity: 2, unitPriceCents: 13000, notes: "Snapshot" });
   });
 
-  it("denies profile edits for a signed-in account without a workspace membership", async () => {
-    const member = await createMember("unassigned-qa@loti.test");
-    await data.db.delete(workspaceMembers).where(eq(workspaceMembers.userId, member.id)).run();
-    const { cookie } = await signIn(member.auth, "unassigned-qa@loti.test");
-    expect((await request(member.auth, "/update-user", { name: "Not allowed" }, cookie)).status).toBe(403);
+  it("allows personal owners without memberships and denies accounts with no authorized workspace", async () => {
+    const personalOwner = await createMember("personal-profile-qa@loti.test");
+    await data.db.delete(workspaceMembers).where(eq(workspaceMembers.userId, personalOwner.id)).run();
+    await ensurePersonalWorkspace(data.db, personalOwner.id);
+    const { cookie: personalCookie } = await signIn(personalOwner.auth, "personal-profile-qa@loti.test");
+    expect((await request(personalOwner.auth, "/update-user", { name: "Personal owner" }, personalCookie)).status).toBe(200);
+
+    const unassigned = await createMember("unassigned-qa@loti.test");
+    await data.db.delete(workspaceMembers).where(eq(workspaceMembers.userId, unassigned.id)).run();
+    const { cookie } = await signIn(unassigned.auth, "unassigned-qa@loti.test");
+    expect((await request(unassigned.auth, "/update-user", { name: "Not allowed" }, cookie)).status).toBe(403);
   });
 
   it("rejects wrong/reused passwords without changing the credential or sessions", async () => {

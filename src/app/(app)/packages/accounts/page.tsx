@@ -10,14 +10,16 @@ export const dynamic = "force-dynamic";
 
 export default async function HubBuyAccountsPage() {
   const currentUser = await requireUser();
-  const membership = await authorization(db, currentUser.id).requireWorkspaceMember();
+  const access = await authorization(db, currentUser.id).requireWorkspaceAccess();
   const [accounts, members] = await Promise.all([
-    hubbuyBalanceServices(db, currentUser.id).listAccounts(membership.workspaceId),
-    db.select({ id: user.id, name: user.name }).from(user).innerJoin(workspaceMembers, eq(workspaceMembers.userId, user.id))
-      .where(eq(workspaceMembers.workspaceId, membership.workspaceId)).orderBy(asc(user.name)).all(),
+    hubbuyBalanceServices(db, currentUser.id).listAccounts(access.workspaceId),
+    access.kind === "personal"
+      ? db.select({ id: user.id, name: user.name }).from(user).where(eq(user.id, currentUser.id)).all()
+      : db.select({ id: user.id, name: user.name }).from(user).innerJoin(workspaceMembers, eq(workspaceMembers.userId, user.id))
+        .where(eq(workspaceMembers.workspaceId, access.workspaceId)).orderBy(asc(user.name)).all(),
   ]);
   return <>
-    <div className="page-heading"><div><h1>Contas HubBuy</h1><p className="muted">Gerencie as contas do grupo e confira saldo, direitos e movimentações.</p></div></div>
-    <HubBuyAccountsPanel workspaceId={membership.workspaceId} actorId={currentUser.id} members={members} initialAccounts={accounts} />
+    <div className="page-heading"><div><h1>Contas HubBuy</h1><p className="muted">{access.kind === "personal" ? "Gerencie suas contas, saldos e movimentações." : "Gerencie as contas do grupo e confira saldo, direitos e movimentações."}</p></div></div>
+    <HubBuyAccountsPanel workspaceId={access.workspaceId} actorId={currentUser.id} members={members} initialAccounts={accounts} personal={access.kind === "personal"} />
   </>;
 }

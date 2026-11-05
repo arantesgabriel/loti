@@ -236,7 +236,7 @@ describe("package product refunds", () => {
       expectedRevision: detail.tracking.revision, costItemId: detail.items[0].id, quantity: 1,
       requestedProductCents: 10_000, requestedChinaCents: 0, reason: "Acesso indevido",
       packageRemovals: [{ packageId: detail.packages[0].id, quantity: 1 }], unassignedQuantity: 0,
-    })).rejects.toThrow(/parte deste espaço/);
+    })).rejects.toMatchObject({ status: 403 });
     expect((await service.getTracking(tracking.id)).refunds).toHaveLength(0);
   });
 });

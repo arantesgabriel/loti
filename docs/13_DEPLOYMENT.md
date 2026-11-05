@@ -76,7 +76,7 @@ Run the command with the target `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` in t
 
 ## User bootstrap
 
-The application has no public signup flow. Create the initial private members with the operator command after production migration:
+Create the initial trusted group members with the operator command after production migration. The approved `/signup` flow also creates personal-only accounts after email verification; it does not add group membership. Group entry still requires a valid invitation. The direct Better Auth signup endpoint remains disabled.
 
 ```sh
 LOTI_USER_PASSWORD='<secure-initial-password>' npm run user:create -- --name '<name>' --email '<real-address>'
@@ -106,13 +106,17 @@ Use the backup/restore controls available for the Turso database plan. Keep prod
 4. Deploy from the intended production branch.
 5. Set `BETTER_AUTH_URL` to the final HTTPS URL and redeploy.
 6. Verify `/login` and `/api/health` publicly.
-7. Bootstrap actual private users; keep public signup disabled.
+7. Bootstrap the initial group members; verify that `/signup` creates only personal accounts and group invitations remain token-gated.
 8. If importing the workbook, review the mapping and dry-run before writing.
 9. Test login, session refresh, favorites, purchase, history, and one write/read round-trip against `loti-prod`.
 
 ## Deploying invitations
 
 Apply migrations `0001` and `0002` explicitly to the target database before deploying the invitation code. No new service credentials or email provider are required. Generated links and origin validation use the same `authOrigin()` as Better Auth; configure `BETTER_AUTH_URL` for the intended public deployment. Keep Preview and Production databases distinct. Verify Profile → Meu grupo → invite → new account and existing account acceptance after deployment. Invitation links are bearer credentials; account for token paths in hosting access logs and do not share them publicly.
+
+## Personal workspace foundation
+
+Migration `0029_massive_owl.sql` must be reviewed and applied explicitly before deploying code that reads `workspaces.kind` or `owner_user_id`. Then run `npm run workspace:provision-personal` once per intended database; it is idempotent and does not run migrations. Verify the target and backup process before either operation. Local implementation does not authorize applying this migration or provisioning real accounts in `loti-dev` or `loti-prod`, or publishing the code.
 
 ## Deploying HubBuy QC
 

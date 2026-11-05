@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingState } from "@/components/ui/loading-state";
+
 import { useEffect, useId, useRef, useState } from "react";
 import { Coins, UserRound } from "lucide-react";
 import { ProductCategoryMarker } from "@/components/product-category-icons";
@@ -70,7 +72,7 @@ export function HubBuyIndividualRights({ traceability, members, loading, failed,
   return <section className="hubbuy-individual-rights hubbuy-history" aria-label="Histórico do saldo por pessoa" aria-busy={loading}>
     <div className="hubbuy-rights-title"><UserRound size={21} aria-hidden="true"/><div><h3>Histórico do saldo por pessoa</h3><p>Inclui créditos já consumidos. CNY são registros do Loti; R$ representa a base histórica.</p></div></div>
     {traceability && !reconciled && <p className="hubbuy-rights-unreconciled" role="status">Direitos não conciliados. Confira o histórico e o saldo da conta antes de usar.</p>}
-    {failed ? <p className="muted">Histórico indisponível. Tente carregar novamente.</p> : !traceability ? <p className="muted">Carregando histórico…</p> : traceability.some(row => row.origins.length) ? <>
+    {failed ? <p className="muted">Histórico indisponível. Tente carregar novamente.</p> : !traceability ? <LoadingState label="Carregando histórico…" /> : traceability.some(row => row.origins.length) ? <>
       <div className="hubbuy-history-filters"><label>Mostrar origens<select value={filter} onChange={event => setFilter(event.target.value)}><option value="all">Todas</option><option value="available">Com saldo</option><option value="exhausted">Esgotadas</option></select></label><label>Pessoa<select value={person} onChange={event => setPerson(event.target.value)}><option value="">Todas as pessoas</option>{traceability.filter(row => row.origins.length).map(row => <option key={row.personId} value={row.personId}>{name(row.personId)}</option>)}</select></label><label>Buscar produto ou origem<input type="search" value={search} onChange={event => setSearch(event.target.value)}/></label></div>
       {visible?.length ? visible.map(row => <PersonHistory key={`${row.personId}:${filter}:${search}`} history={row} origins={row.visibleOrigins} name={name(row.personId)} onDetails={origin => setSelected({ personId: row.personId, originId: origin.id })}/>) : <p role="status">Nenhuma origem encontrada com esses filtros.</p>}
     </> : <p className="muted">Sem histórico de saldo.</p>}

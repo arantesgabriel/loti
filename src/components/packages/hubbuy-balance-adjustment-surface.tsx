@@ -41,7 +41,7 @@ export function HubBuyBalanceAdjustmentSurface({ account, workspaceId, actorId, 
     try { sessionStorage.setItem(storageKey, JSON.stringify(value)); }
     catch { setError("Não foi possível guardar a tentativa neste navegador. Libere o armazenamento da sessão antes de confirmar."); return; }
     setPending(value); setBusy(true); setError(null);
-    const result = await costRequest(`/api/hubbuy/accounts/${account.id}`, { operation: value.reverse ? "adjustment.reverse" : "adjustment.record", ...value.command });
+    const result = await costRequest(`/api/hubbuy/accounts/${account.id}`, { operation: value.reverse ? "adjustment.reverse" : "adjustment.record", ...value.command }, workspaceId);
     setBusy(false);
     if (!result.ok) {
       setError(result.status === 0 || result.status >= 500 ? "A confirmação ficou incerta. Confira a tentativa pendente para evitar um lançamento duplicado." : result.error ?? "Não foi possível confirmar.");
@@ -73,7 +73,7 @@ export function HubBuyBalanceAdjustmentSurface({ account, workspaceId, actorId, 
       }
       const value = { command, reverse: !!reversal };
       setBusy(true);
-      const result = await costRequest<AdjustmentPreview>(`/api/hubbuy/accounts/${account.id}`, { operation: reversal ? "adjustment.reversal.preview" : "adjustment.preview", ...command });
+      const result = await costRequest<AdjustmentPreview>(`/api/hubbuy/accounts/${account.id}`, { operation: reversal ? "adjustment.reversal.preview" : "adjustment.preview", ...command }, workspaceId);
       if (!result.ok || !result.data) { setError(result.error ?? "Não foi possível conferir a prévia."); if (result.status === 409) await onRefresh(); return; }
       setPreview(result.data); setPrepared(value); setConfirmed(false);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Confira os valores."); }

@@ -18,7 +18,9 @@
 - valid user can log in with email/password;
 - session survives normal navigation/reload;
 - logout invalidates session;
-- no public signup CTA/route is exposed as a supported product flow;
+- approved Frente 5 signup is available at `/signup`; it requires email confirmation, creates only the user's personal workspace, and cannot create shared membership;
+- the direct Better Auth signup endpoint remains disabled; duplicate signup is generic and does not mutate an existing account;
+- activation-pending sessions cannot read or mutate app data and can only check status, resend confirmation or sign out;
 - users outside the workspace cannot read workspace data.
 - workspace members can update their own trimmed 1–200 character display name; the email remains read-only;
 - profile names update in the sidebar and current-user surfaces without logging out and persist across reload/login;
@@ -143,6 +145,18 @@
 - browser cannot directly query DB;
 - critical authorization is server-enforced.
 
+## Personal workspace foundation — approved extension
+
+- Every account can have at most one personal workspace with a required owner; every existing workspace remains shared after migration.
+- A personal workspace has no `workspace_members` rows and only its owner can read/write its favorites and collections.
+- An account with no group can load its personal data and save a private favorite through server services.
+- Provisioning is repeatable and parallel calls converge on the same workspace; an existing valid group selection and other user preferences remain intact.
+- A stale or foreign active-workspace preference cannot grant access and is discarded before authorized fallback resolution.
+- One shared group remains the legacy fallback; multiple groups without a valid preference resolve to the personal workspace once provisioned.
+- Group invitations and collaborative purchase actions reject a personal context on the server.
+- A user who has personal and shared workspaces can access each valid context, while mixing a personal favorite with a shared purchase is rejected before any write.
+- Upgrade preserves workspace IDs, references, memberships, invitations, active preferences, and foreign-key integrity. Empty installation and repeated migration also pass.
+
 ## HubBuy account deletion
 
 For HubBuy account deletion, an authorized member can remove an unused local account record with confirmation and reason. The record and audit remain retained; deleted accounts disappear from management and financial selectors. Balance, any ledger history (even net zero), started reconciliation, draft/voided orders, packages, payment sources, refunds including zero receipts, and historical audit references block deletion. Stale revisions, foreign workspaces, late writers and conflicting idempotency payloads are rejected. A lost response can be retried with the same key without duplicate deletion. External HubBuy accounts are unaffected. Full contract: [28](28_HUBBUY_ACCOUNT_DELETION_PLAN.md).
@@ -166,7 +180,7 @@ A group can do the entire workflow without the legacy spreadsheet:
 - reduced motion stops loops/transitions and preserves a balanced static composition;
 - scene is decorative (`aria-hidden`) with no keyboard stops;
 - wrong-password feedback, Enter, loading, redirect, persistent session and logout retain behavior;
-- no real product imagery, public signup, mascot, heavy 3D or runtime asset generation.
+- no real product imagery, mascot, heavy 3D or runtime asset generation; the separate approved `/signup` route does not replace the editorial login.
 
 Exact implementation contract: [17_LOGIN_ORBITAL_MOTION.md](17_LOGIN_ORBITAL_MOTION.md).
 
@@ -179,7 +193,7 @@ Exact implementation contract: [17_LOGIN_ORBITAL_MOTION.md](17_LOGIN_ORBITAL_MOT
 - Expired/revoked/replaced/used links cannot grant access.
 - Concurrent acceptance/revocation/issuance cannot produce duplicate accounts, links or memberships.
 - Failed membership creation rolls back account, credential and invitation consumption.
-- Public signup and authorization of existing data remain intact; the approved four primary navigation destinations are preserved.
+- Front 5 signup and authorization of existing data remain intact; the approved primary navigation destinations are preserved.
 
 ## Packages and costs extension
 

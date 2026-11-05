@@ -58,7 +58,7 @@ export function AdditionalProductEditor({ detail, itemId, busy, onClose, mutate 
   async function prepare() {
     setPreviewing(true); setError("");
     try {
-      const account = await costRequest<{ account: { revision: number } }>(`/api/hubbuy/accounts/${encodeURIComponent(order.accountId!)}`);
+      const account = await costRequest<{ account: { revision: number } }>(`/api/hubbuy/accounts/${encodeURIComponent(order.accountId!)}`, undefined, detail.tracking.workspaceId);
       if (!account.ok || !account.data) throw new Error(account.error ?? "Não foi possível conferir o saldo.");
       const bps = basisPointsFromPercent(fee);
       if (external && bps === null) throw new Error("Informe uma taxa válida entre 0 e 100%.");
@@ -75,7 +75,7 @@ export function AdditionalProductEditor({ detail, itemId, busy, onClose, mutate 
         balanceFunding: advances.map(advance => ({ costItemId: itemId, costComponent: advance.component, beneficiaryId: advance.beneficiaryId, lenderId: advance.lenderId, cnyMinor: minor(advance.amount, "CNY") })),
         external: external ? { paymentMethod: method, principalBrlCents: brl, conversionBrlCents: brl, conversionCnyMinor: minor(externalCny, "CNY"), feeBps: bps } : null,
       };
-      const response = await costRequest<Preview>(`/api/packages/${encodeURIComponent(detail.tracking.id)}`, { operation: "order.additional.preview_correction", orderId: order.id, input });
+      const response = await costRequest<Preview>(`/api/packages/${encodeURIComponent(detail.tracking.id)}`, { operation: "order.additional.preview_correction", orderId: order.id, input }, detail.tracking.workspaceId);
       if (!response.ok || !response.data) throw new Error(response.error ?? "Não foi possível calcular a correção.");
       setPreview({ result: response.data, input });
     } catch (error) { setError(error instanceof Error ? error.message : "Confira os dados da correção."); }

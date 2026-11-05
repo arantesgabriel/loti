@@ -107,7 +107,15 @@ Consequences: cleaner operational UI, faster scanning, fewer assets, simpler mai
 
 ## Private group invitations — 5 October 2026
 
-Approved extension: any member can invite through Profile → Meu grupo → email → generated link → manual sharing. New people define credentials in the token-gated acceptance page; existing accounts authenticate with the invited email. Links expire in seven days, are single-use, and may be revoked/regenerated. No role system, automated email delivery, member removal or workspace switcher is introduced. Public signup remains disabled. Acceptance atomically creates credentials where needed, adds membership, selects the invited workspace and consumes the invitation. Details: `18_WORKSPACE_INVITATIONS_PLAN.md`.
+Approved extension at the time: any member can invite through Profile → Meu grupo → email → generated link → manual sharing. New people define credentials in the token-gated acceptance page; existing accounts authenticate with the invited email. Links expire in seven days, are single-use, and may be revoked/regenerated. No role system, member removal or workspace switcher is introduced. Public signup was disabled in this decision; the later Frente 5 entry below supersedes that restriction for personal accounts only. Acceptance atomically creates credentials where needed, adds membership, selects the invited workspace and consumes the invitation. Details: `18_WORKSPACE_INVITATIONS_PLAN.md`.
+
+## Personal workspace foundation — 3 November 2026
+
+Approved server-side foundation: one owner-only personal workspace per account alongside shared group spaces. `workspace_members` remains the shared-workspace access relation; a personal space has no membership rows. Resolve the active preference only after centralized authorization and keep all group operations shared-only. Provisioning an existing user does not move or copy group data. That front added no selector UI and did not adapt purchases or financial/logistics flows. Full contract: `40_PERSONAL_WORKSPACES_PLAN.md`.
+
+## Public registration and email activation — 5 November 2026
+
+Approved Frente 5 supersedes the earlier blanket public-signup prohibition. `/signup` creates a new owner-only personal account, requires native email confirmation before app data is available, and never enrolls the person in a shared workspace. Account, activation requirement and personal workspace commit atomically. Direct Better Auth signup stays disabled, and duplicate addresses cannot change an existing account. Shared access continues only through verified token-gated invitations. Existing/operator accounts are not backfilled, marked verified or otherwise changed. Full contract and local validation: `43_PUBLIC_SIGNUP_AND_ACTIVATION_HANDOFF.md`.
 
 ## Purchase cost sharing — 7 October 2026
 

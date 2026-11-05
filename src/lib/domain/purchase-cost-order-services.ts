@@ -68,7 +68,11 @@ async function updateTracking(tx: Parameters<Parameters<AppDatabase["transaction
   return row;
 }
 
-export function purchaseCostOrderServices(db: AppDatabase, actorId: string) {
+export function purchaseCostOrderServices(db: AppDatabase, actorId: string, expectedWorkspaceId?: string) {
+  async function requireTrackingContext(tx: CostTransaction, workspaceId: string) {
+    if (expectedWorkspaceId && expectedWorkspaceId !== workspaceId) throw new DomainError("O recurso pertence a outro espaço. Atualize a página antes de salvar.", 409, "WORKSPACE_CONTEXT_CHANGED");
+    await authorization(tx, actorId).requireActiveWorkspaceContext(workspaceId);
+  }
   async function createDraft(trackingId: string, input: unknown) {
     const value = createSchema.parse(input);
     const normalized = { ...value, externalReference: value.externalReference?.trim() || null, items: [...value.items].sort((a, b) => a.itemOrder - b.itemOrder) };
@@ -84,7 +88,7 @@ export function purchaseCostOrderServices(db: AppDatabase, actorId: string) {
     return serializeDomainTransaction(() => db.transaction(async tx => {
       const tracking = await tx.select().from(purchaseCostTrackings).where(eq(purchaseCostTrackings.id, trackingId)).get();
       if (!tracking) throw new DomainError("Acompanhamento de custos não encontrado.", 404);
-      await authorization(tx, actorId).requireWorkspaceMember(tracking.workspaceId);
+      await requireTrackingContext(tx, tracking.workspaceId);
       const prior = await tx.select().from(financialOperations).where(and(eq(financialOperations.workspaceId, tracking.workspaceId), eq(financialOperations.idempotencyKey, value.idempotencyKey))).get();
       const payloadHash = hash({ trackingId, ...normalized });
       if (prior) {
@@ -154,7 +158,7 @@ export function purchaseCostOrderServices(db: AppDatabase, actorId: string) {
     return serializeDomainTransaction(() => db.transaction(async tx => {
       const tracking = await tx.select().from(purchaseCostTrackings).where(eq(purchaseCostTrackings.id, trackingId)).get();
       if (!tracking) throw new DomainError("Acompanhamento de custos não encontrado.", 404);
-      await authorization(tx, actorId).requireWorkspaceMember(tracking.workspaceId);
+      await requireTrackingContext(tx, tracking.workspaceId);
       const payloadHash = hash({ trackingId, orderId, ...normalized });
       const prior = await tx.select().from(financialOperations).where(and(eq(financialOperations.workspaceId, tracking.workspaceId), eq(financialOperations.idempotencyKey, value.idempotencyKey))).get();
       if (prior) {
@@ -210,7 +214,7 @@ export function purchaseCostOrderServices(db: AppDatabase, actorId: string) {
     return serializeDomainTransaction(() => db.transaction(async tx => {
       const tracking = await tx.select().from(purchaseCostTrackings).where(eq(purchaseCostTrackings.id, trackingId)).get();
       if (!tracking) throw new DomainError("Acompanhamento de custos não encontrado.", 404);
-      await authorization(tx, actorId).requireWorkspaceMember(tracking.workspaceId);
+      await requireTrackingContext(tx, tracking.workspaceId);
       const payloadHash = hash({ trackingId, orderId, ...value });
       const prior = await tx.select().from(financialOperations).where(and(eq(financialOperations.workspaceId, tracking.workspaceId), eq(financialOperations.idempotencyKey, value.idempotencyKey))).get();
       if (prior) {
@@ -281,7 +285,7 @@ export function purchaseCostOrderServices(db: AppDatabase, actorId: string) {
     const normalized = { ...value, balanceFunding };
       const tracking = await tx.select().from(purchaseCostTrackings).where(eq(purchaseCostTrackings.id, trackingId)).get();
       if (!tracking) throw new DomainError("Acompanhamento de custos não encontrado.", 404);
-      await authorization(tx, actorId).requireWorkspaceMember(tracking.workspaceId);
+      await requireTrackingContext(tx, tracking.workspaceId);
       const payloadHash = hash({ trackingId, orderId, ...normalized });
       const prior = await tx.select().from(financialOperations).where(and(eq(financialOperations.workspaceId, tracking.workspaceId), eq(financialOperations.idempotencyKey, value.idempotencyKey))).get();
       if (prior) {
@@ -487,7 +491,7 @@ export function purchaseCostOrderServices(db: AppDatabase, actorId: string) {
     return serializeDomainTransaction(() => db.transaction(async tx => {
       const tracking = await tx.select().from(purchaseCostTrackings).where(eq(purchaseCostTrackings.id, trackingId)).get();
       if (!tracking) throw new DomainError("Acompanhamento de custos não encontrado.", 404);
-      await authorization(tx, actorId).requireWorkspaceMember(tracking.workspaceId);
+      await requireTrackingContext(tx, tracking.workspaceId);
       const prior = await tx.select().from(financialOperations).where(and(eq(financialOperations.workspaceId, tracking.workspaceId), eq(financialOperations.idempotencyKey, value.idempotencyKey))).get();
       if (prior) {
         if (prior.operationType !== "additional_order_voided" || prior.payloadHash !== payloadHash) throw new DomainError("Esta chave já foi usada com outros dados.", 409, "IDEMPOTENCY_CONFLICT");

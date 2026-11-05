@@ -1,7 +1,9 @@
 import { test, expect } from "@playwright/test";
 import { login } from "./helpers";
-test("private routes redirect and public signup is disabled", async ({ page, request }) => {
-  for (const path of ["/favorites", "/purchase", "/history", "/history/private-id", "/profile"]) { await page.goto(path); await expect(page).toHaveURL(/\/login/); } await expect(page.getByText(/cadast/i)).toHaveCount(0);
+test("private routes redirect and Better Auth direct signup stays disabled", async ({ page, request }) => {
+  for (const path of ["/favorites", "/purchase", "/history", "/history/private-id", "/profile"]) { await page.goto(path); await expect(page).toHaveURL(/\/login/); }
+  await expect(page.getByRole("link", { name: "Criar conta", exact: true })).toBeVisible();
+  await page.goto("/signup"); await expect(page.getByRole("heading", { name: "Crie seu espaço no Loti." })).toBeVisible();
   const health = await request.get("/api/health"); expect(health.status()).toBe(200); expect(await health.json()).toEqual({ status: "ok", database: "ok" });
   const app = await request.get("/api/app"); expect(app.status()).toBe(401);
   const r = await request.post("/api/auth/sign-up/email", { data: { name: "Public", email: "public@loti.test", password: "Loti-Dev-Only-2026!" }, headers: { Origin: "http://localhost:3100" } }); expect(r.ok()).toBe(false);
@@ -16,7 +18,7 @@ test("favorite lifecycle: create, search, edit with category marker", async ({ p
 test("another member sees the favorite and cannot mutate it", async ({ page }) => {
   await login(page, "brunna"); await page.getByLabel("Buscar favoritos").fill("E2E Gabriel"); await page.getByRole("button", { name: "Tênis E2E Gabriel editado", exact: true }).click(); await expect(page.getByRole("button", { name: "Editar favorito", exact: true })).toHaveCount(0);
   const data = await (await page.request.get("/api/app")).json(); const favorite = data.favorites.find((f: { name: string }) => f.name === "Tênis E2E Gabriel editado");
-  for (const operation of ["favorite.save", "favorite.delete"]) { const r = await page.request.post("/api/app", { headers: { Origin: "http://localhost:3100" }, data: { operation, id: favorite.id, input: { name: "Changed", url: favorite.url, priceCents: 100 } } }); expect(r.status()).toBe(403); }
+  for (const operation of ["favorite.save", "favorite.delete"]) { const r = await page.request.post("/api/app", { headers: { Origin: "http://localhost:3100" }, data: { operation, workspaceId: data.workspaceId, id: favorite.id, input: { name: "Changed", url: favorite.url, priceCents: 100 } } }); expect(r.status()).toBe(403); }
 });
 test("view preference survives reload and a new login", async ({ page }) => {
   await login(page); await page.getByRole("button", { name: "Cards", exact: true }).click(); await expect(page.getByTestId("favorites-content")).toHaveClass(/cards/); await page.reload(); await expect(page.getByRole("button", { name: "Cards", exact: true })).toHaveAttribute("aria-pressed", "true");

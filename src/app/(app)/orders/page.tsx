@@ -1,4 +1,5 @@
 import { OrdersScreen, type OrdersFilters } from "@/components/orders/orders-screen";
+import { ordersView } from "@/components/orders/orders-list-state";
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
@@ -24,7 +25,10 @@ export default async function OrdersPage({
     status: ["review", "awaiting", "warehouse", "available", "package", "sent", "received"].includes(first(params.status))
       ? first(params.status)
       : "",
+    view: ordersView(first(params.view)),
     page: Number.isSafeInteger(page) && page >= 0 ? Math.min(page, 10000) : 0,
   };
-  return <OrdersScreen key={JSON.stringify(initialFilters)} initialFilters={initialFilters} />;
+  const item = first(params.item);
+  const initialItemId = item && item.length <= 200 && !item.includes(",") ? item : undefined;
+  return <OrdersScreen key={JSON.stringify([initialFilters, initialItemId])} initialFilters={initialFilters} initialItemId={initialItemId} />;
 }

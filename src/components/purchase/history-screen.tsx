@@ -14,17 +14,20 @@ import {
 } from "../packages/package-cost-client";
 export function HistoryScreen() {
   const { data } = useWorkspace();
-  const [trackings, setTrackings] = useState<CostTrackingSummary[]>([]),
+  const personal = data.workspaceKind === "personal";
+  const [trackingData, setTrackingData] = useState<{ workspaceId: string; trackings: CostTrackingSummary[] } | null>(null),
     [starting, setStarting] = useState<string | null>(null);
+  const trackings = trackingData?.workspaceId === data.workspaceId ? trackingData.trackings : [];
   useEffect(() => {
+    if (personal) return;
     let active = true;
-    void costRequest<CostTrackingSummary[]>("/api/packages").then((result) => {
-      if (active && result.ok && result.data) setTrackings(result.data);
+    void costRequest<CostTrackingSummary[]>("/api/packages", undefined, data.workspaceId).then((result) => {
+      if (active && result.ok && result.data) setTrackingData({ workspaceId: data.workspaceId, trackings: result.data });
     });
     return () => {
       active = false;
     };
-  }, []);
+  }, [data.workspaceId, personal]);
   const history = data.purchases
     .filter((p) => p.status === "finalized")
     .sort((a, b) => (b.finalizedAt ?? "").localeCompare(a.finalizedAt ?? ""));
@@ -33,8 +36,8 @@ export function HistoryScreen() {
     const result = await costRequest<CostTrackingSummary[]>("/api/packages", {
       operation: "start",
       purchaseId,
-    });
-    if (result.ok && result.data) setTrackings(result.data);
+    }, data.workspaceId);
+    if (result.ok && result.data) setTrackingData({ workspaceId: data.workspaceId, trackings: result.data });
     else toast.error(result.error ?? "Não foi possível iniciar os custos.");
     setStarting(null);
   }
@@ -43,7 +46,7 @@ export function HistoryScreen() {
       <div className="page-heading">
         <div>
           <h1>Histórico</h1>
-          <p className="muted">As compras que vocês fizeram juntos.</p>
+          <p className="muted">{personal ? "Suas compras finalizadas neste espaço pessoal." : "As compras que vocês fizeram juntos."}</p>
         </div>
       </div>
       <div className="history-list">
@@ -94,7 +97,7 @@ export function HistoryScreen() {
       <ArrowUpRight size={20} />
     </Link>
 
-    <div className="history-cost-action">
+    {!personal && <div className="history-cost-action">
       {tracking ? (
         <Button asChild variant="outline" size="sm">
           <Link href={`/packages/${tracking.tracking.id}`}>
@@ -111,7 +114,7 @@ export function HistoryScreen() {
           {starting === p.id ? "Iniciando…" : "Iniciar custos"}
         </Button>
       )}
-    </div>
+    </div>}
   </div>
 </article>
           );

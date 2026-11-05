@@ -24,14 +24,18 @@ export const warehouseCommandSchema = z.discriminatedUnion("operation", [
   z.object({ operation: z.literal("release"), packageId: id, expectedRevision: revision, reservationIds: z.array(id).min(1).max(10000), reason }).strict(),
 ]);
 type Command = z.infer<typeof warehouseCommandSchema>;
-export const warehouseQuerySchema=z.object({page:z.coerce.number().int().min(0).max(10000).default(0),pageSize:z.coerce.number().int().min(1).max(100).default(20),search:z.string().max(200).default(""),account:z.string().max(200).default(""),person:z.string().max(200).default(""),origin:z.enum(["","original","additional"]).default(""),status:z.enum(["","review","awaiting","warehouse","available","package","sent","received"]).default(""),trackingId:z.string().max(200).default(""),packageId:z.string().max(200).default(""),packagePage:z.coerce.number().int().min(0).max(10000).default(0)}).strict();
+const itemIdsQuery = z.string().max(20099).default("").refine(value => !value || (value.split(",").length <= 100 && value.split(",").every(id => id.length > 0 && id.length <= 200) && new Set(value.split(",")).size === value.split(",").length), "Selecione até 100 itens distintos.");
+export const warehouseQuerySchema=z.object({workspaceId:z.string().min(1).max(200).optional(),itemIds:itemIdsQuery,page:z.coerce.number().int().min(0).max(10000).default(0),pageSize:z.coerce.number().int().min(1).max(100).default(20),search:z.string().trim().max(200).default(""),account:z.string().max(200).default(""),person:z.string().max(200).default(""),origin:z.enum(["","original","additional"]).default(""),view:z.enum(["all","warehouse","available","awaiting"]).default("all"),status:z.enum(["","review","awaiting","warehouse","available","package","sent","received"]).default(""),trackingId:z.string().max(200).default(""),packageId:z.string().max(200).default(""),packagePage:z.coerce.number().int().min(0).max(10000).default(0)}).strict();
 
 export function warehouseServices(db: AppDatabase, userId: string) {
-  async function list(query?:z.infer<typeof warehouseQuerySchema>) {
-    return readDatabaseSnapshot(db,tx=>readList(tx,query));
+  async function list(query?:z.infer<typeof warehouseQuerySchema>, expectedWorkspaceId?:string) {
+    return readDatabaseSnapshot(db,tx=>readList(tx,query,expectedWorkspaceId));
   }
-  async function readList(db:Pick<AppDatabase,"select"|"all">,query?:z.infer<typeof warehouseQuerySchema>) {
-    const { workspaceId } = await authorization(db,userId).requireWorkspaceMember();
+  async function readList(db:Pick<AppDatabase,"select"|"all">,query?:z.infer<typeof warehouseQuerySchema>,expectedWorkspaceId?:string) {
+    if (expectedWorkspaceId && query?.workspaceId && expectedWorkspaceId !== query.workspaceId) throw new DomainError("O espaço ativo mudou. Atualize a tela antes de continuar.",409,"WORKSPACE_CONTEXT_CHANGED");
+    const access = await authorization(db,userId).requireWorkspaceAccess(expectedWorkspaceId ?? query?.workspaceId);
+    await authorization(db,userId).requireActiveWorkspaceContext(access.workspaceId);
+    const { workspaceId } = access;
     const pageResult=query?await warehousePage(db,workspaceId,query):null;
     const positions = pageResult ? pageResult.ids.length ? await db.select().from(s.orderWarehousePositions).where(inArray(s.orderWarehousePositions.costItemId,pageResult.ids)).all() : [] : await db.select().from(s.orderWarehousePositions).where(eq(s.orderWarehousePositions.workspaceId,workspaceId)).all();
     const positionIds=positions.map(p=>p.costItemId);
@@ -80,7 +84,7 @@ export function warehouseServices(db: AppDatabase, userId: string) {
   async function execute(workspaceId: string, key: string, raw: unknown) {
     id.parse(key); const command = warehouseCommandSchema.parse(raw), payload = JSON.stringify(command);
     return logisticsTransaction(() => db.transaction(async tx => {
-      await authorization(tx,userId).requireWorkspaceMember(workspaceId);
+      await authorization(tx,userId).requireActiveWorkspaceContext(workspaceId);
       const prior = await tx.select().from(s.logisticsCommands).where(and(eq(s.logisticsCommands.workspaceId,workspaceId),eq(s.logisticsCommands.key,key))).get();
       if (prior) {
         if (prior.payload !== payload || prior.actorId !== userId) throw new DomainError("A chave já foi usada em outra operação.",409);
@@ -94,7 +98,7 @@ export function warehouseServices(db: AppDatabase, userId: string) {
 
   async function account(tx: CostTransaction, workspaceId: string, accountId: string) {
     const row = await tx.select().from(s.hubbuyAccounts).where(and(eq(s.hubbuyAccounts.id,accountId),eq(s.hubbuyAccounts.workspaceId,workspaceId),isNull(s.hubbuyAccounts.deletedAt))).get();
-    if (!row || row.status !== "active") throw new DomainError("Selecione uma conta HubBuy ativa e conferida deste espaço.",409);
+    if (!row || row.status !== "active") throw new DomainError("Escolha uma conta HubBuy ativa neste grupo.",409);
   }
   async function event(tx: CostTransaction, workspaceId: string, resourceId: string, command: Command, before: unknown, after: unknown) {
     await tx.insert(s.logisticsEvents).values({id:crypto.randomUUID(),workspaceId,resourceId,action:command.operation,reason:command.reason,before,after,actorId:userId,createdAt:new Date()}).run();

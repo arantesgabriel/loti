@@ -1,15 +1,23 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { APIError } from "better-auth/api";
-const mocks = vi.hoisted(() => ({ getSession: vi.fn(), headers: vi.fn(async () => new Headers()) }));
+const mocks = vi.hoisted(() => ({ getSession: vi.fn(), activationState: vi.fn(), headers: vi.fn(async () => new Headers()) }));
 vi.mock("next/headers", () => ({ headers: mocks.headers }));
 vi.mock("@/lib/auth/index", () => ({ auth: { api: { getSession: mocks.getSession } } }));
+vi.mock("@/lib/auth/activation", () => ({ activationState: mocks.activationState }));
 import { requireUser } from "@/lib/auth/session";
 
 afterEach(() => vi.restoreAllMocks());
 describe("session availability", () => {
   it("returns the authenticated user", async () => {
     mocks.getSession.mockResolvedValue({ user: { id: "member" } });
+    mocks.activationState.mockResolvedValue({ pending: false });
     await expect(requireUser()).resolves.toEqual({ id: "member" });
+  });
+  it("blocks pending activation unless the caller explicitly allows it", async () => {
+    mocks.getSession.mockResolvedValue({ user: { id: "member" } });
+    mocks.activationState.mockResolvedValue({ pending: true });
+    await expect(requireUser()).rejects.toMatchObject({ status: 403, code: "EMAIL_ACTIVATION_REQUIRED" });
+    await expect(requireUser({ allowPendingActivation: true })).resolves.toEqual({ id: "member" });
   });
   it("keeps missing and rejected sessions unauthorized", async () => {
     mocks.getSession.mockResolvedValue(null);

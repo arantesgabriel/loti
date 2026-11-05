@@ -1,6 +1,6 @@
 "use client";
 import { useForm, useWatch } from "react-hook-form";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import type { ClientData } from "@/lib/domain/services";
 import { parseMoney, moneyInput } from "@/lib/domain/money";
@@ -11,8 +11,9 @@ import { useWorkspace } from "../workspace-provider";
 export type ClientFavorite = ClientData["favorites"][number];
 type Fields = { name: string; url: string; price: string; variant: string; notes: string; collectionId: string; qcStatus: "not_reviewed" | "approved" | "rejected" };
 export function FavoriteEditor({ favorite, onClose, onExisting }: { favorite?: ClientFavorite; onClose: () => void; onExisting: (favorite: ClientFavorite) => void }) {
-  const { data, busy, mutate } = useWorkspace(); const [error, setError] = useState("");
-  const { register, handleSubmit, control, formState: { errors } } = useForm<Fields>({ defaultValues: { name: favorite?.name ?? "", url: favorite?.url ?? "", price: moneyInput(favorite?.priceCents ?? null), variant: favorite?.variant ?? "", notes: favorite?.notes ?? "", collectionId: favorite?.collectionId ?? "", qcStatus: favorite?.qcStatus ?? "not_reviewed" } });
+  const { data, busy, mutate, registerWorkspaceDraft } = useWorkspace(); const [error, setError] = useState("");
+  const { register, handleSubmit, control, formState: { errors, isDirty } } = useForm<Fields>({ defaultValues: { name: favorite?.name ?? "", url: favorite?.url ?? "", price: moneyInput(favorite?.priceCents ?? null), variant: favorite?.variant ?? "", notes: favorite?.notes ?? "", collectionId: favorite?.collectionId ?? "", qcStatus: favorite?.qcStatus ?? "not_reviewed" } });
+  useEffect(() => registerWorkspaceDraft("favorite-editor", isDirty), [isDirty, registerWorkspaceDraft]);
   const url = useWatch({ control, name: "url" }), key = buildCanonicalProductKey(url);
   const duplicate = key ? data.favorites.find(f => f.canonicalProductKey === key && f.id !== favorite?.id) : undefined;
   async function save(fields: Fields) {

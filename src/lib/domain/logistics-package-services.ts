@@ -15,6 +15,8 @@ import {countActivePackageUnitsByPackage} from "./logistics-package-reservations
 
 const minor = z.number().int().min(0).max(1_000_000_000_000);
 const base = { expectedRevision:z.number().int().nonnegative(), reason:z.string().trim().min(3).max(1000) };
+const logisticsStages = ["preparing", "sent", "received"] as const;
+const logisticsStageOrder = Object.fromEntries(logisticsStages.map((stage, index) => [stage, index])) as Record<typeof logisticsStages[number], number>;
 const personShare=z.object({personId:z.string(),amountCents:minor});
 const manifestSchema=z.object({version:z.literal(1),packageId:z.string(),items:z.array(z.object({costItemId:z.string(),orderId:z.string(),trackingId:z.string(),valuationVersion:z.number(),quantity:z.number(),valuationKey:z.string(),participants:z.array(z.object({personId:z.string(),allocationOrder:z.number(),weight:z.number()})),components:z.array(z.object({name:z.string(),sourceAmountCents:minor,units:z.array(z.object({unitIndex:z.number().int(),amountCents:minor,people:z.array(personShare)}))}))})),charges:z.array(z.object({name:z.string(),amountCents:minor,units:z.array(z.object({costItemId:z.string(),unitIndex:z.number().int(),amountCents:minor,people:z.array(personShare)}))}))});
 export const logisticsPackageCommandSchema = z.discriminatedUnion("operation",[
@@ -23,6 +25,7 @@ export const logisticsPackageCommandSchema = z.discriminatedUnion("operation",[
   z.object({...base,operation:z.literal("pay_charge"),charge:z.enum(["freight","customs"]),amountCents:minor,paymentMethod:z.enum(["pix","card"]),feeBps:z.number().int().min(0).max(10000),confirmed:z.literal(true)}).strict(),
   z.object({...base,operation:z.literal("record_charge"),charge:z.enum(["freight","customs"]),valueState:z.enum(["pending","known","no_charge"]),amountCents:minor.nullable(),paymentMethod:z.enum(["pix","card"]).nullable(),feeBps:z.number().int().min(0).max(10000).nullable()}).strict(),
   z.object({...base,operation:z.literal("correct_charge"),charge:z.enum(["freight","customs"]),valueState:z.enum(["pending","known","no_charge"]),amountCents:minor.nullable(),paymentMethod:z.enum(["pix","card"]).nullable(),feeBps:z.number().int().min(0).max(10000).nullable(),confirmedPaymentReset:z.literal(true)}).strict(),
+  z.object({...base,operation:z.literal("regress_stage"),targetStage:z.enum(logisticsStages),confirmed:z.literal(true),regressionConfirmed:z.literal(true)}).strict(),
   z.object({...base,operation:z.literal("weight"),weightGrams:z.number().int().min(1).max(1_000_000_000)}).strict(),
 ]);
 
@@ -30,17 +33,26 @@ export function logisticsPackageServices(db:AppDatabase,userId:string) {
   async function get(packageId:string) {
     return readDatabaseSnapshot(db,snapshot=>getSnapshot(snapshot,packageId));
   }
+  async function getFromSnapshot(snapshot:Pick<AppDatabase,"select">,packageId:string) {
+    return getSnapshot(snapshot,packageId);
+  }
   async function getSnapshot(db:Pick<AppDatabase,"select">,packageId:string) {
     const pkg = await db.select().from(s.logisticsPackages).where(eq(s.logisticsPackages.id,packageId)).get();
     if (!pkg) throw new DomainError("Pacote não encontrado.",404);
-    await authorization(db,userId).requireWorkspaceMember(pkg.workspaceId);
+    await authorization(db,userId).requireActiveWorkspaceContext(pkg.workspaceId);
     const current=await detail(db,pkg);
-    let valuation:Awaited<ReturnType<typeof manifest>>|null=null,valuationError:string|null=null;
+    let valuation:Awaited<ReturnType<typeof manifest>>|null=null,listValuation:Awaited<ReturnType<typeof manifest>>|null=null,valuationError:string|null=null;
     try {
       const latest=[...current.manifests].sort((a,b)=>b.revision-a.revision)[0];
       valuation=pkg.contentClosedAt && latest ? manifestSchema.parse(latest.snapshot) : await manifest(db,pkg,current.reservations);
-    }catch(error){if(error instanceof DomainError)valuationError=error.message;else throw error;}
-    return {...current,valuation,valuationError};
+      listValuation=valuation;
+    }catch(error){
+      if(error instanceof DomainError){
+        valuationError=error.message;
+        try{listValuation=await manifest(db,pkg,current.reservations,true);}catch(previewError){if(!(previewError instanceof DomainError))throw previewError;}
+      }else throw error;
+    }
+    return {...current,valuation,listValuation,valuationError};
   }
   async function detail(tx:Pick<AppDatabase,"select">,pkg:typeof s.logisticsPackages.$inferSelect) {
     const reservations = await tx.select().from(s.logisticsReservations).where(and(eq(s.logisticsReservations.packageId,pkg.id),isNull(s.logisticsReservations.releasedAt))).all();
@@ -54,21 +66,22 @@ export function logisticsPackageServices(db:AppDatabase,userId:string) {
     const legacyFreight=legacyCharges.find(c=>c.chargeType==="brazil_freight");
     return {pkg,reservations,unitCount,manifests,events,legacyCharges,legacyProjections,ownership,inPackage:!!pkg.contentClosedAt && !!(ownership.freight?pkg.freightPaidAt:legacyFreight?.paymentStatus==="paid"?legacyFreight.paidAt:null)};
   }
-  async function execute(packageId:string,key:string,input:unknown) {
+  async function execute(packageId:string,key:string,input:unknown,expectedWorkspaceId?:string) {
     z.string().min(1).max(200).parse(key);
     const command = logisticsPackageCommandSchema.parse(input), payload=JSON.stringify({packageId,...command});
     return logisticsTransaction(() => db.transaction(async tx => {
       const pkg = await tx.select().from(s.logisticsPackages).where(eq(s.logisticsPackages.id,packageId)).get();
       if (!pkg) throw new DomainError("Pacote não encontrado.",404);
-      await authorization(tx,userId).requireWorkspaceMember(pkg.workspaceId);
+      if (expectedWorkspaceId && expectedWorkspaceId !== pkg.workspaceId) throw new DomainError("O pacote pertence a outro espaço. Atualize a página antes de salvar.",409,"WORKSPACE_CONTEXT_CHANGED");
+      await authorization(tx,userId).requireActiveWorkspaceContext(pkg.workspaceId);
       const prior = await tx.select().from(s.logisticsCommands).where(and(eq(s.logisticsCommands.workspaceId,pkg.workspaceId),eq(s.logisticsCommands.key,key))).get();
       if (prior) {
         if (prior.payload !== payload || prior.actorId !== userId) throw new DomainError("Chave de operação já utilizada.",409);
         return {id:prior.resultId};
       }
       if (pkg.revision !== command.expectedRevision) throw new DomainError("O pacote mudou. Atualize a página.",409);
-      if (pkg.financialClosedAt && !["dispatch","receive","weight","reopen_financial"].includes(command.operation)) throw new DomainError("Este pacote está encerrado financeiramente.",409);
-      if (command.operation !== "review" && pkg.reviewState !== "confirmed") throw new DomainError("Confira o legado antes de alterar o pacote.",409);
+      if (pkg.financialClosedAt && !["dispatch","receive","regress_stage","weight","reopen_financial"].includes(command.operation)) throw new DomainError("Este pacote está encerrado financeiramente.",409);
+      if (command.operation !== "review" && pkg.reviewState !== "confirmed") throw new DomainError("Confirme o pacote antes de fazer alterações.",409);
       const now = new Date(), patch:Partial<typeof s.logisticsPackages.$inferInsert>={revision:pkg.revision+1};
       const current = await detail(tx,pkg);
       const legacyFreight=current.legacyCharges.find(c=>c.chargeType==="brazil_freight");
@@ -80,7 +93,7 @@ export function logisticsPackageServices(db:AppDatabase,userId:string) {
         const account = await tx.select().from(s.hubbuyAccounts).where(and(eq(s.hubbuyAccounts.id,command.accountId),eq(s.hubbuyAccounts.workspaceId,pkg.workspaceId),isNull(s.hubbuyAccounts.deletedAt))).get();
         if (!account || account.status !== "active") throw new DomainError("A conta precisa estar ativa e conferida.",409);
         const positions = current.reservations.length ? await tx.select().from(s.orderWarehousePositions).where(inArray(s.orderWarehousePositions.costItemId,[...new Set(current.reservations.map(r=>r.costItemId))])).all() : [];
-        if (positions.some(p => p.reviewState !== "confirmed" || p.accountId !== account.id)) throw new DomainError("Confira primeiro a chegada e conta de todos os itens reservados.",409);
+        if (positions.some(p => p.reviewState !== "confirmed" || p.accountId !== account.id)) throw new DomainError("Registre a chegada e a conta de todos os itens do pacote em Pedidos.",409);
         patch.accountId=account.id; patch.reviewState="confirmed";
         if(command.confirmClosedContent && !pkg.contentClosedAt){
           if(!current.reservations.length)throw new DomainError("Confira um conteúdo não vazio antes de confirmar seu fechamento.",409);
@@ -89,7 +102,7 @@ export function logisticsPackageServices(db:AppDatabase,userId:string) {
           patch.contentClosedAt=now; // Current explicit confirmation, never an inferred historical occurrence.
         }
       } else if(command.operation==="confirm_legacy_content"){
-        if(!pkg.legacyPackageId || pkg.contentClosedAt || !current.reservations.length)throw new DomainError("Este pacote não precisa de confirmação legada de conteúdo.",409);
+        if(!pkg.legacyPackageId || pkg.contentClosedAt || !current.reservations.length)throw new DomainError("O fechamento do conteúdo já está resolvido ou o pacote está vazio.",409);
         const snapshot=await manifest(tx,pkg,current.reservations);
         await tx.insert(s.logisticsManifests).values({id:crypto.randomUUID(),packageId,revision:pkg.revision+1,snapshot,createdBy:userId,createdAt:now}).run();
         patch.contentClosedAt=now;
@@ -123,6 +136,17 @@ export function logisticsPackageServices(db:AppDatabase,userId:string) {
       } else if (command.operation === "receive") {
         if (pkg.stage !== "sent") throw new DomainError("Registre o despacho antes do recebimento.",409);
         patch.stage="received"; patch.receivedAt=now;
+      } else if (command.operation === "regress_stage") {
+        if (logisticsStageOrder[command.targetStage] !== logisticsStageOrder[pkg.stage] - 1) {
+          throw new DomainError("A regressão só pode voltar uma etapa por vez.",409);
+        }
+        patch.stage=command.targetStage;
+        if (command.targetStage === "preparing") {
+          patch.dispatchedAt=null;
+          patch.receivedAt=null;
+        } else {
+          patch.receivedAt=null;
+        }
       } else if (command.operation === "weight") {
         if (!pkg.contentClosedAt || !freightPaid) throw new DomainError("Peso disponível após conteúdo fechado e frete pago.",409);
         patch.weightGrams=command.weightGrams;
@@ -143,7 +167,7 @@ export function logisticsPackageServices(db:AppDatabase,userId:string) {
       return {id:packageId};
     },{behavior:"immediate"}));
   }
-  async function manifest(tx:Pick<AppDatabase,"select">,pkg:typeof s.logisticsPackages.$inferSelect,reservations:typeof s.logisticsReservations.$inferSelect[]) {
+  async function manifest(tx:Pick<AppDatabase,"select">,pkg:typeof s.logisticsPackages.$inferSelect,reservations:typeof s.logisticsReservations.$inferSelect[],allowUnpaidProducts=false) {
     const result:z.infer<typeof manifestSchema>["items"]=[];
     for (const costItemId of [...new Set(reservations.map(r=>r.costItemId))].sort()) {
       const cost=await tx.select().from(s.purchaseItemCosts).where(eq(s.purchaseItemCosts.id,costItemId)).get();
@@ -153,7 +177,7 @@ export function logisticsPackageServices(db:AppDatabase,userId:string) {
       const detail=await readCostTracking(tx,userId,cost.trackingId,"order"), line=detail.calculation.items.find(i=>i.id===costItemId);
       const item=detail.items.find(i=>i.id===costItemId)??detail.productOrders.flatMap(o=>o.items).find(i=>i.cost.id===costItemId);
       const productPayment=detail.charges.find(c=>c.orderId===cost.orderId && c.chargeType==="products");
-      if(productPayment?.paymentStatus!=="paid")throw new DomainError("Confirme o financiamento dos produtos no pedido antes de fechar o conteúdo.",409);
+      if(!allowUnpaidProducts && productPayment?.paymentStatus!=="paid")throw new DomainError("Confirme o financiamento dos produtos no pedido antes de fechar o conteúdo.",409);
       if (!line || !item || line.components.some(c=>c.amountCents===null) || line.undistributedCents!==0) throw new DomainError("Resolva as bases e parcelas do pedido antes de fechar o conteúdo.",409);
       const selected=reservations.filter(r=>r.costItemId===costItemId).sort((a,b)=>a.unitIndex-b.unitIndex);
       const components=line.components.map(component=>{
@@ -180,5 +204,5 @@ export function logisticsPackageServices(db:AppDatabase,userId:string) {
     });
     return manifestSchema.parse({version:1,packageId:pkg.id,items:result,charges});
   }
-  return {get,execute};
+  return {get,getFromSnapshot,execute};
 }

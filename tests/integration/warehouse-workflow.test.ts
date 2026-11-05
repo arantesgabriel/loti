@@ -77,11 +77,15 @@ describe("orders warehouse workflow",() => {
       expect(pkg.unitCount).toBe(pkg.reservations.length);
       await packages.execute(reserved.id,"dispatch",{operation:"dispatch",expectedRevision:pkg.pkg.revision,reason:"Despacho manual conferido",confirmed:true});
       pkg=await packages.get(reserved.id);expect(pkg.pkg.stage).toBe("sent");
-      expect((await listLogisticsPackages(f.db,"alice",{page:0,filter:"sent"})).rows.find(row=>row.pkg.id===reserved.id)?.unitCount).toBe(pkg.unitCount);
+      const sentList=await listLogisticsPackages(f.db,"alice",{page:0,filter:"sent"});
+      expect(sentList.rows.find(row=>row.pkg.id===reserved.id)?.unitCount).toBe(pkg.unitCount);
+      expect(sentList.counts.sent).toBeGreaterThanOrEqual(1);
       expect(pkg.unitCount).toBe(pkg.reservations.length);
       await packages.execute(reserved.id,"received",{operation:"receive",expectedRevision:pkg.pkg.revision,reason:"Entrega manual conferida",confirmed:true});
       pkg=await packages.get(reserved.id);expect(pkg.pkg.stage).toBe("received");
-      expect((await listLogisticsPackages(f.db,"alice",{page:0,filter:"received"})).rows.find(row=>row.pkg.id===reserved.id)?.unitCount).toBe(pkg.unitCount);
+      const receivedList=await listLogisticsPackages(f.db,"alice",{page:0,filter:"received"});
+      expect(receivedList.rows.find(row=>row.pkg.id===reserved.id)?.unitCount).toBe(pkg.unitCount);
+      expect(receivedList.counts.received).toBeGreaterThanOrEqual(1);
       expect(pkg.unitCount).toBe(pkg.reservations.length);
       const summary=await readWorkflowFinancialSummary(f.db,"alice");
       expect(summary.ordersCents).toBe(612);

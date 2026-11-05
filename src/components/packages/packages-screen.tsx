@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingState } from "@/components/ui/loading-state";
+
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowUpRight, Package, ReceiptText } from "lucide-react";
@@ -7,21 +9,23 @@ import { EmptyState } from "@/components/shared";
 import { Button } from "@/components/ui/button";
 import { costRequest, type CostTrackingSummary } from "./package-cost-client";
 import { formatMoney } from "@/lib/domain/money";
+import { useWorkspace } from "@/components/workspace-provider";
 
 type Filter = "open" | "closed";
 
 export function PackagesScreen() {
+  const { data: workspace } = useWorkspace();
   const [rows, setRows] = useState<CostTrackingSummary[]>([]), [filter, setFilter] = useState<Filter>("open"), [loading, setLoading] = useState(true), [error, setError] = useState("");
   useEffect(() => {
     let active = true;
-    void costRequest<CostTrackingSummary[]>("/api/packages").then(result => {
+    void costRequest<CostTrackingSummary[]>("/api/packages", undefined, workspace.workspaceId).then(result => {
       if (!active) return;
       if (result.ok && result.data) setRows(result.data);
       else setError(result.error ?? "Não foi possível carregar os acompanhamentos.");
       setLoading(false);
     });
     return () => { active = false; };
-  }, []);
+  }, [workspace.workspaceId]);
   const counts = useMemo(() => ({ open: rows.filter(row => row.tracking.status === "open").length, closed: rows.filter(row => row.tracking.status === "closed").length }), [rows]);
   const visible = rows.filter(row => row.tracking.status === filter).sort((a, b) => new Date(b.tracking.updatedAt ?? 0).getTime() - new Date(a.tracking.updatedAt ?? 0).getTime());
 
@@ -31,7 +35,7 @@ export function PackagesScreen() {
       {(["open", "closed"] as const).map(value => <button key={value} role="tab" aria-selected={filter === value} className={filter === value ? "selected" : ""} onClick={() => setFilter(value)}>{value === "open" ? "Abertos" : "Encerrados"}<span>{counts[value]}</span></button>)}
     </div>
     {error && <p className="error" role="alert">{error}</p>}
-    {loading ? <p className="muted cost-loading">Carregando acompanhamentos…</p> : visible.length ? <div className="cost-tracking-list">
+    {loading ? <LoadingState label="Carregando acompanhamentos…" rows={3} /> : visible.length ? <div className="cost-tracking-list">
       {visible.map(row => { const paymentPending = row.charges.some(charge => charge.chargeType === "products" ? charge.paymentStatus !== "paid" : charge.valueState === "pending" || charge.valueState === "known" && charge.paymentStatus !== "paid"); const refundPending = row.refundsSummary.requestedCount > 0; const hasPending = paymentPending || row.calculation.summary.pendingItemCount > 0 || refundPending; return <Link className="cost-tracking-row" key={row.tracking.id} href={`/packages/${row.tracking.id}`}>
         <span className="cost-tracking-icon"><Package size={22} aria-hidden="true" /></span>
         <span className="cost-tracking-copy"><strong>{row.purchase.name}</strong><small>{row.packages.length} {row.packages.length === 1 ? "pacote" : "pacotes"} · {row.calculation.summary.shippingUnits} de {row.calculation.summary.unitCount} unidades para envio{refundPending ? ` · ${row.refundsSummary.requestedCount} reembolso(s) a receber` : ""}</small><span className={`cost-status ${row.tracking.status}`}>{row.tracking.status === "open" ? "Custos abertos" : "Custos encerrados"}{hasPending && <em>{refundPending ? "Reembolso solicitado" : "Pendências financeiras"}</em>}</span></span>

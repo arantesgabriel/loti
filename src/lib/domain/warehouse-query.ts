@@ -19,13 +19,22 @@ export async function warehousePage(db:Pick<AppDatabase,"all">,workspaceId:strin
     received:sql`EXISTS(SELECT 1 FROM logistics_reservations r JOIN logistics_packages p ON p.id=r.package_id WHERE r.cost_item_id=w.cost_item_id AND r.released_at IS NULL AND p.stage='received')`,
   };
   const filters=[sql`w.workspace_id=${workspaceId}`,sql`o.state='recorded'`,sql`NOT EXISTS(SELECT 1 FROM purchase_order_corrections x WHERE x.previous_order_id=o.id)`];
-  if(q.search)filters.push(sql`instr(lower(coalesce(i.name,a.name)),lower(${q.search}))>0`);
+  // Bounded exact identities revalidate selections across list pages and filters.
+  if(q.itemIds)filters.push(sql`w.cost_item_id IN (${sql.join(q.itemIds.split(",").map(id=>sql`${id}`),sql`,`)})`);
+  if(q.search)filters.push(sql`(
+    instr(lower(coalesce(i.name,a.name)),lower(${q.search}))>0 OR
+    instr(lower(coalesce(i.variant,a.variant,'')),lower(${q.search}))>0 OR
+    instr(lower(coalesce(o.external_reference,'')),lower(${q.search}))>0 OR
+    instr(lower(o.id),lower(${q.search}))>0 OR
+    EXISTS(SELECT 1 FROM purchase_cost_trackings st JOIN purchases sp ON sp.id=st.purchase_id WHERE st.id=c.tracking_id AND instr(lower(sp.name),lower(${q.search}))>0)
+  )`);
   if(q.account)filters.push(sql`w.account_id=${q.account}`);
   if(q.person)filters.push(sql`EXISTS(SELECT 1 FROM purchase_cost_participants cp WHERE cp.cost_item_id=w.cost_item_id AND cp.person_id=${q.person})`);
   if(q.origin)filters.push(sql`o.kind=${q.origin}`);
   if(q.trackingId)filters.push(sql`c.tracking_id=${q.trackingId}`);
   if(q.packageId)filters.push(sql`EXISTS(SELECT 1 FROM logistics_reservations r WHERE r.cost_item_id=w.cost_item_id AND r.released_at IS NULL AND r.package_id=${q.packageId})`);
   if(q.status)filters.push(stage[q.status]);
+  if(q.view && q.view!=="all")filters.push(stage[q.view]);
   const from=sql`FROM order_warehouse_positions w JOIN purchase_item_costs c ON c.id=w.cost_item_id JOIN purchase_cost_orders o ON o.id=c.order_id LEFT JOIN purchase_items i ON i.id=c.purchase_item_id LEFT JOIN purchase_additional_order_items a ON a.id=c.additional_order_item_id WHERE ${sql.join(filters,sql` AND `)}`;
   const count=await db.all<{total:number}>(sql`SELECT count(*) AS total ${from}`);
   const ids=await db.all<{id:string}>(sql`SELECT w.cost_item_id AS id ${from} ORDER BY o.created_at DESC,o.id,c.item_order,c.id LIMIT ${q.pageSize} OFFSET ${q.page*q.pageSize}`);
