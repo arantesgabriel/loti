@@ -1,5 +1,5 @@
-// Editorial candidate for local review. Public tools and independent signup
-// remain release dependencies; this module never imports application data.
+// Editorial landing content. Public tools remain release dependencies; this
+// module never imports application data.
 export const landingContent = {
   hero: {
     title: "Suas importações, tudo em um só lugar.",
@@ -27,9 +27,9 @@ export const landingContent = {
     description: "Explore recursos úteis para suas decisões de importação, sem precisar criar uma conta.",
   },
   faq: [
-    { question: "Como acesso o Loti?", answer: "Se você já tem uma conta, use Entrar. Novos participantes recebem um convite de alguém do grupo. O cadastro público ainda não está disponível." },
+    { question: "Como acesso o Loti?", answer: "Crie uma conta para organizar seus favoritos no seu espaço pessoal. Para entrar em um grupo, aceite um convite enviado por alguém que já participa." },
     { question: "O que posso organizar no Loti?", answer: "Você pode organizar favoritos, acompanhar compras e consultar informações de produtos, pacotes e custos em uma mesma plataforma." },
-    { question: "Posso organizar produtos meus e compras em grupo?", answer: "Sim. Você pode manter seus próprios favoritos e participar de compras compartilhadas, com produtos por participante e divisão de custos. Atualmente, o acesso ao gerenciador é por convite a um grupo." },
+    { question: "Posso organizar produtos meus e compras em grupo?", answer: "Sim. Comece no seu espaço pessoal e aceite um convite para participar de compras compartilhadas, com produtos por participante e divisão de custos." },
     { question: "O Loti faz as compras por mim?", answer: "As compras são feitas por você nos sites de origem. O Loti ajuda a organizar os produtos, acompanhar os itens da compra e registrar seus custos." },
     { question: "Como os custos são registrados?", answer: "Fretes e taxas são informados manualmente em Pacotes e custos, após a finalização da compra. O Loti organiza a distribuição desses valores entre os produtos; não consulta cotações nem acompanha entregas automaticamente." },
     { question: "Preciso de uma conta para acessar as ferramentas?", answer: "As páginas das ferramentas podem ser acessadas sem conta. As cinco ferramentas ainda estão em construção. Para acessar o gerenciador de favoritos e compras, entre com sua conta do Loti." },

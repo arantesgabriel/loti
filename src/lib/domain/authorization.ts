@@ -1,15 +1,34 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { AppDatabase } from "../db/connection";
-import { workspaceMembers, userPreferences, favorites, collections, purchases, workspaces } from "../db/schema";
+import { accountActivationRequirements, user, workspaceMembers, userPreferences, favorites, collections, purchases, workspaces } from "../db/schema";
 import { DomainError } from "./errors";
 type AuthorizationDatabase = Pick<AppDatabase, "select"> & Partial<Pick<AppDatabase, "all" | "update">>;
 export function authorization(db: AuthorizationDatabase, userId: string) {
   let hasWorkspaceKind: Promise<boolean> | undefined;
+  let hasActivationRequirements: Promise<boolean> | undefined;
 
   function supportsWorkspaceKinds() {
     if (!db.all) return Promise.resolve(true);
     return hasWorkspaceKind ??= db.all<{ name: string }>(sql`PRAGMA table_info(workspaces)`)
       .then(columns => columns.some(column => column.name === "kind"));
+  }
+
+  function supportsActivationRequirements() {
+    if (!db.all) return Promise.resolve(false);
+    return hasActivationRequirements ??= db.all<{ name: string }>(sql`PRAGMA table_info(account_activation_requirements)`)
+      .then(columns => columns.length > 0);
+  }
+
+  async function requireActivatedAccount() {
+    if (!await supportsActivationRequirements()) return;
+    const accountState = await db.select({
+      required: accountActivationRequirements.userId,
+      verified: user.emailVerified,
+    }).from(user).leftJoin(accountActivationRequirements, eq(accountActivationRequirements.userId, user.id))
+      .where(eq(user.id, userId)).get();
+    if (accountState?.required && !accountState.verified) {
+      throw new DomainError("Confirme seu email para acessar o Loti.", 403, "EMAIL_ACTIVATION_REQUIRED");
+    }
   }
 
   async function legacySharedWorkspace(id: string) {
@@ -108,6 +127,7 @@ export function authorization(db: AuthorizationDatabase, userId: string) {
   }
 
   async function requireWorkspaceAccess(workspaceId?: string) {
+    await requireActivatedAccount();
     const workspace = workspaceId
       ? await getWorkspace(workspaceId)
       : await resolveActiveWorkspace();
@@ -116,12 +136,16 @@ export function authorization(db: AuthorizationDatabase, userId: string) {
   }
 
   async function requireActiveWorkspaceContext(workspaceId: string) {
+    // Establish access to the requested workspace before comparing the active
+    // context; otherwise a non-member gets a misleading 409 for an inaccessible ID.
+    const requested = await requireWorkspaceAccess(workspaceId);
     const active = await resolveActiveWorkspace();
     if (active.id !== workspaceId) throw new DomainError("O espaço ativo mudou. Atualize a tela antes de salvar novamente.", 409, "WORKSPACE_CONTEXT_CHANGED");
-    return requireWorkspaceAccess(workspaceId);
+    return requested;
   }
 
   async function requireWorkspaceMember(workspaceId?: string) {
+    await requireActivatedAccount();
     const workspace = workspaceId ? await getWorkspace(workspaceId) : await resolveActiveWorkspace();
     if (!workspace) throw new DomainError("Você não tem acesso a este espaço.", 403);
     if (workspace.kind === "personal") {

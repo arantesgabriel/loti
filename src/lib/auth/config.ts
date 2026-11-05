@@ -2,7 +2,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
 import { APIError, getAuthoritativeSessionFromCtx, createAuthMiddleware } from "better-auth/api";
 import type { AppDatabase } from "../db/connection";
-import { account, authEmailDeliveries, user as users } from "../db/schema";
+import { account, accountActivationRequirements, authEmailDeliveries, user as users } from "../db/schema";
 import { authorization } from "../domain/authorization";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { z } from "zod";
@@ -13,7 +13,7 @@ import { DomainError } from "../domain/errors";
 import * as schema from "../db/schema";
 import { authOrigin } from "./origin";
 import { passwordChangeSchema, profileNameSchema } from "./profile-validation";
-export type AuthOptions = { emailTransport?: EmailTransport; scheduleEmail?: (task: () => Promise<void>) => void };
+export type AuthOptions = { emailTransport?: EmailTransport; scheduleEmail?: (task: () => Promise<void>) => void; activationResendRecipient?: string };
 export function createAuth(db: AuthDatabase, operator = false, options: AuthOptions = {}) {
   const mail = emailService(db, options.emailTransport);
   return betterAuth({
@@ -78,8 +78,18 @@ export function createAuth(db: AuthDatabase, operator = false, options: AuthOpti
           if (ctx.path === "/request-password-reset") ctx.body.redirectTo = `${authOrigin()}/reset-password`;
         }
         if (ctx.path === "/send-verification-email") {
+          const requestedEmail = z.email().safeParse(typeof ctx.body?.email === "string" ? ctx.body.email.trim().toLowerCase() : null);
+          if (requestedEmail.success) ctx.body.email = requestedEmail.data;
           const session = await getAuthoritativeSessionFromCtx(ctx);
-          if (!session || session.user.email.toLowerCase() !== ctx.body?.email?.toLowerCase()) throw APIError.from("UNAUTHORIZED", { code: "VERIFICATION_SESSION_REQUIRED", message: "Entre na sua conta para confirmar seu email." });
+          const internallyAllowed = !!requestedEmail.success && options.activationResendRecipient?.toLowerCase() === requestedEmail.data
+            ? await db.select({ source: accountActivationRequirements.source, verified: users.emailVerified })
+              .from(users).innerJoin(accountActivationRequirements, eq(accountActivationRequirements.userId, users.id))
+              .where(and(eq(users.email, requestedEmail.data), eq(accountActivationRequirements.source, "public_signup"))).get()
+            : undefined;
+          const anonymousAllowed = !!internallyAllowed && !internallyAllowed.verified;
+          if ((!session && !anonymousAllowed) || (session && (!requestedEmail.success || session.user.email.toLowerCase() !== requestedEmail.data))) {
+            throw APIError.from("UNAUTHORIZED", { code: "VERIFICATION_SESSION_REQUIRED", message: "Entre na sua conta para confirmar seu email." });
+          }
           const destination = loginDestination(ctx.body.callbackURL ?? null);
           ctx.body.callbackURL = `${authOrigin()}/verify-email${destination.startsWith("/invite/") ? `?returnTo=${encodeURIComponent(destination)}` : ""}`;
         }

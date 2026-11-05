@@ -18,7 +18,9 @@
 - valid user can log in with email/password;
 - session survives normal navigation/reload;
 - logout invalidates session;
-- no public signup CTA/route is exposed as a supported product flow;
+- approved Frente 5 signup is available at `/signup`; it requires email confirmation, creates only the user's personal workspace, and cannot create shared membership;
+- the direct Better Auth signup endpoint remains disabled; duplicate signup is generic and does not mutate an existing account;
+- activation-pending sessions cannot read or mutate app data and can only check status, resend confirmation or sign out;
 - users outside the workspace cannot read workspace data.
 - workspace members can update their own trimmed 1–200 character display name; the email remains read-only;
 - profile names update in the sidebar and current-user surfaces without logging out and persist across reload/login;
@@ -178,7 +180,7 @@ A group can do the entire workflow without the legacy spreadsheet:
 - reduced motion stops loops/transitions and preserves a balanced static composition;
 - scene is decorative (`aria-hidden`) with no keyboard stops;
 - wrong-password feedback, Enter, loading, redirect, persistent session and logout retain behavior;
-- no real product imagery, public signup, mascot, heavy 3D or runtime asset generation.
+- no real product imagery, mascot, heavy 3D or runtime asset generation; the separate approved `/signup` route does not replace the editorial login.
 
 Exact implementation contract: [17_LOGIN_ORBITAL_MOTION.md](17_LOGIN_ORBITAL_MOTION.md).
 
@@ -191,7 +193,7 @@ Exact implementation contract: [17_LOGIN_ORBITAL_MOTION.md](17_LOGIN_ORBITAL_MOT
 - Expired/revoked/replaced/used links cannot grant access.
 - Concurrent acceptance/revocation/issuance cannot produce duplicate accounts, links or memberships.
 - Failed membership creation rolls back account, credential and invitation consumption.
-- Public signup and authorization of existing data remain intact; the approved four primary navigation destinations are preserved.
+- Front 5 signup and authorization of existing data remain intact; the approved primary navigation destinations are preserved.
 
 ## Packages and costs extension
 

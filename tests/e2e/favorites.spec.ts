@@ -1,7 +1,9 @@
 import { test, expect } from "@playwright/test";
 import { login } from "./helpers";
-test("private routes redirect and public signup is disabled", async ({ page, request }) => {
-  for (const path of ["/favorites", "/purchase", "/history", "/history/private-id", "/profile"]) { await page.goto(path); await expect(page).toHaveURL(/\/login/); } await expect(page.getByText(/cadast/i)).toHaveCount(0);
+test("private routes redirect and Better Auth direct signup stays disabled", async ({ page, request }) => {
+  for (const path of ["/favorites", "/purchase", "/history", "/history/private-id", "/profile"]) { await page.goto(path); await expect(page).toHaveURL(/\/login/); }
+  await expect(page.getByRole("link", { name: "Criar conta", exact: true })).toBeVisible();
+  await page.goto("/signup"); await expect(page.getByRole("heading", { name: "Crie seu espaço no Loti." })).toBeVisible();
   const health = await request.get("/api/health"); expect(health.status()).toBe(200); expect(await health.json()).toEqual({ status: "ok", database: "ok" });
   const app = await request.get("/api/app"); expect(app.status()).toBe(401);
   const r = await request.post("/api/auth/sign-up/email", { data: { name: "Public", email: "public@loti.test", password: "Loti-Dev-Only-2026!" }, headers: { Origin: "http://localhost:3100" } }); expect(r.ok()).toBe(false);

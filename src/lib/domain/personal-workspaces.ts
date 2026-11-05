@@ -10,8 +10,7 @@ import { serializeDomainTransaction } from "./transaction-lock";
  * unique index is the concurrency boundary; insert-first transactions serialize
  * competing provisioners before they inspect preferences or group memberships.
  */
-export async function ensurePersonalWorkspace(db: AppDatabase, userId: string) {
-  const provision = () => serializeDomainTransaction(() => db.transaction(async tx => {
+export async function ensurePersonalWorkspaceInTransaction(tx: Parameters<Parameters<AppDatabase["transaction"]>[0]>[0], userId: string) {
     const now = new Date();
     const inserted = await tx.insert(workspaces).values({
       id: crypto.randomUUID(), name: "Espaço pessoal", kind: "personal", ownerUserId: userId, createdAt: now,
@@ -49,7 +48,10 @@ export async function ensurePersonalWorkspace(db: AppDatabase, userId: string) {
     }).run();
 
     return { workspace: personal, created: inserted.rowsAffected > 0 };
-  }));
+}
+
+export async function ensurePersonalWorkspace(db: AppDatabase, userId: string) {
+  const provision = () => serializeDomainTransaction(() => db.transaction(tx => ensurePersonalWorkspaceInTransaction(tx, userId)));
 
   for (let attempt = 0; ; attempt += 1) {
     try {

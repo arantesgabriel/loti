@@ -20,6 +20,8 @@ Use one consistent Drizzle/SQLite timestamp representation for app tables, prefe
 
 The email-security extension adds only `auth_limits` and `auth_email_deliveries` in migration `0021_fine_puppet_master.sql`. They hold hashed limiter scopes, bounded counters, hashed delivery/token identifiers, expiry and delivery/consumption state. Native reset identifiers are hashed by Better Auth. No existing identity or membership is backfilled/verified. See `31_AUTH_EMAIL_SECURITY_PLAN.md` for atomic reservation and verification semantics.
 
+Frente 5 adds `account_activation_requirements` in migration `0030_public_signup_activation.sql`. One row per newly registered or invitation-created account stores the source (`public_signup` or `invitation`) and creation time. A row plus `user.email_verified = false` means activation is pending; absence of a row preserves the legacy/operator account behavior. The migration does not backfill users or rewrite verification flags.
+
 Generated/managed according to the official Better Auth Drizzle/SQLite integration, typically including concepts such as:
 
 - `user`

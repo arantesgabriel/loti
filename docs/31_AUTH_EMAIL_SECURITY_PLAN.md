@@ -2,6 +2,8 @@
 
 Autorização: 20 de outubro de 2026, guia anexado pelo usuário. Escopo: recuperação autônoma, limitação persistente e verificação de email nos convites (prioridades 1, 2 e 5 da avaliação). Nenhuma publicação ou migração de produção está autorizada nesta entrega.
 
+Atualização posterior: a Frente 5 (5/11/2026) aprova `/signup` para contas pessoais, sempre com ativação nativa antes de liberar dados. Ela não habilita o endpoint Better Auth de cadastro público, não altera contas antigas e não concede associação compartilhada. Reenvio de cadastro usa a mesma camada nativa de email e os limites persistentes. Detalhes: `43_PUBLIC_SIGNUP_AND_ACTIVATION_HANDOFF.md`.
+
 ## Auditoria e decisões
 
 - Better Auth e adapter Drizzle **1.7.7**; Resend SDK **6.34.1**. Convites são personalizados, sem plugin organization.

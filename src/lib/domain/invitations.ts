@@ -2,11 +2,12 @@ import { createHash, randomBytes } from "node:crypto";
 import { and, eq, gt, isNull, lt, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { AppDatabase } from "../db/connection";
-import { invitationLimits, workspaceInvitations as invites, workspaceMembers, workspaces, user, userPreferences } from "../db/schema";
+import { accountActivationRequirements, invitationLimits, workspaceInvitations as invites, workspaceMembers, workspaces, user, userPreferences } from "../db/schema";
 import { createAuth } from "../auth/config";
 import { authorization } from "./authorization";
 import { DomainError } from "./errors";
 import { serializeDomainTransaction } from "./transaction-lock";
+import { ensurePersonalWorkspaceInTransaction } from "./personal-workspaces";
 
 const emailInput = z.string().trim().email().transform(v => v.toLowerCase());
 const accountInput = z.object({ name: z.string().trim().min(1).max(200), password: z.string().min(12).max(128) });
@@ -108,6 +109,12 @@ export function invitationService(db: AppDatabase) {
       const existing = await tx.select().from(user).where(eq(user.email, invite.email)).get();
       if (existing && (!sessionUser || existing.id !== sessionUser.id)) throw new DomainError("Esta conta já existe. Entre para aceitar o convite.", 401);
       const member = existing ?? (await createAuth(tx, true).api.signUpEmail({ body: { ...accountInput.parse(input), email: invite.email } })).user;
+      if (!existing) {
+        await tx.insert(accountActivationRequirements).values({ userId: member.id, source: "invitation", createdAt: now }).run();
+      }
+      // Every account has a private space before an invitation can be activated.
+      // For new, unverified members it is the only workspace they can access.
+      await ensurePersonalWorkspaceInTransaction(tx, member.id);
       // Registration is durable so verification can be retried, but grants no group data.
       // Read authoritative user state in this transaction, never session/client claims.
       if (!member.emailVerified) return { email: invite.email, created: !existing, verificationRequired: true };

@@ -4,12 +4,12 @@
 
 ### Authentication and workspace
 
-Approved extension (20 October 2026): self-service email password recovery, mandatory native email verification before each new invitation membership, Resend transactional delivery and persistent distributed authentication/mail limits. Existing memberships keep access without marking legacy addresses verified. Public signup remains disabled. This supersedes older manual-only recovery/invitation-email exclusions. See `31_AUTH_EMAIL_SECURITY_PLAN.md`.
+Approved extension (20 October 2026): self-service email password recovery, mandatory native email verification before each new invitation membership, Resend transactional delivery and persistent distributed authentication/mail limits. Existing memberships keep access without marking legacy addresses verified. See `31_AUTH_EMAIL_SECURITY_PLAN.md`.
 
 Approved server foundation (3 November 2026): each account may have one owner-only personal workspace alongside any shared group workspaces. The personal workspace supports private favorites and collections; the current front adds no workspace selector or new navigation. Existing group data remains in its shared workspace. Provision existing accounts with `npm run workspace:provision-personal` after applying the reviewed migration. See `40_PERSONAL_WORKSPACES_PLAN.md`.
 
 - private email/password login;
-- no public signup screen;
+- public `/signup` with mandatory email confirmation and a personal workspace; shared group membership remains invitation-only (Frente 5);
 - one shared workspace in the UI;
 - five initial users created by operator/seed tooling;
 - logout and persistent sessions.
@@ -107,7 +107,6 @@ Do not implement any of the following in the MVP:
 - notifications;
 - chat/comments;
 - realtime/websockets;
-- public signup;
 - social login;
 - MFA;
 - multiple-workspace management UI;
@@ -132,7 +131,7 @@ The MVP succeeds when the five users can complete the full favorite → shared p
 - Profile → Meu grupo: current members, pending invitations, email input and manual sharing.
 - Any member may invite, revoke or regenerate links valid for seven days.
 - New invited users choose their name/password; existing users authenticate before accepting.
-- Public signup stays disabled. Operator tooling remains for bootstrap.
+- New users may create a personal account through the approved `/signup` flow; operator tooling remains for initial bootstrap. Signup alone never grants shared group membership.
 - No automatic invitation email, member removal, roles or multiple-workspace navigation.
 
 ### Approved Packages and costs extension
@@ -150,6 +149,10 @@ The approved extension in [the refund plan](23_PRODUCT_REFUNDS_PLAN.md) adds onl
 - Keep matching, upload, retry, deletion, quotas and audit independent from packages, costs, refunds and purchase snapshots.
 
 This is the only photo exception: no listing thumbnails or product images in operational cards/lists. Do not add a bookmarklet, browser extension, automatic collection, scraping, AI, workers or queues. External Cloudflare configuration, secrets, bucket creation, production migration and publication require specific authorization.
+
+### Approved Frente 5 — public registration and activation
+
+The custom `/signup` flow creates a user, activation requirement and owner-only personal workspace atomically. Email confirmation is required before any protected app data is available. Better Auth's public `/sign-up/email` endpoint stays disabled; existing accounts are never rewritten by duplicate registration. Shared workspaces can only be joined through the verified, token-gated invitation flow. Full handoff: `43_PUBLIC_SIGNUP_AND_ACTIVATION_HANDOFF.md`.
 
 ### Approved post-MVP financial extension — 17 October 2026
 

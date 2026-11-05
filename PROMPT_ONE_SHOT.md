@@ -36,6 +36,8 @@ Then inspect the existing repository before making assumptions.
 
 For the approved Pedidos → Armazém → Pacotes extension, also read `docs/39_ORDERS_WAREHOUSE_AND_PACKAGES_PLAN.md` and follow its scope, preservation requirements, local validation gates and production restrictions.
 
+For approved Frente 5 public registration and email activation, also read `docs/43_PUBLIC_SIGNUP_AND_ACTIVATION_HANDOFF.md`. It supersedes the earlier blanket public-signup prohibition only for the custom personal-account flow; direct Better Auth signup stays disabled and group entry remains invitation-gated.
+
 The approved mockups are:
 
 - `docs/design/mockups/favorites-desktop.png`
@@ -126,7 +128,8 @@ Required:
 - protected application routes;
 - persistent session;
 - logout;
-- no public signup flow;
+- custom `/signup` for personal accounts with mandatory email activation; never create shared membership from signup;
+- keep Better Auth's direct `/api/auth/sign-up/email` endpoint disabled;
 - operator script/command to create an initial user and add that user to the singleton workspace;
 - development seed users may use safe clearly-dev-only credentials.
 
@@ -401,7 +404,7 @@ Follow `docs/17_LOGIN_ORBITAL_MOTION.md` and `docs/design/mockups/login-orbital.
 - `prefers-reduced-motion`: fully static, balanced equivalent;
 - decorative scene is `aria-hidden`, has no keyboard stops and cannot interfere with login;
 - preserve Better Auth, React Hook Form, validation, errors, Enter, loading, sessions and logout;
-- no public signup, mascot, video, Three.js/WebGL, runtime generation or new animation dependency when CSS suffices.
+- keep the existing editorial login direction; the separate approved `/signup` route may reuse its visual scene without changing the login flow, adding a mascot, video, Three.js/WebGL, runtime generation or new animation dependency.
 
 The editorial scene may use orange for the central symbol and pastel object backplates. The operational palette remains unchanged and product items use the small functional category-marker system.
 
@@ -674,7 +677,6 @@ Even if they seem useful, do not add:
 - comments/chat;
 - realtime/websockets;
 - admin dashboard;
-- public signup;
 - social auth;
 - MFA;
 - multiple workspace UI;
@@ -757,7 +759,7 @@ Before declaring the MVP complete, verify:
 - isolated local libSQL migrations and tests pass;
 - production runtime connects to Turso and does not depend on a local database file;
 - production server fails closed when the Turso URL or remote database token is missing;
-- no public signup;
+- approved `/signup` activation flow works without enabling direct Better Auth signup or self-service group membership;
 - no client DB access;
 - server authorization prevents forbidden mutations;
 - only one active purchase can exist;

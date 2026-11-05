@@ -30,6 +30,16 @@ flowchart LR
 - email/password focus and submitting get subtle scene feedback; Enter, inline errors and loading retain their behavior;
 - reduced motion shows a static equivalent; no illustration delays authentication or redirect. See `17_LOGIN_ORBITAL_MOTION.md`.
 
+## 1b. Public registration and activation
+
+`Login → Criar conta → name/email/password/confirmation → generic email notice → native 30-minute verification link → login → personal Favorites`
+
+- the custom `/signup` route atomically creates the account, activation record and owner-only personal workspace;
+- signup does not create a session, add group membership or expose protected data;
+- an unverified login sees only the activation screen, with resend, status check and sign-out;
+- direct Better Auth signup remains disabled; duplicate addresses receive a generic response and no account is modified;
+- a verified user enters a group only by accepting its valid token-gated invitation. See `43_PUBLIC_SIGNUP_AND_ACTIVATION_HANDOFF.md`.
+
 ## 1a. Edit profile
 
 Approved email extension: `Login → Esqueceu a senha? → email → generic confirmation → email link (30 minutes) → new password/confirmation → sessions revoked → normal login`. New invited accounts remain without workspace membership until native email confirmation; then return to the invitation, authenticate as needed and accept. Existing unverified invitees must also confirm before a new association. Existing memberships remain usable. See `31_AUTH_EMAIL_SECURITY_PLAN.md`; the older direct signup-to-membership journey below is superseded for unverified accounts.

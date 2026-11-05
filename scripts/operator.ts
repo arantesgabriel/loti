@@ -2,6 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import type { AppDatabase } from "../src/lib/db/connection";
 import { workspaces, workspaceMembers, user } from "../src/lib/db/schema";
 import { createAuth } from "../src/lib/auth/config";
+import { ensurePersonalWorkspaceInTransaction } from "../src/lib/domain/personal-workspaces";
 
 type WorkspaceQuery = Pick<AppDatabase, "all">;
 async function sharedWorkspaceId(db: WorkspaceQuery) {
@@ -28,6 +29,7 @@ export async function createMember(db: AppDatabase, input: { name: string; email
       else await tx.run(sql`INSERT INTO workspaces (id, name, created_at) VALUES (${workspaceId}, 'Loti', ${now.getTime()})`);
     }
     await tx.insert(workspaceMembers).values({ workspaceId, userId: member.id, createdAt: new Date() }).onConflictDoNothing().run();
+    await ensurePersonalWorkspaceInTransaction(tx, member.id);
   });
   return member;
 }

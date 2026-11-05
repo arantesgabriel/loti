@@ -91,6 +91,14 @@ export const authEmailDeliveries = sqliteTable("auth_email_deliveries", {
   createdAt: timestamp("created_at"), expiresAt: timestamp("expires_at"), consumedAt: integer("consumed_at", { mode: "timestamp_ms" }),
 }, t => [index("auth_email_expiry_idx").on(t.expiresAt), check("auth_email_kind", sql`${t.kind} IN ('reset','verification','invitation')`), check("auth_email_state", sql`${t.state} IN ('reserved','sent','failed','uncertain')`)]);
 
+// Presence marks accounts created through a flow that requires email activation.
+// Older/operator accounts have no row and retain their existing access behavior.
+export const accountActivationRequirements = sqliteTable("account_activation_requirements", {
+  userId: text("user_id").primaryKey().references(() => user.id, { onDelete: "cascade" }),
+  source: text("source", { enum: ["public_signup", "invitation"] }).notNull(),
+  createdAt: timestamp("created_at"),
+}, t => [check("account_activation_source", sql`${t.source} IN ('public_signup','invitation')`)]);
+
 export const workspaceCostSettings = sqliteTable("workspace_cost_settings", {
   workspaceId: text("workspace_id").primaryKey().references(() => workspaces.id),
   pixBps: integer("pix_bps").notNull().default(100),

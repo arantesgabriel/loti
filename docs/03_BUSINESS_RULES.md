@@ -6,6 +6,8 @@
 2. The current UI exposes one active workspace context at a time; the personal-workspace foundation does not add a selector or multi-workspace navigation.
 3. All initial members have equal collaborative rights in purchases; there is no admin/editor/viewer role system.
 4. User identity comes from Better Auth.
+- Public registration creates only a personal workspace and remains activation-pending until Better Auth's native email verification completes; it never adds shared membership.
+- Existing/operator accounts without an activation-requirement row retain their existing access behavior. A duplicate signup never changes credentials, profile, verification state or memberships.
 - A personal workspace has exactly one owner, has no `workspace_members` rows, and is accessible only to its owner. Each user can have at most one personal workspace.
 - A shared workspace has no owner field; access requires a `workspace_members` row. Group invitations and collaborative purchase actions are restricted to shared workspaces.
 - The active workspace preference is only a hint. Central authorization validates owner access or shared membership before selecting it; an invalid preference is discarded and fallback resolution never grants access.

@@ -1,6 +1,6 @@
 # Loti Specification Index
 
-This folder is the canonical product and engineering handoff for the Loti MVP.
+This folder is the canonical product and engineering handoff for Loti. Later approved extensions supersede earlier scope restrictions only where their handoffs explicitly say so.
 
 Authentication email extension: [`31_AUTH_EMAIL_SECURITY_PLAN.md`](31_AUTH_EMAIL_SECURITY_PLAN.md) specifies Resend, native recovery/verification, pending invitations, legacy compatibility, atomic persistent limits and publication gates.
 
@@ -46,6 +46,7 @@ Authentication email extension: [`31_AUTH_EMAIL_SECURITY_PLAN.md`](31_AUTH_EMAIL
 | `40_PERSONAL_WORKSPACES_PLAN.md` | Approved owner-only personal workspace foundation, migration/provisioning, active-context resolution and server authorization boundaries |
 | `41_PERSONAL_PURCHASES_AND_HISTORY_HANDOFF.md` | Frente 3 implementation handoff for personal purchases and History, changed files, validation and explicit dependencies for Frente 4 |
 | `42_PERSONAL_ORDERS_WAREHOUSE_PACKAGES_HANDOFF.md` | Frente 4 handoff for owner-only personal Pedidos, Armazém, Pacotes, costs and HubBuy accounts |
+| `43_PUBLIC_SIGNUP_AND_ACTIVATION_HANDOFF.md` | Frente 5 handoff for public personal-account signup, mandatory email activation and invitation-only group entry |
 | `audits/2026-10-17_HUBBUY_BALANCE_AND_MIXED_PAYMENTS.md` | Technical and functional investigation supporting the HubBuy balance and mixed-payment proposal |
 | `design/REFERENCES.md` | Figma and palette inspiration URLs |
 | `design/PACKAGES_AND_COSTS_REFERENCES.md` | Approved A/B/C/D visual references, images and acceptance for Pacotes e custos |

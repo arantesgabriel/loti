@@ -42,12 +42,22 @@ Gate: empty DB migrates successfully; constraints tested.
 - `/login` with the editorial community-orbit composition specified in `17_LOGIN_ORBITAL_MOTION.md`: desktop split, compact mobile, three motion layers, upright subjects and static reduced motion;
 - protected app layout;
 - logout;
-- no public signup;
+- Better Auth's direct public signup endpoint disabled (a separate `/signup` flow was later approved in Frente 5);
 - `scripts/create-user.ts` or equivalent operator command;
 - singleton/default workspace bootstrap/member assignment;
 - centralized authorization helpers.
 
 Gate: session works; favorite ownership/workspace access integration tests pass; login focus/loading/error, Enter, redirect/logout and responsive/reduced-motion E2E pass.
+
+## Approved extension — Frente 5: registration and activation
+
+- `/signup` uses the existing login editorial scene and accessible auth controls;
+- the custom API validates input and persistent email/IP limits, then atomically creates account, activation requirement and personal workspace;
+- native verification is required before any protected app read/write; activation has generic confirmation/resend and verified-status check;
+- direct Better Auth signup stays disabled; duplicates never mutate existing accounts; invitations stay the only route into a shared workspace;
+- invitation-created accounts also get the activation record and personal workspace transactionally.
+
+Gate: integration tests prove atomic rollback, generic duplicate handling, resend recovery, no data before verification and personal-space access after verification; Playwright covers signup, non-auto-login verification and 320/390/768/1440 layouts.
 
 ## Phase 04 — Application shell
 

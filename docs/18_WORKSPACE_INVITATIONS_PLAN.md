@@ -2,13 +2,15 @@
 
 Atualização autorizada em 20/10/2026: `31_AUTH_EMAIL_SECURITY_PLAN.md` substitui o aceite imediato para contas não verificadas e a restrição a compartilhamento manual. O cadastro permanece pendente, sem associação, até confirmação nativa do email e aceite autenticado. A emissão também tenta enviar o convite por Resend, mantendo o link manual se o envio não for confirmado. Papéis, permissões e vínculos existentes permanecem iguais. As decisões e validações históricas abaixo descrevem a entrega original.
 
+Atualização posterior (Frente 5, 5/11/2026): cadastro público de contas pessoais foi autorizado em `/signup`. A proibição anterior continua válida para autoentrada em grupo: somente o token do convite vincula uma conta verificada. Contas novas via convite agora também recebem um espaço pessoal e uma linha de ativação na mesma transação antes de qualquer associação. Ver `43_PUBLIC_SIGNUP_AND_ACTIVATION_HANDOFF.md`.
+
 Status: implementado e validado localmente. Fluxo autorizado pelo usuário em 5 de outubro de 2026. Publicação não executada.
 
 ## Objetivo
 
 Permitir o fluxo **Meu grupo → informar email → gerar link de convite → compartilhar → pessoa define nome e senha → vínculo ao grupo → Favoritos**, sem depender de comandos para cada novo membro.
 
-Preservar Better Auth, autorização no servidor, espaço único, cadastro público desabilitado, colaboração atual e as três áreas principais da navegação. Usar a camada de persistência existente no checkout; esta mudança não inclui migração de infraestrutura.
+Preservar Better Auth, autorização no servidor, colaboração atual e as três áreas principais da navegação. Na aprovação original, cadastro público estava desabilitado; Frente 5 posteriormente aprovou contas pessoais em `/signup`, sem autoentrada no grupo. Usar a camada de persistência existente no checkout; esta mudança não inclui migração de infraestrutura.
 
 ## Decisões propostas
 
@@ -114,7 +116,7 @@ Aplicar a migração ao banco de destino antes do deploy que depende da tabela. 
 - Link antigo deixa de funcionar imediatamente após regeneração; expirado/revogado não cria vínculo.
 - Submissões repetidas, dois aceites concorrentes e corrida entre revogar/regenerar/aceitar não concedem acesso indevido.
 - Falhas antes/depois da criação da conta, associação e sessão têm retomada previsível.
-- Cadastro público continua recusado; favoritos, compras e histórico preservam autorização atual.
+- Na validação desta entrega original, cadastro público foi recusado; Frente 5 posteriormente aprovou o cadastro pessoal, preservando a autorização de favoritos, compras e histórico.
 - Compartilhamento/cópia tem fallback; erros são anunciados; foco, teclado, mobile e retorno de login funcionam.
 
 Cobertura: testes unitários das regras/estados; integração no adapter real de conta/vínculo/token/transação e concorrência; Playwright para pessoa nova, conta existente, email incorreto, link inutilizável e jornada mobile. Executar lint, typecheck, testes relevantes, migração em base vazia e existente, e build. Para concorrência, exercitar conexões independentes ao banco e não somente chamadas sequenciais.

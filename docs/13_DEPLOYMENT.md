@@ -76,7 +76,7 @@ Run the command with the target `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` in t
 
 ## User bootstrap
 
-The application has no public signup flow. Create the initial private members with the operator command after production migration:
+Create the initial trusted group members with the operator command after production migration. The approved `/signup` flow also creates personal-only accounts after email verification; it does not add group membership. Group entry still requires a valid invitation. The direct Better Auth signup endpoint remains disabled.
 
 ```sh
 LOTI_USER_PASSWORD='<secure-initial-password>' npm run user:create -- --name '<name>' --email '<real-address>'
@@ -106,7 +106,7 @@ Use the backup/restore controls available for the Turso database plan. Keep prod
 4. Deploy from the intended production branch.
 5. Set `BETTER_AUTH_URL` to the final HTTPS URL and redeploy.
 6. Verify `/login` and `/api/health` publicly.
-7. Bootstrap actual private users; keep public signup disabled.
+7. Bootstrap the initial group members; verify that `/signup` creates only personal accounts and group invitations remain token-gated.
 8. If importing the workbook, review the mapping and dry-run before writing.
 9. Test login, session refresh, favorites, purchase, history, and one write/read round-trip against `loti-prod`.
 

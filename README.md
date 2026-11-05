@@ -103,6 +103,6 @@ Extensão de emails (20/10/2026): o convite tenta envio transacional pelo Resend
 
 Abra o perfil pelo avatar e selecione **Meu grupo → Convidar pessoa**. Informe o email, gere o link e use **Copiar link** ou **Compartilhar**. O convite dura sete dias e permite que a pessoa defina nome e senha; contas existentes entram com sua senha atual antes do aceite. Todos os membros podem convidar e revogar convites pendentes.
 
-O link aparece somente ao gerar. **Gerar novo link** invalida o anterior; **Revogar** encerra o convite. Compartilhe somente com a pessoa convidada. O cadastro público continua desabilitado.
+O link aparece somente ao gerar. **Gerar novo link** invalida o anterior; **Revogar** encerra o convite. Compartilhe somente com a pessoa convidada. Qualquer pessoa pode criar um espaço pessoal em `/signup` e confirmar o email; entrar no grupo continua exigindo um convite válido.
 
 Antes de publicar esta versão, execute `npm run db:migrate` no banco de destino: as migrações `0001` e `0002` são obrigatórias. A implementação e seus critérios estão em [docs/18_WORKSPACE_INVITATIONS_PLAN.md](docs/18_WORKSPACE_INVITATIONS_PLAN.md).
