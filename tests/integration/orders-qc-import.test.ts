@@ -5,6 +5,7 @@ import { purchases, purchaseItems, qcImports, hubbuyExternalItems } from "@/lib/
 import { ordersQcImport } from "@/lib/domain/orders-qc-import";
 import { qcServices } from "@/lib/domain/qc-services";
 import type { QcStorage } from "@/lib/qc/storage";
+import { ensurePersonalWorkspace } from "@/lib/domain/personal-workspaces";
 
 let f: Fixture;
 beforeEach(async () => { f = await fixture(); });
@@ -70,6 +71,39 @@ it("enforces manager and workspace scope, rejects malformed/duplicate/unsafe sou
   await expect(service.preview(payload(unsafe))).rejects.toMatchObject({ code: "QC_SOURCE_REJECTED" });
   const foreign = ordersQcImport(f.db, "foreign", { ...config(), managerId: "foreign" });
   expect((await foreign.preview(payload(goods("a", "101")))).rows[0].status).toBe("ignored");
+});
+
+it("lets a personal owner import, transfer, and administer their QC gallery without the global manager ID", async () => {
+  f.client.close();
+  f = await fixture(":memory:", "orders");
+  const { workspace } = await ensurePersonalWorkspace(f.db, "alice");
+  await f.alice.selectWorkspace(workspace.id, "workspace");
+  await purchase("personal-one", "101", workspace.id);
+  const cfg = { ...config(), managerId: "foreign" };
+  const qc = qcServices(f.db, "alice", cfg, workspace.id);
+  const service = ordersQcImport(f.db, "alice", cfg, workspace.id);
+  expect(await service.capabilities()).toEqual({ canManage: true });
+
+  const data = payload(goods("personal-goods", "101"));
+  const preview = await service.preview(data);
+  expect(preview.rows[0].targetKey).toBe("purchase:personal-one-item");
+  const prepared = await service.prepare(data, [{ externalKey: preview.rows[0].externalKey, targetKey: "purchase:personal-one-item" }]);
+  const group = prepared.groups[0]!;
+  expect(group.importId).toBeTruthy();
+  const confirmed = await qc.confirmImport(group.importId!, group.revision, group.choices);
+  const transfer = await qc.runImportBatch(group.importId!, confirmed.revision);
+  expect(transfer.imported).toBe(1);
+
+  expect(await qc.getQcSummary("personal-one")).toMatchObject({ canManage: true, counts: [{ itemId: "purchase:personal-one-item", count: 1 }] });
+  const gallery = await qc.getGallery("personal-one", "purchase:personal-one-item");
+  expect(gallery.canSetCover).toBe(true);
+  expect(gallery.images).toHaveLength(1);
+  const presentations = await qc.getQcPresentations("personal-one", ["purchase:personal-one-item"]);
+  expect(presentations.items[0].canSetCover).toBe(true);
+  await qc.setPresentationCover("personal-one", "purchase:personal-one-item", gallery.images[0].id, presentations.items[0].presentationRevision);
+  expect((await qc.getQcPresentations("personal-one", ["purchase:personal-one-item"])).items[0].primaryImageId).toBe(gallery.images[0].id);
+  expect(await qc.deleteImage(gallery.images[0].id)).toMatchObject({ status: "deleted" });
+  expect((await qc.getGallery("personal-one", "purchase:personal-one-item")).images).toHaveLength(0);
 });
 
 it("prioritizes confirmed external IDs and flags conflicting aliases instead of remapping", async () => {

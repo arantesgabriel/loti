@@ -15,12 +15,13 @@ Finalizar uma compra continua criando o acompanhamento de custos e o pedido orig
 - A navegação de desktop inclui Pedidos e Pacotes no espaço pessoal. A ilha móvel apresenta Favoritos, Compra, Pedidos, Pacotes e Mais; Histórico e Contas HubBuy ficam em Mais. `/orders`, `/packages`, `/packages/accounts` e `/more` aceitam os dois tipos de workspace.
 - A troca de contexto descarta estados locais, seleções, drawers e respostas atrasadas por meio da chave do conteúdo da página e do cancelamento lógico das leituras. Formulários operacionais abertos são registrados no mecanismo de rascunhos e pedem confirmação antes de descartar alterações.
 - Taxas, estornos, direitos de saldo, eventos, recibos e snapshots financeiros mantêm os fluxos e invariantes existentes. Os snapshots finalizados continuam imutáveis; as alterações de favorito não alcançam pedidos históricos.
-- QC segue a galeria aprovada. Esta entrega não inclui fotos QC em linhas ou cartões operacionais, nem prepara flags ou slots para a fase 3.
+- QC segue a galeria aprovada. O titular pode importar, transferir e administrar galerias somente no workspace pessoal próprio; em workspaces compartilhados, as permissões continuam com o administrador QC configurado. Esta entrega não inclui fotos QC em linhas ou cartões operacionais, nem prepara flags ou slots para a fase 3.
 - Nenhuma migration é necessária. O ensaio de migration e `db:verify` foi executado apenas em arquivo SQLite descartável local.
 
 ## Áreas alteradas
 
 - `src/components/layout/app-shell.tsx` e layouts de Pedidos/Pacotes/Mais — navegação e acesso por tipo de workspace, redirecionamento de detalhes após troca de contexto.
+- `src/components/group-screen.tsx` e `src/components/purchase/history-screen.tsx` — taxas padrão e início/listagem de custos enviam o workspace exibido.
 - `src/app/(app)/orders/[orderId]/page.tsx` e `src/app/(app)/packages/accounts/page.tsx` — leitura de detalhes e apresentação de contas no contexto pessoal.
 - `src/lib/domain/package-cost-reading.ts`, `package-cost-services.ts`, `purchase-cost-order-services.ts` e `purchase-order-corrections.ts` — leitura e mutação de custos/pedidos com titular owner-only e contexto ativo.
 - `src/lib/domain/warehouse-services.ts`, `logistics-package-list.ts`, `logistics-package-services.ts` e `logistics-financials.ts` — armazém, listagem, detalhe e operações de pacotes isolados por workspace.
@@ -28,7 +29,8 @@ Finalizar uma compra continua criando o acompanhamento de custos e o pedido orig
 - `src/lib/domain/qc-services.ts` e `orders-qc-import.ts`, rotas `/api/**` correspondentes e clientes operacionais — contexto explícito nas consultas, importação QC e mutações.
 - `src/components/orders/**`, `src/components/packages/**` e `src/components/qc/**` — envio do workspace ativo, filtro de pessoa omitido no modo pessoal, rascunhos e cópia adequada ao titular.
 - `tests/integration/personal-orders-workflow.test.ts` — fluxo pessoal de custos, chegada, reserva, pacote, titular único, isolamento e conflito após troca de contexto.
-- `tests/e2e/workspaces.spec.ts` e `tests/e2e/packages.spec.ts` — navegação pessoal em desktop e mobile.
+- `tests/integration/orders-qc-import.test.ts` — titular pessoal comum importa, transfere, define capa e exclui foto QC sem ID de administrador global.
+- `tests/e2e/workspaces.spec.ts`, `tests/e2e/packages.spec.ts` e `tests/e2e/workspace-context-contracts.spec.ts` — navegação pessoal, chegada/reserva/pacote, payload de taxas e início de custos pelo Histórico.
 
 ## Validação
 
@@ -44,3 +46,9 @@ Validação final local:
 - E2E aprovados: workspaces (5) e fluxo pessoal de Pacotes/custos, incluindo chegada, reserva, montagem e frete manual (1). O fluxo de Pacotes foi executado contra build local e banco descartável.
 
 Banco remoto, publicação, configuração Cloudflare/R2 e fotos QC em custos operacionais não fazem parte desta entrega.
+
+## Correções após revisão (5 de novembro de 2026)
+
+- O formulário de Meu grupo lê e salva taxas com o ID de `data.workspace`; Histórico inclui `data.workspaceId` na leitura e na ação legada de início de custos.
+- O ID global `LOTI_QC_MANAGER_USER_ID` continua controlando QC em workspaces compartilhados. O titular pode administrar somente QC do próprio workspace pessoal: capacidades, importação, transferência, capa e exclusão. Nenhum acesso global é concedido por essa regra.
+- Regressões aprovadas: `orders-qc-import.test.ts` 7/7, `qc-services.test.ts` 47/47 e Playwright `workspace-context-contracts.spec.ts` 2/2. `npm run typecheck`, `npm run lint` e build de produção local também passaram. O build isolado manteve os avisos já conhecidos do Better Auth sobre segredo padrão ausente durante geração estática.

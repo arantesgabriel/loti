@@ -14,13 +14,15 @@ export function GroupScreen({ initialData }: { initialData: GroupData }) {
   const [busy, setBusy] = useState(false), [error, setError] = useState(""), [link, setLink] = useState(""), [expires, setExpires] = useState("");
   const [action, setAction] = useState<{ id: string; email: string; kind: "issue" | "revoke" } | null>(null);
   const [pixPercent, setPixPercent] = useState("1.00"), [cardPercent, setCardPercent] = useState("5.00"), [settingsBusy, setSettingsBusy] = useState(false), [settingsError, setSettingsError] = useState("");
-  useEffect(() => { let active = true; void costRequest<{ pixBps: number; cardBps: number }>("/api/cost-settings").then(result => { if (!active || !result.ok || !result.data) return; setPixPercent(percentInputFromBasisPoints(result.data.pixBps)); setCardPercent(percentInputFromBasisPoints(result.data.cardBps)); }); return () => { active = false; }; }, []);
+  useEffect(() => { let active = true; if (!data.workspace?.id) return () => { active = false; }; void costRequest<{ pixBps: number; cardBps: number }>("/api/cost-settings", undefined, data.workspace.id).then(result => { if (!active || !result.ok || !result.data) return; setPixPercent(percentInputFromBasisPoints(result.data.pixBps)); setCardPercent(percentInputFromBasisPoints(result.data.cardBps)); }); return () => { active = false; }; }, [data.workspace?.id]);
   const pending = data.invitations.filter(i => i.state === "pending");
   async function saveCostSettings(event: React.FormEvent) {
     event.preventDefault(); setSettingsBusy(true); setSettingsError("");
     const pixBps = basisPointsFromPercent(pixPercent), cardBps = basisPointsFromPercent(cardPercent);
     if (pixBps === null || cardBps === null) { setSettingsError("Informe percentuais entre 0% e 100%, com até duas casas decimais."); setSettingsBusy(false); return; }
-    const result = await costRequest<{ pixBps: number; cardBps: number }>("/api/cost-settings", { pixBps, cardBps });
+    const workspaceId = data.workspace?.id;
+    if (!workspaceId) { setSettingsError("Não foi possível identificar o espaço ativo. Atualize a página e tente novamente."); setSettingsBusy(false); return; }
+    const result = await costRequest<{ pixBps: number; cardBps: number }>("/api/cost-settings", { pixBps, cardBps }, workspaceId);
     if (result.ok && result.data) { setPixPercent(percentInputFromBasisPoints(result.data.pixBps)); setCardPercent(percentInputFromBasisPoints(result.data.cardBps)); toast.success("Taxas padrão atualizadas"); }
     else setSettingsError(result.error ?? "Não foi possível salvar as taxas.");
     setSettingsBusy(false);

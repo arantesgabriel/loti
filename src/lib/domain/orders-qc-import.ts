@@ -18,7 +18,7 @@ export function ordersQcImport(db: AppDatabase, userId: string, config: Paramete
   const qc = qcServices(db, userId, config, expectedWorkspaceId);
   async function scope() {
     const access = await authorization(db, userId).requireActiveWorkspaceContext(expectedWorkspaceId ?? (await authorization(db, userId).resolveActiveWorkspace()).id);
-    if (!qc.managerId || qc.managerId !== userId) throw new DomainError("Você não pode administrar QC.", 403, "QC_FORBIDDEN");
+    if (qc.managerId !== userId && !(access.kind === "personal" && access.ownerUserId === userId)) throw new DomainError("Você não pode administrar QC.", 403, "QC_FORBIDDEN");
     return access.workspaceId;
   }
   async function capabilities() { await scope(); return { canManage: true }; }

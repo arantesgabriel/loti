@@ -106,12 +106,22 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
     return config.signal ? AbortSignal.any([config.signal, timeout]) : timeout;
   }
 
-  async function authorizedPurchase(purchaseId: string, manage = false) {
-    const purchase = await authorization(db, userId).requirePurchaseAccess(purchaseId);
+  async function authorizedPurchaseContext(purchaseId: string) {
+    const guard = authorization(db, userId);
+    const purchase = await guard.requirePurchaseAccess(purchaseId);
     if (expectedWorkspaceId && expectedWorkspaceId !== purchase.workspaceId) throw new DomainError("A compra pertence a outro espaço. Atualize a página antes de continuar.", 409, "WORKSPACE_CONTEXT_CHANGED");
-    await authorization(db, userId).requireActiveWorkspaceContext(purchase.workspaceId);
+    const access = await guard.requireActiveWorkspaceContext(purchase.workspaceId);
     if (purchase.status !== "finalized") throw new DomainError("O QC só pode ser gerenciado em compras finalizadas.", 409, "QC_PURCHASE_NOT_FINALIZED");
-    if (manage && (!managerId || userId !== managerId)) throw new DomainError("Você não pode administrar QC.", 403, "QC_FORBIDDEN");
+    return { purchase, access };
+  }
+
+  function canManageWorkspaceQc(access: { kind: "personal" | "shared"; ownerUserId: string | null }) {
+    return managerId === userId || access.kind === "personal" && access.ownerUserId === userId;
+  }
+
+  async function authorizedPurchase(purchaseId: string, manage = false) {
+    const { purchase, access } = await authorizedPurchaseContext(purchaseId);
+    if (manage && !canManageWorkspaceQc(access)) throw new DomainError("Você não pode administrar QC.", 403, "QC_FORBIDDEN");
     return purchase;
   }
 
@@ -269,8 +279,8 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
   }
 
   async function getQcSummary(purchaseId: string) {
-    await authorizedPurchase(purchaseId);
-    const manage = !!managerId && managerId === userId;
+    const { access } = await authorizedPurchaseContext(purchaseId);
+    const manage = canManageWorkspaceQc(access);
     const [external, images, sources, pendingDeletes, previewWork] = await Promise.all([
       db.select().from(hubbuyExternalItems).where(eq(hubbuyExternalItems.purchaseId, purchaseId)).all(),
       db.select({ externalItemId: qcImages.externalItemId, status: qcImages.status, deleteState: qcImages.deleteState }).from(qcImages).innerJoin(hubbuyExternalItems, eq(qcImages.externalItemId, hubbuyExternalItems.id)).where(eq(hubbuyExternalItems.purchaseId, purchaseId)).all(),
@@ -307,7 +317,7 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
   }
 
   async function getGallery(purchaseId: string, itemId: string, limit = 12, requestedOffset = 0, targetImageId?: string) {
-    await authorizedPurchase(purchaseId);
+    const { access } = await authorizedPurchaseContext(purchaseId);
     const target = parseTargetKey(itemId);
     const item = await resolveTarget(db, purchaseId, target.key);
     if (!item) throw new DomainError("Produto não encontrado nesta compra.", 404, "QC_ITEM_NOT_FOUND");
@@ -329,12 +339,12 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
     const imageIds = rows.map(row => row.image.id);
     const previews = imageIds.length ? await db.select().from(qcImagePreviews).where(and(inArray(qcImagePreviews.imageId, imageIds), eq(qcImagePreviews.status, "ready"), eq(qcImagePreviews.deleteState, "none"))).all() : [];
     const previewVersions = new Map(previews.map(row => [row.imageId, qcPreviewVersion(row)]));
-    const manage = !!managerId && managerId === userId;
+    const manage = canManageWorkspaceQc(access);
     return { itemId: target.key, pageOffset: offset, totalCount, presentationRevision: presentation?.revision ?? 0, primaryImageId: presentation?.imageId ?? null, canSetCover: manage, images: rows.map(row => ({ id: row.image.id, previewVersion: previewVersions.get(row.image.id) ?? null, previewUrl: previewVersions.has(row.image.id) ? `/api/qc/images/${encodeURIComponent(row.image.id)}/preview?v=${previewVersions.get(row.image.id)}` : null, width: row.image.width, height: row.image.height, occurrence: row.occurrence })), nextOffset: offset + rows.length < totalCount ? offset + rows.length : null };
   }
 
   async function getQcPresentations(purchaseId: string, itemIds: string[]) {
-    await authorizedPurchase(purchaseId);
+    const { access } = await authorizedPurchaseContext(purchaseId);
     if (!Array.isArray(itemIds) || itemIds.length > 20 || itemIds.some(id => typeof id !== "string" || !id || id.length > 220)) throw new DomainError("A solicitação de capas QC deve conter até 20 produtos distintos.", 400, "QC_PRESENTATION_BATCH_INVALID");
     const targets = itemIds.map(parseTargetKey);
     if (targets.some(target => !target.id || target.id.length > 200) || new Set(targets.map(target => target.key)).size !== targets.length) throw new DomainError("Destinos QC inválidos ou repetidos.", 400, "QC_PRESENTATION_BATCH_INVALID");
@@ -385,7 +395,7 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
       });
       const coverPreview = previews.find(row => row.imageId === presentation?.image_id) ?? null;
       const thumbnails = previews.filter(row => row.imageId !== presentation?.image_id).slice(0, 3);
-      return { itemId: target.key, purchaseItemId: target.id, qcCount: total, primaryImageId: presentation?.image_id ?? null, presentationRevision: presentation?.revision ?? 0, coverPreview, canSetCover: !!managerId && managerId === userId, previews: thumbnails, remainingCount: Math.max(0, total - thumbnails.length - (coverPreview ? 1 : 0)) };
+      return { itemId: target.key, purchaseItemId: target.id, qcCount: total, primaryImageId: presentation?.image_id ?? null, presentationRevision: presentation?.revision ?? 0, coverPreview, canSetCover: canManageWorkspaceQc(access), previews: thumbnails, remainingCount: Math.max(0, total - thumbnails.length - (coverPreview ? 1 : 0)) };
     }) };
   }
 
@@ -1318,7 +1328,6 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
     const startedAt = performance.now();
     const budget = { deadline: now() + QC_LIMITS.requestMs };
     const purchase = await rate(purchaseId, "batch");
-    if (!managerId || managerId !== userId) throw new DomainError("Você não pode administrar QC.", 403, "QC_FORBIDDEN");
     if (externalItemId) {
       const external = await db.select({ id: hubbuyExternalItems.id }).from(hubbuyExternalItems).where(and(eq(hubbuyExternalItems.id, externalItemId), eq(hubbuyExternalItems.purchaseId, purchaseId), or(sql`${hubbuyExternalItems.purchaseItemId} IS NOT NULL`, sql`${hubbuyExternalItems.additionalOrderItemId} IS NOT NULL`))).get();
       if (!external) throw new DomainError("Ocorrência QC não encontrada ou ainda não associada.", 404, "QC_EXTERNAL_NOT_FOUND");

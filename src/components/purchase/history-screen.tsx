@@ -21,7 +21,7 @@ export function HistoryScreen() {
   useEffect(() => {
     if (personal) return;
     let active = true;
-    void costRequest<CostTrackingSummary[]>("/api/packages").then((result) => {
+    void costRequest<CostTrackingSummary[]>("/api/packages", undefined, data.workspaceId).then((result) => {
       if (active && result.ok && result.data) setTrackingData({ workspaceId: data.workspaceId, trackings: result.data });
     });
     return () => {
@@ -36,7 +36,7 @@ export function HistoryScreen() {
     const result = await costRequest<CostTrackingSummary[]>("/api/packages", {
       operation: "start",
       purchaseId,
-    });
+    }, data.workspaceId);
     if (result.ok && result.data) setTrackingData({ workspaceId: data.workspaceId, trackings: result.data });
     else toast.error(result.error ?? "Não foi possível iniciar os custos.");
     setStarting(null);
