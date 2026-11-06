@@ -100,26 +100,12 @@ export function SupplierMarquee({ suppliers }: SupplierMarqueeProps) {
           className={styles.marqueeLogoSlot}
           data-testid={isClone ? undefined : `marquee-logo-slot-${supplier.id}`}
           data-logo-status={supplier.logoAudit.status}
+          hidden={!isVerified}
         >
           {isVerified && supplier.logoAudit.logoAssetLocal ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={supplier.logoAudit.logoAssetLocal}
-              alt={isClone ? "" : `Logo de ${supplier.title}`}
-              className={styles.marqueeLogoImg}
-              loading="lazy"
-              decoding="async"
-            />
-          ) : (
-            <span
-              className={styles.marqueeLogoPending}
-              role={isClone ? undefined : "img"}
-              aria-label={isClone ? undefined : `Ativo de logo pendente para ${supplier.title}`}
-              title={`Pendente de ativo oficial (${supplier.logoAudit.status}): ${supplier.title}`}
-            >
-              PEND
-            </span>
-          )}
+            <img src={supplier.logoAudit.logoAssetLocal} alt={isClone ? "" : `Logo de ${supplier.title}`} width={32} height={32} className={styles.marqueeLogoImg} loading="lazy" decoding="async" />
+          ) : null}
         </span>
         <span className={styles.marqueeItemText}>
           <span className={styles.marqueeItemTitle}>{supplier.title}</span>
@@ -140,9 +126,7 @@ export function SupplierMarquee({ suppliers }: SupplierMarqueeProps) {
     >
       <div className={styles.marqueeLabelWrap}>
         <span className={styles.marqueeLabel}>FORNECEDORES</span>
-        <span className={styles.marqueeCountBadge} title={"73 fornecedores na sequ\u00eancia"}>
-          {suppliers.length}
-        </span>
+
       </div>
 
       <div

@@ -2,9 +2,10 @@
 
 import React, { useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Bookmark, Search, Share2, X } from "lucide-react";
-import { useTheme } from "@/components/theme-provider";
-import type { ThemePreference } from "@/lib/theme";
+import Image from "next/image";
+import { Bookmark, Search, Share2, ExternalLink, Star, BookOpen, FileText, Table2, ArrowUpRight, CarFront, Cpu, Footprints, Gamepad2, Glasses, LayoutGrid, Shirt, Trophy, type LucideIcon } from "lucide-react";
+import { ThemeSwitch } from "@/components/theme-switch";
+import { Button } from "@/components/ui/button";
 import {
   ENEBINHA_BRAND_REFERENCES,
   ENEBINHA_DISCLOSURES,
@@ -17,7 +18,6 @@ import {
   filterCommunity,
   filterGuides,
   filterSupplierCategories,
-  normalizeEnebinhaSearch,
 } from "@/lib/enebinha/manifest";
 import { SupplierMarquee } from "./supplier-marquee";
 import styles from "./enebinha.module.css";
@@ -26,21 +26,27 @@ type CatalogTab = "fornecedores" | "guias" | "comunidade";
 
 const INITIAL_CATEGORY_PREVIEW_LIMIT = 6;
 
-const THEME_OPTIONS: Array<{ value: ThemePreference; label: string }> = [
-  { value: "light", label: "Claro" },
-  { value: "dark", label: "Escuro" },
-  { value: "system", label: "Sistema" },
-];
+const CATEGORY_ICONS: Record<string, LucideIcon> = {
+  all: LayoutGrid,
+  "eletronicos-e-perifericos": Cpu,
+  "relogios-e-oculos": Glasses,
+  "roupas-e-moda": Shirt,
+  "tenis-e-calcados": Footprints,
+  "esportes-e-camisas": Trophy,
+  "brinquedos-e-colecionaveis": Gamepad2,
+  "automotivos-e-pecas": CarFront,
+};
 
 export function EnebinhaPage() {
-  const { preference, setPreference } = useTheme();
 
   const [activeTab, setActiveTab] = useState<CatalogTab>("fornecedores");
-  const [selectedCategory, setSelectedCategory] = useState<string | "all">("all");
-  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [selectedCategory, setSelectedCategory] = useState<string | "all">("eletronicos-e-perifericos");
+  // Each section retains its own query when visitors switch tabs.
+  const [queries, setQueries] = useState<Record<CatalogTab, string>>({ fornecedores: "", guias: "", comunidade: "" });
+  const searchQuery = queries[activeTab];
+  const setSearchQuery = (value: string) => setQueries((prev) => ({ ...prev, [activeTab]: value }));
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
   const [expandAllCategories, setExpandAllCategories] = useState<boolean>(false);
-  const [isMobileCategoriesOpen, setIsMobileCategoriesOpen] = useState<boolean>(false);
   const [isBrandsOpen, setIsBrandsOpen] = useState<boolean>(false);
   const [shareFeedback, setShareFeedback] = useState<string | null>(null);
 
@@ -50,13 +56,12 @@ export function EnebinhaPage() {
     comunidade: null,
   });
 
-  const normalizedQuery = useMemo(() => normalizeEnebinhaSearch(searchQuery), [searchQuery]);
   const hasActiveSearch = searchQuery.trim().length > 0;
 
   const filteredSupplierCategories = useMemo(
     () =>
       filterSupplierCategories({
-        categorySlug: selectedCategory,
+        categorySlug: searchQuery.trim() ? "all" : selectedCategory,
         query: searchQuery,
       }),
     [selectedCategory, searchQuery]
@@ -67,14 +72,6 @@ export function EnebinhaPage() {
     [filteredSupplierCategories]
   );
 
-  const showVitrineCard = useMemo(() => {
-    if (selectedCategory !== "all") return false;
-    if (!normalizedQuery) return true;
-    return normalizeEnebinhaSearch(
-      `${ENEBINHA_VITRINE.title} ${ENEBINHA_VITRINE.subtitle} outfitlit enebinha vitrine`
-    ).includes(normalizedQuery);
-  }, [selectedCategory, normalizedQuery]);
-
   const filteredGuides = useMemo(() => filterGuides(searchQuery), [searchQuery]);
   const filteredCommunity = useMemo(() => filterCommunity(searchQuery), [searchQuery]);
 
@@ -82,7 +79,7 @@ export function EnebinhaPage() {
     const shareUrl =
       typeof window !== "undefined" ? window.location.href : "https://loti.app/enebinha";
     const shareData = {
-      title: "ENEBINHA · Curadoria de importação | Loti",
+      title: "ENEBINHA · Sua central de importações | Loti",
       text: "Fornecedores, catálogos e guias para importar da China selecionados por @enebinha.",
       url: shareUrl,
     };
@@ -144,10 +141,10 @@ export function EnebinhaPage() {
   };
 
   const isCategoryExpanded = (slug: string, entryCount: number) => {
-    if (selectedCategory !== "all" || hasActiveSearch || expandAllCategories) {
+    if (hasActiveSearch || (selectedCategory === "all" && expandAllCategories)) {
       return true;
     }
-    if (entryCount <= INITIAL_CATEGORY_PREVIEW_LIMIT) {
+    if (entryCount <= (selectedCategory === "all" ? 3 : INITIAL_CATEGORY_PREVIEW_LIMIT)) {
       return true;
     }
     return Boolean(expandedCategories[slug]);
@@ -163,39 +160,16 @@ export function EnebinhaPage() {
             data-testid="enebinha-loti-brand"
           >
             <span className={styles.brandMark}>
-              <Bookmark className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+              <Bookmark size={27} fill="currentColor" strokeWidth={0} aria-hidden="true" />
             </span>
             <span>Loti</span>
           </Link>
 
           <div className={styles.headerActions}>
-            <div
-              className={styles.themeGroup}
-              role="group"
-              aria-label="Aparência da página"
-              data-testid="enebinha-theme-group"
-            >
-              <span className={styles.themeGroupLabel}>Tema</span>
-              {THEME_OPTIONS.map((opt) => {
-                const active = preference === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setPreference(opt.value)}
-                    aria-pressed={active}
-                    className={`${styles.themeBtn} ${
-                      active ? styles.themeBtnActive : ""
-                    }`}
-                    data-testid={`enebinha-theme-${opt.value}`}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
+            <ThemeSwitch className={styles.headerThemeSwitch} />
 
-            <button
+            <Button
+              variant="ghost" size="icon"
               type="button"
               onClick={handleShare}
               className={styles.headerActionBtn}
@@ -203,9 +177,7 @@ export function EnebinhaPage() {
               data-testid="enebinha-share-btn"
             >
               <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>Compartilhar</span>
-              <span aria-hidden="true">↗</span>
-            </button>
+            </Button>
 
             {shareFeedback && (
               <span
@@ -224,7 +196,7 @@ export function EnebinhaPage() {
               data-testid="enebinha-loti-cta"
             >
               <span>Conhecer Loti</span>
-              <span aria-hidden="true">↗</span>
+              <ExternalLink size={15} aria-hidden="true" />
             </Link>
           </div>
         </div>
@@ -238,7 +210,7 @@ export function EnebinhaPage() {
           data-testid="enebinha-hero"
         >
           <div className={styles.heroCopy}>
-            <p className={styles.heroEyebrow}>CURADORIA DE IMPORTAÇÃO</p>
+            <p className={styles.heroEyebrow}>CENTRAL DE IMPORTAÇÃO</p>
             <h1 id="enebinha-hero-title" className={styles.heroTitle}>
               ENEBINHA
             </h1>
@@ -266,33 +238,57 @@ export function EnebinhaPage() {
         {/* D7 — Faixa animada horizontal de fornecedores com logos/avatares */}
         <SupplierMarquee suppliers={ENEBINHA_MARQUEE_SUPPLIERS} />
 
-        {/* Ação principal — Cadastro HubBuy */}
-        <section
-          aria-labelledby="enebinha-hubbuy-title"
-          className={styles.hubbuyCard}
-          data-testid="enebinha-hubbuy-card"
-        >
-          <div className={styles.hubbuyCopy}>
-            <h2 id="enebinha-hubbuy-title" className={styles.hubbuyTitle}>
-              {ENEBINHA_HUBBUY.headline}
-            </h2>
-            <p className={`${styles.hubbuySubtitle} ${styles.hubbuySubtitleDesktop}`}>
-              {ENEBINHA_HUBBUY.subtitleDesktop}
-            </p>
-            <p className={`${styles.hubbuySubtitle} ${styles.hubbuySubtitleMobile}`}>
-              {ENEBINHA_HUBBUY.subtitleMobile}
-            </p>
-          </div>
+        <section className={styles.featuredLinks} aria-label="Destaques da importação">
+          {/* Ação principal — Cadastro HubBuy */}
+          <section
+            aria-labelledby="enebinha-hubbuy-title"
+            className={styles.hubbuyCard}
+            data-testid="enebinha-hubbuy-card"
+          >
+            <div className={styles.hubbuyCopy}>
+              <h2 id="enebinha-hubbuy-title" className={styles.hubbuyTitle}>
+                {ENEBINHA_HUBBUY.headline}
+              </h2>
+              <p className={`${styles.hubbuySubtitle} ${styles.hubbuySubtitleDesktop}`}>
+                {ENEBINHA_HUBBUY.subtitleDesktop}
+              </p>
+              <p className={`${styles.hubbuySubtitle} ${styles.hubbuySubtitleMobile}`}>
+                {ENEBINHA_HUBBUY.subtitleMobile}
+              </p>
+            </div>
+
+            <a
+              href={ENEBINHA_HUBBUY.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`button button-primary ${styles.hubbuyCta}`}
+              data-testid="enebinha-hubbuy-cta"
+            >
+              <span>{ENEBINHA_HUBBUY.ctaLabel}</span>
+              <ExternalLink size={15} aria-hidden="true" />
+            </a>
+          </section>
 
           <a
-            href={ENEBINHA_HUBBUY.url}
+            href={ENEBINHA_VITRINE.url}
             target="_blank"
             rel="noopener noreferrer"
-            className={styles.hubbuyCta}
-            data-testid="enebinha-hubbuy-cta"
+            className={styles.vitrineCard}
+            data-testid="enebinha-vitrine-card"
           >
-            <span>{ENEBINHA_HUBBUY.ctaLabel}</span>
-            <span aria-hidden="true">↗</span>
+            <span className={styles.vitrineIdentity}>
+              <span className={styles.vitrineDot} aria-hidden="true">
+                <Star size={18} aria-hidden="true" />
+              </span>
+              <span className={styles.vitrineText}>
+                <span className={styles.vitrineEyebrow}>Curadoria da Enebinha</span>
+                <span className={styles.vitrineTitle}>{ENEBINHA_VITRINE.title}</span>
+                <span className={styles.vitrineSub}>{ENEBINHA_VITRINE.subtitle} · outfitlit.com/@enebinha</span>
+              </span>
+            </span>
+            <span className={styles.vitrineAction}>
+              {ENEBINHA_VITRINE.ctaLabel} <ExternalLink size={15} aria-hidden="true" />
+            </span>
           </a>
         </section>
 
@@ -307,16 +303,17 @@ export function EnebinhaPage() {
               Explore os links
             </h2>
             <p className={styles.catalogMeta} data-testid="enebinha-catalog-meta">
-              {ENEBINHA_DISPLAY_COUNTS.supplierEntries} fornecedores ·{" "}
-              {ENEBINHA_DISPLAY_COUNTS.storefrontsIdentifiedWithinCatalog} lojas e vitrines
+              {activeTab === "fornecedores"
+                ? `${ENEBINHA_DISPLAY_COUNTS.supplierEntries} fornecedores · ${ENEBINHA_DISPLAY_COUNTS.storefrontsIdentifiedWithinCatalog} lojas e vitrines`
+                : activeTab === "guias" ? `${ENEBINHA_DISPLAY_COUNTS.guides} guias` : `${ENEBINHA_DISPLAY_COUNTS.community} canais`}
             </p>
           </div>
 
           <div className={styles.toolbarRow}>
             <div
               role="tablist"
-              aria-label="Seções da curadoria"
-              className={styles.tabList}
+              aria-label="Seções da central de importação"
+              className={`segmented ${styles.tabList}`}
               onKeyDown={handleTabKeyDown}
             >
               <button
@@ -330,12 +327,12 @@ export function EnebinhaPage() {
                 aria-controls="panel-fornecedores"
                 tabIndex={activeTab === "fornecedores" ? 0 : -1}
                 onClick={() => setActiveTab("fornecedores")}
-                className={`${styles.tabButton} ${
-                  activeTab === "fornecedores" ? styles.tabButtonActive : ""
+                className={`${
+                  activeTab === "fornecedores" ? "selected" : ""
                 }`}
                 data-testid="tab-fornecedores"
               >
-                Fornecedores ({ENEBINHA_DISPLAY_COUNTS.supplierEntries})
+                Fornecedores
               </button>
 
               <button
@@ -349,12 +346,12 @@ export function EnebinhaPage() {
                 aria-controls="panel-guias"
                 tabIndex={activeTab === "guias" ? 0 : -1}
                 onClick={() => setActiveTab("guias")}
-                className={`${styles.tabButton} ${
-                  activeTab === "guias" ? styles.tabButtonActive : ""
+                className={`${
+                  activeTab === "guias" ? "selected" : ""
                 }`}
                 data-testid="tab-guias"
               >
-                Guias ({ENEBINHA_DISPLAY_COUNTS.guides})
+                Guias
               </button>
 
               <button
@@ -368,17 +365,17 @@ export function EnebinhaPage() {
                 aria-controls="panel-comunidade"
                 tabIndex={activeTab === "comunidade" ? 0 : -1}
                 onClick={() => setActiveTab("comunidade")}
-                className={`${styles.tabButton} ${
-                  activeTab === "comunidade" ? styles.tabButtonActive : ""
+                className={`${
+                  activeTab === "comunidade" ? "selected" : ""
                 }`}
                 data-testid="tab-comunidade"
               >
-                Comunidade ({ENEBINHA_DISPLAY_COUNTS.community})
+                Comunidade
               </button>
             </div>
 
-            <div className={styles.searchWrap}>
-              <Search className={styles.searchIcon} aria-hidden="true" />
+            <div className={`search-input ${styles.searchWrap}`}>
+              <Search size={19} className={styles.searchIcon} aria-hidden="true" />
               <input
                 type="search"
                 value={searchQuery}
@@ -390,7 +387,7 @@ export function EnebinhaPage() {
                     ? "Buscar guia ou tutorial..."
                     : "Buscar canal da comunidade..."
                 }
-                aria-label="Buscar links na curadoria"
+                aria-label="Buscar links na central de importações"
                 className={styles.searchInput}
                 data-testid="enebinha-search-input"
               />
@@ -415,51 +412,26 @@ export function EnebinhaPage() {
               aria-labelledby="tab-fornecedores"
               data-testid="panel-fornecedores"
             >
-              {/* Mobile Quick Category Pills + Mais + */}
-              <div
-                className={styles.mobileCategoryBar}
-                aria-label="Filtro rápido de categorias"
-                data-testid="mobile-category-bar"
-              >
-                <button
-                  type="button"
-                  onClick={() => setSelectedCategory("all")}
-                  className={`${styles.mobilePillBtn} ${
-                    selectedCategory === "all" ? styles.mobilePillBtnActive : ""
-                  }`}
-                >
-                  Todos ({ENEBINHA_DISPLAY_COUNTS.supplierEntries})
-                </button>
-                {ENEBINHA_SUPPLIER_CATEGORIES.slice(0, 2).map((cat) => (
-                  <button
-                    key={cat.slug}
-                    type="button"
-                    onClick={() => setSelectedCategory(cat.slug)}
-                    className={`${styles.mobilePillBtn} ${
-                      selectedCategory === cat.slug ? styles.mobilePillBtnActive : ""
-                    }`}
-                  >
-                    {cat.shortLabel}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  onClick={() => setIsMobileCategoriesOpen(true)}
-                  aria-expanded={isMobileCategoriesOpen}
-                  aria-controls="mobile-categories-sheet"
-                  className={`${styles.mobilePillBtn} ${
-                    selectedCategory !== "all" &&
-                    !ENEBINHA_SUPPLIER_CATEGORIES.slice(0, 2).some(
-                      (c) => c.slug === selectedCategory
-                    )
-                      ? styles.mobilePillBtnActive
-                      : ""
-                  }`}
-                  data-testid="mobile-categories-more-btn"
-                >
-                  Mais +
-                </button>
+              <div className={styles.categoryRail} role="group" aria-label="Categorias de fornecedores" data-testid="category-bar">
+                {[{ slug: "all", category: "Todos" }, ...ENEBINHA_SUPPLIER_CATEGORIES].map((category) => {
+                  const CategoryIcon = CATEGORY_ICONS[category.slug] ?? LayoutGrid;
+                  return (
+                    <button key={category.slug} type="button" aria-pressed={!hasActiveSearch && selectedCategory === category.slug}
+                      onClick={(event) => {
+                        setSelectedCategory(category.slug);
+                        setSearchQuery("");
+                        event.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" });
+                      }}
+                      className={styles.categoryFilter} data-testid={`category-filter-${category.slug}`}>
+                      <CategoryIcon className={styles.categoryIcon} size={15} aria-hidden="true" />
+                      <span>{category.category}</span>
+                    </button>
+                  );
+                })}
               </div>
+              <p className="sr-only" role="status" aria-live="polite">
+                {filteredSupplierCount} fornecedores{hasActiveSearch ? ` para “${searchQuery.trim()}”` : ` em ${selectedCategory === "all" ? "todas as categorias" : ENEBINHA_SUPPLIER_CATEGORIES.find((category) => category.slug === selectedCategory)?.category}`}.
+              </p>
 
               <div className={styles.summaryBar}>
                 <span>
@@ -469,26 +441,7 @@ export function EnebinhaPage() {
                       {filteredSupplierCount === 1 ? "resultado" : "resultados"} em{" "}
                       <strong>&ldquo;{searchQuery.trim()}&rdquo;</strong>
                     </>
-                  ) : selectedCategory === "all" ? (
-                    <>
-                      Exibindo curadoria em{" "}
-                      <strong>{ENEBINHA_SUPPLIER_CATEGORIES.length} categorias</strong> ·{" "}
-                      {ENEBINHA_DISPLAY_COUNTS.supplierEntries} fornecedores e{" "}
-                      {ENEBINHA_VITRINE.title}
-                    </>
-                  ) : (
-                    <>
-                      Categoria selecionada:{" "}
-                      <strong>
-                        {
-                          ENEBINHA_SUPPLIER_CATEGORIES.find(
-                            (c) => c.slug === selectedCategory
-                          )?.category
-                        }
-                      </strong>{" "}
-                      ({filteredSupplierCount} fornecedores)
-                    </>
-                  )}
+                  ) : null}
                 </span>
 
                 {selectedCategory === "all" && !hasActiveSearch && (
@@ -507,74 +460,9 @@ export function EnebinhaPage() {
               </div>
 
               <div className={styles.suppliersLayout}>
-                <aside
-                  aria-label="Categorias de fornecedores"
-                  className={styles.categorySidebar}
-                  data-testid="desktop-category-sidebar"
-                >
-                  <p className={styles.sidebarHeading}>CATEGORIAS</p>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedCategory("all")}
-                    className={`${styles.sidebarCategoryBtn} ${
-                      selectedCategory === "all" ? styles.sidebarCategoryBtnActive : ""
-                    }`}
-                    data-testid="category-filter-all"
-                  >
-                    <span>Todos</span>
-                    <span className={styles.sidebarCategoryCount}>
-                      {ENEBINHA_DISPLAY_COUNTS.supplierEntries}
-                    </span>
-                  </button>
 
-                  {ENEBINHA_SUPPLIER_CATEGORIES.map((cat) => {
-                    const active = selectedCategory === cat.slug;
-                    return (
-                      <button
-                        key={cat.slug}
-                        type="button"
-                        onClick={() => setSelectedCategory(cat.slug)}
-                        className={`${styles.sidebarCategoryBtn} ${
-                          active ? styles.sidebarCategoryBtnActive : ""
-                        }`}
-                        data-testid={`category-filter-${cat.slug}`}
-                      >
-                        <span>{cat.category}</span>
-                        <span className={styles.sidebarCategoryCount}>{cat.count}</span>
-                      </button>
-                    );
-                  })}
-                </aside>
 
                 <div className={styles.suppliersContent}>
-                  {/* Vitrine Enebinha fixada */}
-                  {showVitrineCard && (
-                    <a
-                      href={ENEBINHA_VITRINE.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={styles.vitrineCard}
-                      data-testid="enebinha-vitrine-card"
-                    >
-                      <div className={styles.vitrineLeft}>
-                        <span className={styles.vitrineDot} aria-hidden="true">
-                          ★
-                        </span>
-                        <div className={styles.vitrineText}>
-                          <span className={styles.vitrineTitle}>
-                            {ENEBINHA_VITRINE.title}
-                          </span>
-                          <span className={styles.vitrineSub}>
-                            {ENEBINHA_VITRINE.subtitle} · outfitlit.com/@enebinha
-                          </span>
-                        </div>
-                      </div>
-                      <span className={styles.vitrineAction}>
-                        {ENEBINHA_VITRINE.ctaLabel} ↗
-                      </span>
-                    </a>
-                  )}
-
                   {filteredSupplierCategories.length === 0 ? (
                     <div
                       className={styles.emptyState}
@@ -600,6 +488,7 @@ export function EnebinhaPage() {
                     </div>
                   ) : (
                     filteredSupplierCategories.map((categoryGroup) => {
+                      const previewLimit = selectedCategory === "all" ? 3 : INITIAL_CATEGORY_PREVIEW_LIMIT;
                       const expanded = isCategoryExpanded(
                         categoryGroup.slug,
                         categoryGroup.entries.length
@@ -608,13 +497,12 @@ export function EnebinhaPage() {
                         ? categoryGroup.entries
                         : categoryGroup.entries.slice(
                             0,
-                            INITIAL_CATEGORY_PREVIEW_LIMIT
+                            previewLimit
                           );
                       const hasMore =
-                        categoryGroup.entries.length > INITIAL_CATEGORY_PREVIEW_LIMIT &&
-                        selectedCategory === "all" &&
+                        categoryGroup.entries.length > previewLimit &&
                         !hasActiveSearch &&
-                        !expandAllCategories;
+                        !(selectedCategory === "all" && expandAllCategories);
 
                       return (
                         <div
@@ -652,7 +540,7 @@ export function EnebinhaPage() {
                                   </span>
                                 </div>
                                 <span className={styles.externalArrow} aria-hidden="true">
-                                  ↗
+                                  <ExternalLink size={16} aria-hidden="true" />
                                 </span>
                               </a>
                             ))}
@@ -661,7 +549,6 @@ export function EnebinhaPage() {
                           {(hasMore ||
                             (expanded &&
                               Boolean(expandedCategories[categoryGroup.slug]) &&
-                              selectedCategory === "all" &&
                               !hasActiveSearch &&
                               !expandAllCategories)) && (
                             <button
@@ -673,7 +560,7 @@ export function EnebinhaPage() {
                             >
                               {expanded
                                 ? "Mostrar menos"
-                                : `Ver todos os ${categoryGroup.entries.length} links desta categoria ↗`}
+                                : `Ver todos os ${categoryGroup.entries.length} links`}
                             </button>
                           )}
                         </div>
@@ -713,24 +600,26 @@ export function EnebinhaPage() {
                   </button>
                 </div>
               ) : (
-                <div className={styles.linksGrid}>
+                <div className={styles.guidesGrid}>
                   {filteredGuides.map((guide) => (
                     <a
                       key={guide.id}
                       href={guide.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className={styles.linkRow}
+                      className={guide.id === "guide-01" ? styles.guideFeatured : styles.guideCard}
                       data-testid={`guide-link-${guide.id}`}
                     >
+                      <span className={styles.guideIcon} aria-hidden="true">{guide.id === "guide-01" ? <BookOpen size={28} /> : guide.platform === "Google Sheets" ? <Table2 size={20} /> : <FileText size={20} />}</span>
                       <div className={styles.linkRowMain}>
                         <span className={styles.linkRowTitle}>{guide.title}</span>
                         <span className={styles.linkRowSubtitle}>
                           {guide.platform}
                         </span>
                       </div>
+                      {guide.id === "guide-01" && <span className={styles.guideAction}>Abrir guia</span>}
                       <span className={styles.externalArrow} aria-hidden="true">
-                        ↗
+                        <ExternalLink size={16} aria-hidden="true" />
                       </span>
                     </a>
                   ))}
@@ -768,27 +657,27 @@ export function EnebinhaPage() {
                   </button>
                 </div>
               ) : (
-                <div className={styles.linksGrid}>
-                  {filteredCommunity.map((entry) => (
+                <div className={styles.communityGrid}>
+                  {filteredCommunity.map((entry) => {
+                    return (
                     <a
                       key={entry.id}
                       href={entry.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className={styles.linkRow}
+                      className={styles.channelCard}
                       data-testid={`community-link-${entry.id}`}
                     >
+                      <div className={styles.channelHeading}><Image src={`/enebinha/platforms/${entry.platform.toLowerCase()}.svg`} width={24} height={24} alt="" className={styles.platformLogo} />{entry.title !== entry.platform && <span className={styles.channelPlatform}>{entry.platform}</span>}</div>
                       <div className={styles.linkRowMain}>
                         <span className={styles.linkRowTitle}>{entry.title}</span>
                         <span className={styles.linkRowSubtitle}>
-                          {entry.platform} · {entry.subtitle}
+                          {entry.subtitle}
                         </span>
                       </div>
-                      <span className={styles.externalArrow} aria-hidden="true">
-                        ↗
-                      </span>
+                      <span className={styles.channelAction}>{entry.platform === "Amazon" ? "Visitar" : entry.platform === "Telegram" ? "Abrir canal" : "Ver conteúdo"}<ArrowUpRight size={16} aria-hidden="true" /></span>
                     </a>
-                  ))}
+                  ); })}
                 </div>
               )}
             </div>
@@ -875,74 +764,6 @@ export function EnebinhaPage() {
         </footer>
       </main>
 
-      {/* Sheet Mobile para selecionar qualquer uma das 7 categorias */}
-      {isMobileCategoriesOpen && (
-        <div
-          className={styles.mobileSheetBackdrop}
-          onClick={() => setIsMobileCategoriesOpen(false)}
-          role="presentation"
-        >
-          <div
-            id="mobile-categories-sheet"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Selecionar categoria de fornecedores"
-            className={styles.mobileSheet}
-            onClick={(e) => e.stopPropagation()}
-            data-testid="mobile-categories-sheet"
-          >
-            <div className={styles.mobileSheetHeader}>
-              <h3 className={styles.mobileSheetTitle}>Categorias (7)</h3>
-              <button
-                type="button"
-                onClick={() => setIsMobileCategoriesOpen(false)}
-                aria-label="Fechar categorias"
-                className={styles.mobileSheetCloseBtn}
-                data-testid="mobile-categories-close"
-              >
-                <X className="h-4 w-4" aria-hidden="true" />
-              </button>
-            </div>
-
-            <div className={styles.mobileSheetList}>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedCategory("all");
-                  setIsMobileCategoriesOpen(false);
-                }}
-                className={`${styles.sidebarCategoryBtn} ${
-                  selectedCategory === "all" ? styles.sidebarCategoryBtnActive : ""
-                }`}
-                data-testid="mobile-category-option-all"
-              >
-                <span>Todos os fornecedores</span>
-                <span className={styles.sidebarCategoryCount}>
-                  {ENEBINHA_DISPLAY_COUNTS.supplierEntries}
-                </span>
-              </button>
-
-              {ENEBINHA_SUPPLIER_CATEGORIES.map((cat) => (
-                <button
-                  key={cat.slug}
-                  type="button"
-                  onClick={() => {
-                    setSelectedCategory(cat.slug);
-                    setIsMobileCategoriesOpen(false);
-                  }}
-                  className={`${styles.sidebarCategoryBtn} ${
-                    selectedCategory === cat.slug ? styles.sidebarCategoryBtnActive : ""
-                  }`}
-                  data-testid={`mobile-category-option-${cat.slug}`}
-                >
-                  <span>{cat.category}</span>
-                  <span className={styles.sidebarCategoryCount}>{cat.count}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
