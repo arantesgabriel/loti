@@ -5,7 +5,7 @@ import { Bookmark, Eye, EyeOff, LockKeyhole } from "lucide-react";
 import { LoginStoriesCarousel } from "@/components/login/login-stories-carousel";
 import { Button } from "@/components/ui/button";
 
-export function SignupScreen() {
+export function SignupScreen({ referralToken }: { referralToken: string }) {
   const [busy, setBusy] = useState(false), [show, setShow] = useState(false);
   const [error, setError] = useState(""), [email, setEmail] = useState(""), [sent, setSent] = useState(false), [resent, setResent] = useState(false), [cooldown, setCooldown] = useState(0);
   useEffect(() => { if (!cooldown) return; const timer = window.setTimeout(() => setCooldown(value => Math.max(0, value - 1)), 1000); return () => window.clearTimeout(timer); }, [cooldown]);
@@ -55,6 +55,7 @@ export function SignupScreen() {
             </div>
             <form onSubmit={submit} aria-busy={busy}>
               <div className="login-field"><label htmlFor="signup-name">Nome completo</label><input id="signup-name" name="name" autoComplete="name" placeholder="Como podemos chamar você?" required maxLength={200} disabled={busy}/></div>
+              <input type="hidden" name="referralToken" value={referralToken}/>
               <div className="login-field"><label htmlFor="signup-email">Email</label><input id="signup-email" name="email" type="email" autoComplete="email" placeholder="seu@email.com" required maxLength={254} disabled={busy}/></div>
               <div className="login-field login-password-field"><div className="login-password-heading"><label htmlFor="signup-password">Senha</label></div><div className="login-password-control"><input id="signup-password" name="password" type={show ? "text" : "password"} autoComplete="new-password" required minLength={12} maxLength={128} aria-describedby="signup-password-help" disabled={busy}/><button className="login-password-toggle" type="button" aria-label={show ? "Ocultar senhas" : "Mostrar senhas"} aria-pressed={show} onClick={() => setShow(value => !value)}>{show ? <EyeOff size={18} aria-hidden="true"/> : <Eye size={18} aria-hidden="true"/>}</button></div><small className="signup-field-help" id="signup-password-help">Use de 12 a 128 caracteres.</small></div>
               <div className="login-field"><label htmlFor="signup-confirm-password">Confirmar senha</label><input id="signup-confirm-password" name="confirmPassword" type={show ? "text" : "password"} autoComplete="new-password" required minLength={12} maxLength={128} disabled={busy}/></div>

@@ -14,6 +14,7 @@ import { authClient } from "@/lib/auth/client";
 import { ProfileNameForm } from "@/components/profile/profile-name-form";
 import { ProfilePasswordForm } from "@/components/profile/profile-password-form";
 import { ProfileTheme } from "@/components/profile/profile-theme";
+import { ReferralLink } from "@/components/profile/referral-link";
 
 const categories = [
   { id: "profile", label: "Perfil", Icon: UserRound },
@@ -166,6 +167,7 @@ export default function Profile() {
             onPendingChange={setFormPending}
             onDirtyChange={setHasUnsavedChanges}
           />
+          <ReferralLink />
         </div>}
 
         {activeCategory === "appearance" && <ProfileTheme />}

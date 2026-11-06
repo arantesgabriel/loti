@@ -8,6 +8,7 @@ import { createAuth, type AuthOptions } from "./config";
 import { authOrigin } from "./origin";
 import { publicSignupSchema, sendActivationEmail } from "./activation";
 import { abuseMessage, privateKey, requireLimits, trustedClientIp, type AuthDatabase } from "./security-limits";
+import { captureReferralAttribution } from "../domain/referrals";
 
 const privateHeaders = { "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer" };
 const genericResponse = { ok: true, message: "Se o cadastro puder receber uma confirmação, enviaremos um email. Confira também o spam." };
@@ -58,7 +59,7 @@ export async function handlePublicSignup(db: AuthDatabase, request: Request, opt
   const raw = parsedBody.value;
   const parsed = publicSignupSchema.safeParse(raw);
   if (!parsed.success) return json({ error: "Confira o nome, email e senhas. A senha precisa ter de 12 a 128 caracteres e as confirmações devem coincidir." }, 400);
-  const { name, email, password } = parsed.data;
+  const { name, email, password, referralToken } = parsed.data;
   const started = Date.now();
   try {
     await serializeSignup(privateKey(email), async () => {
@@ -76,6 +77,7 @@ export async function handlePublicSignup(db: AuthDatabase, request: Request, opt
               const createdUser = (await createAuth(tx, true, options).api.signUpEmail({ body: { name, email, password } })).user;
               await tx.insert(accountActivationRequirements).values({ userId: createdUser.id, source: "public_signup", createdAt: new Date() }).run();
               await ensurePersonalWorkspaceInTransaction(tx, createdUser.id);
+              await captureReferralAttribution(tx, referralToken, createdUser.id);
               return true;
             });
           } catch (error) {
