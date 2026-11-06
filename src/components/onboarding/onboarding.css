@@ -245,7 +245,45 @@
   .guidance-preferences-intro { flex-direction: column; gap: 10px; }
   .guidance-preferences-intro > .button { max-width: 100%; white-space: normal; text-align: left; }
 }
-.guidance-help { margin: 0 0 20px; padding: 18px 20px; border: 1px solid var(--border); background: var(--surface-muted); border-radius: 12px; }
-.guidance-help h2 { font-size: 15px; margin: 0 0 5px; }
-.guidance-help p { font-size: 13px; color: var(--muted); margin: 0 0 8px; }
-.guidance-help button { margin-right: 15px; }
+.guidance-help {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 20px 28px;
+  margin: 0 0 20px;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.guidance-help-message { display: flex; align-items: flex-start; gap: 12px; min-width: 0; }
+.guidance-help-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  color: var(--primary-ink);
+  background: var(--primary-soft);
+}
+.guidance-help-copy { min-width: 0; }
+.guidance-help h2 { margin: 1px 0 4px; font-size: 15px; font-weight: 650; line-height: 1.4; letter-spacing: -.01em; }
+.guidance-help p { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.guidance-help-actions { display: flex; align-items: center; justify-content: flex-end; gap: 18px; min-width: 0; }
+.guidance-help-primary { display: flex; align-items: center; gap: 14px; }
+.guidance-help-primary > a { color: var(--primary-ink); font-size: 13px; font-weight: 550; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 3px; transition: text-decoration-color 180ms ease-out; }
+.guidance-help-primary > a:hover { text-decoration-color: currentColor; }
+.guidance-help-dismiss { display: flex; align-items: center; gap: 2px; padding-left: 16px; border-left: 1px solid var(--border); }
+.guidance-help-dismiss .button { min-height: 40px; padding: 8px 10px; color: var(--muted); font-size: 12px; }
+.guidance-help-dismiss .button:hover { color: var(--foreground); }
+.guidance-help .guidance-help-error { grid-column: 1 / -1; padding: 10px 12px; border-radius: 9px; color: var(--danger-ink); background: var(--danger-soft); }
+@media (max-width: 900px) {
+  .guidance-help { grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 16px; }
+  .guidance-help-actions { align-items: stretch; flex-direction: column; gap: 10px; }
+  .guidance-help-primary { align-items: stretch; flex-direction: column; gap: 4px; }
+  .guidance-help-primary > .button { width: 100%; }
+  .guidance-help-primary > a { display: flex; align-items: center; justify-content: center; min-height: 42px; }
+  .guidance-help-dismiss { justify-content: space-between; flex-wrap: wrap; gap: 4px; padding: 8px 0 0; border-top: 1px solid var(--border); border-left: 0; }
+  .guidance-help-dismiss .button { flex: 1 1 auto; min-height: 40px; white-space: normal; }
+}
