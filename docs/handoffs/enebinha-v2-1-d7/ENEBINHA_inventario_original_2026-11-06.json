@@ -1,0 +1,656 @@
+{
+  "title": "ENEBINHA original — complete link inventory",
+  "source": "https://enebinha.netlify.app/",
+  "captured_on": "2026-11-06",
+  "usage": "Read-only visual consolidation reference; preserve labels/URLs when implementing /enebinha.",
+  "mascot": {
+    "source": "https://enebinha.netlify.app/images/identity/enebinha-importacao.webp",
+    "dimensions_px": [
+      780,
+      355
+    ],
+    "sha256": "487929fe8501456317095c37c8cafd808db8a8733ae64b85f07aa6013bf096bf",
+    "immutable": true
+  },
+  "display_counts": {
+    "supplier_entries": 73,
+    "supplier_view_results_including_vitrine": 74,
+    "storefronts_identified_within_catalog": 5,
+    "guides": 8,
+    "community": 6,
+    "home_view_results_including_hubbuy": 15,
+    "total_displayed_entries": 89
+  },
+  "hub_buy": {
+    "source_title": "Cadastro HubBuy",
+    "title": "Cadastro HubBuy",
+    "url": "https://www.hubbuy.com/signUp?utm_source=website&utm_medium=ambassador&utm_campaign=linksharing&inviteCode=65EAVN8o"
+  },
+  "vitrine_enebinha": {
+    "source_title": "Vitrine",
+    "title": "Vitrine Enebinha",
+    "url": "https://outfitlit.com/@enebinha"
+  },
+  "supplier_categories": [
+    {
+      "category": "Eletrônicos e periféricos",
+      "entries": [
+        {
+          "source_title": "Periféricos",
+          "title": "Periféricos",
+          "url": "https://www.goofish.com/personal?userId=2217553906964"
+        },
+        {
+          "source_title": "Teclados",
+          "title": "Teclados",
+          "url": "https://www.goofish.com/personal?userId=2565451157"
+        },
+        {
+          "source_title": "Câmeras",
+          "title": "Câmeras",
+          "url": "https://www.goofish.com/personal?userId=144293078"
+        },
+        {
+          "source_title": "GPU",
+          "title": "GPU",
+          "url": "https://www.goofish.com/personal?userId=2216234552100"
+        },
+        {
+          "source_title": "Periféricos PC",
+          "title": "Periféricos PC",
+          "url": "https://www.goofish.com/personal?userId=2207576282831"
+        },
+        {
+          "source_title": "Periféricos Razer",
+          "title": "Periféricos Razer",
+          "url": "https://www.goofish.com/personal?userId=2215764481076"
+        },
+        {
+          "source_title": "Placa-mãe",
+          "title": "Placa-mãe",
+          "url": "https://www.goofish.com/personal?userId=2124649991"
+        },
+        {
+          "source_title": "Smart Watch",
+          "title": "Smart Watch",
+          "url": "https://www.goofish.com/personal?userId=1654586593"
+        },
+        {
+          "source_title": "Steam Deck",
+          "title": "Steam Deck",
+          "url": "https://www.goofish.com/personal?userId=1796669585"
+        },
+        {
+          "source_title": "Tablet",
+          "title": "Tablet",
+          "url": "https://www.goofish.com/personal?userId=2217137257557"
+        },
+        {
+          "source_title": "Switch",
+          "title": "Nintendo Switch",
+          "url": "https://www.goofish.com/personal?userId=2214007628702"
+        },
+        {
+          "source_title": "Notebook",
+          "title": "Notebook",
+          "url": "https://www.goofish.com/personal?userId=2216739033201"
+        },
+        {
+          "source_title": "Monitor",
+          "title": "Monitor",
+          "url": "https://www.goofish.com/personal?userId=2214895245823"
+        },
+        {
+          "source_title": "iPhones",
+          "title": "iPhones",
+          "url": "https://www.goofish.com/personal?userId=391299371"
+        },
+        {
+          "source_title": "Celulares Android",
+          "title": "Celulares Android",
+          "url": "https://www.goofish.com/personal?userId=420356490"
+        },
+        {
+          "source_title": "iPads",
+          "title": "iPads",
+          "url": "https://www.goofish.com/personal?spm=a21ybx.item.itemHeader.1.183e2127UuGLUC&userId=2215109756778"
+        },
+        {
+          "source_title": "MacBook",
+          "title": "MacBook",
+          "url": "https://www.goofish.com/personal?spm=a21ybx.item.itemHeader.1.4d173da6UAnbU8&userId=3252814831"
+        }
+      ],
+      "count": 17
+    },
+    {
+      "category": "Relógios e óculos",
+      "entries": [
+        {
+          "source_title": "Bones",
+          "title": "Bonés",
+          "url": "https://www.goofish.com/personal?spm=a21ybx.item.itemHeader.1.45353da6VDmhJC&userId=2218618228826"
+        },
+        {
+          "source_title": "Relógios variados",
+          "title": "Relógios variados",
+          "url": "https://www.goofish.com/personal?spm=a21ybx.item.itemHeader.1.738f3da6N30PGv&userId=689324702"
+        },
+        {
+          "source_title": "Little Whale",
+          "title": "Little Whale",
+          "url": "https://00123luxury.x.yupoo.com/albums"
+        },
+        {
+          "source_title": "Atlantis NO.1",
+          "title": "Atlantis NO.1",
+          "url": "https://atlantis001.x.yupoo.com/albums?page=1"
+        },
+        {
+          "source_title": "Garmin",
+          "title": "Garmin",
+          "url": "https://www.goofish.com/personal?spm=a21ybx.item.itemHeader.1.7eec3da615OCc7&userId=2208503680989"
+        },
+        {
+          "source_title": "G-Shock e Casio",
+          "title": "G-Shock e Casio",
+          "url": "https://www.goofish.com/personal?spm=a21ybx.item.itemHeader.1.50d83da6iunOCg&userId=3914866962"
+        },
+        {
+          "source_title": "Ray-Ban",
+          "title": "Ray-Ban",
+          "url": "https://www.goofish.com/personal?spm=a21ybx.item.itemHeader.1.67f13da6SCCvVG&userId=2207661288707"
+        },
+        {
+          "source_title": "Óculos Oakley",
+          "title": "Óculos Oakley",
+          "url": "https://www.goofish.com/personal?spm=a21ybx.item.itemHeader.1.235b3da6JSNDOv&userId=2216696656177"
+        },
+        {
+          "source_title": "Apple Watch",
+          "title": "Apple Watch",
+          "url": "https://www.goofish.com/personal?spm=a21ybx.item.itemHeader.1.58d03da6JJrXa5&userId=3335270619"
+        },
+        {
+          "source_title": "Kipling",
+          "title": "Kipling",
+          "url": "https://x.com/enebinha/status/2054556808379847040?s=20"
+        }
+      ],
+      "count": 10
+    },
+    {
+      "category": "Roupas e moda",
+      "entries": [
+        {
+          "source_title": "ARTIEMASTER",
+          "title": "ARTIEMASTER",
+          "url": "https://hubbuy-shorten-redirect-727446398583.us-central1.run.app/BE9GaqRK"
+        },
+        {
+          "source_title": "eSport",
+          "title": "eSport",
+          "url": "https://hubbuy-shorten-redirect-727446398583.us-central1.run.app/eLRG1JEB"
+        },
+        {
+          "source_title": "Husky Reps",
+          "title": "Husky Reps",
+          "url": "https://huskyreps.x.yupoo.com/albums"
+        },
+        {
+          "source_title": "Lemonvip",
+          "title": "Lemonvip",
+          "url": "https://lemonvip.x.yupoo.com/albums"
+        },
+        {
+          "source_title": "Angelking47",
+          "title": "Angelking47",
+          "url": "https://angelking47.x.yupoo.com/albums"
+        },
+        {
+          "source_title": "GOAT Official",
+          "title": "GOAT Official",
+          "url": "https://goat-official.x.yupoo.com/albums"
+        },
+        {
+          "source_title": "Madebykungfu",
+          "title": "Madebykungfu",
+          "url": "https://madebykungfu.x.yupoo.com/albums"
+        },
+        {
+          "source_title": "French Fish Store",
+          "title": "French Fish Store",
+          "url": "https://kdi220.x.yupoo.com/albums"
+        },
+        {
+          "source_title": "Black Mask",
+          "title": "Black Mask",
+          "url": "https://windvane168.x.yupoo.com/albums"
+        },
+        {
+          "source_title": "Victoria Reps",
+          "title": "Victoria Reps",
+          "url": "https://victoria-reps.x.yupoo.com/albums"
+        },
+        {
+          "source_title": "Taurus Reps",
+          "title": "Taurus Reps",
+          "url": "https://deateath.x.yupoo.com/albums"
+        },
+        {
+          "source_title": "DragonRep",
+          "title": "DragonRep",
+          "url": "https://noghost.x.yupoo.com"
+        },
+        {
+          "source_title": "3125Tiger",
+          "title": "3125Tiger",
+          "url": "https://3125tiger.x.yupoo.com/albums"
+        },
+        {
+          "source_title": "TigerRep",
+          "title": "TigerRep",
+          "url": "https://tiger-official.x.yupoo.com/albums"
+        },
+        {
+          "source_title": "Zara feminino",
+          "title": "Zara feminino",
+          "url": "https://hubbuy-shorten-redirect-727446398583.us-central1.run.app/3K8WZ7E1"
+        },
+        {
+          "source_title": "Zara masculino",
+          "title": "Zara masculino",
+          "url": "https://hubbuy-shorten-redirect-727446398583.us-central1.run.app/k4RrBZRB"
+        },
+        {
+          "source_title": "Calças Jeans (Levi's, Carhartt, Acne Studio etc.)",
+          "title": "Calças Jeans (Levi's, Carhartt, Acne Studio)",
+          "url": "https://www.hubbuy.com/shop/2/1701831725?&utm_source=website&utm_medium=share&utm_campaign=shop&inviteCode=65EAVN8o"
+        }
+      ],
+      "count": 17
+    },
+    {
+      "category": "Tênis e calçados",
+      "entries": [
+        {
+          "source_title": "WWTOP",
+          "title": "WWTOP",
+          "url": "https://wwfake100.x.yupoo.com/albums"
+        },
+        {
+          "source_title": "Repsmaster",
+          "title": "Repsmaster",
+          "url": "https://repsmaster.x.yupoo.com/albums"
+        },
+        {
+          "source_title": "Ovosneaker",
+          "title": "Ovosneaker",
+          "url": "https://ovosneaker.x.yupoo.com/albums"
+        },
+        {
+          "source_title": "JMDY",
+          "title": "JMDY",
+          "url": "https://tianjin-no1.x.yupoo.com"
+        },
+        {
+          "source_title": "PAI",
+          "title": "PAI",
+          "url": "https://pai-reps.x.yupoo.com/albums"
+        },
+        {
+          "source_title": "100 REP",
+          "title": "100 REP",
+          "url": "https://100rep.x.yupoo.com/albums"
+        }
+      ],
+      "count": 6
+    },
+    {
+      "category": "Esportes e camisas",
+      "entries": [
+        {
+          "source_title": "Equipamentos e roupas de luta ORIGINAIS",
+          "title": "Equipamentos e roupas de luta originais",
+          "url": "https://www.goofish.com/personal?userId=2217045023426"
+        },
+        {
+          "source_title": "OKJersey",
+          "title": "OKJersey",
+          "url": "https://okjersey.x.yupoo.com"
+        },
+        {
+          "source_title": "NFL",
+          "title": "NFL",
+          "url": "https://hubbuy-shorten-redirect-727446398583.us-central1.run.app/o38VBx8z"
+        },
+        {
+          "source_title": "NHL, MLB etc.",
+          "title": "NHL, MLB etc.",
+          "url": "https://hubbuy-shorten-redirect-727446398583.us-central1.run.app/4NXbLj8o"
+        },
+        {
+          "source_title": "AAA Jersey",
+          "title": "AAA Jersey",
+          "url": "https://aaaajersey.x.yupoo.com/albums"
+        },
+        {
+          "source_title": "Roupas para esportes",
+          "title": "Roupas para esportes",
+          "url": "https://hubbuy-shorten-redirect-727446398583.us-central1.run.app/L7EjGA8g"
+        },
+        {
+          "source_title": "Roupas de academia",
+          "title": "Roupas de academia",
+          "url": "https://t.co/fTgGTyhQjS"
+        },
+        {
+          "source_title": "Jersey-go — loja direto na HubBuy",
+          "title": "Jersey-go — loja direto na HubBuy",
+          "url": "https://hubbuy-shorten-redirect-727446398583.us-central1.run.app/3K8Ww781"
+        },
+        {
+          "source_title": "Jersey-go",
+          "title": "Jersey-go",
+          "url": "https://jersey-go.x.yupoo.com/albums"
+        },
+        {
+          "source_title": "Roupas de academia femininas",
+          "title": "Roupas de academia femininas",
+          "url": "https://hubbuy-shorten-redirect-727446398583.us-central1.run.app/k4Rrq78B"
+        }
+      ],
+      "count": 10
+    },
+    {
+      "category": "Brinquedos e colecionáveis",
+      "entries": [
+        {
+          "source_title": "Funko",
+          "title": "Funko",
+          "url": "https://hubbuy-shorten-redirect-727446398583.us-central1.run.app/4NXb9jRo"
+        },
+        {
+          "source_title": "Hot Wheels",
+          "title": "Hot Wheels",
+          "url": "https://hubbuy-shorten-redirect-727446398583.us-central1.run.app/gP8g7z8B"
+        },
+        {
+          "source_title": "LEGO",
+          "title": "LEGO",
+          "url": "https://hubbuy-shorten-redirect-727446398583.us-central1.run.app/PEZnQpEk"
+        },
+        {
+          "source_title": "Action Figure 2",
+          "title": "Action Figure 2",
+          "url": "https://www.goofish.com/personal?userId=2217679380261"
+        },
+        {
+          "source_title": "Action Figure",
+          "title": "Action Figure",
+          "url": "https://www.goofish.com/personal?userId=14649943"
+        }
+      ],
+      "count": 5
+    },
+    {
+      "category": "Automotivos e peças",
+      "entries": [
+        {
+          "source_title": "Volantes",
+          "title": "Volantes",
+          "url": "https://www.goofish.com/personal?userId=2212918838631"
+        },
+        {
+          "source_title": "Volante Mercedes",
+          "title": "Volante Mercedes",
+          "url": "https://www.goofish.com/personal?userId=3382262981"
+        },
+        {
+          "source_title": "Volante Audi",
+          "title": "Volante Audi",
+          "url": "https://www.goofish.com/personal?userId=2212865316806"
+        },
+        {
+          "source_title": "Peças 3",
+          "title": "Peças 3",
+          "url": "https://www.goofish.com/personal?userId=2216561930127"
+        },
+        {
+          "source_title": "Peças 2",
+          "title": "Peças 2",
+          "url": "https://www.goofish.com/personal?userId=819751940"
+        },
+        {
+          "source_title": "Peças 1",
+          "title": "Peças 1",
+          "url": "https://www.goofish.com/personal?userId=2964122225"
+        },
+        {
+          "source_title": "Miniaturas",
+          "title": "Miniaturas",
+          "url": "https://www.goofish.com/personal?userId=1021653808"
+        },
+        {
+          "source_title": "Rodas",
+          "title": "Rodas",
+          "url": "https://www.goofish.com/personal?userId=4189278061"
+        }
+      ],
+      "count": 8
+    }
+  ],
+  "guides": [
+    {
+      "source_title": "Tutorial completo",
+      "title": "Tutorial completo",
+      "url": "https://drive.google.com/drive/folders/1tdvya-fgOb8Fj10q02QQYP8KSXxM2LZU?usp=drive_link"
+    },
+    {
+      "source_title": "Tutorial resumido",
+      "title": "Tutorial resumido",
+      "url": "https://x.com/enebinha/status/2038451054631633411?s=20"
+    },
+    {
+      "source_title": "Tutorial de envio resumido",
+      "title": "Tutorial de envio resumido",
+      "url": "https://x.com/enebinha/status/2058293615357522017?s=20"
+    },
+    {
+      "source_title": "Tutorial vitrine",
+      "title": "Tutorial vitrine",
+      "url": "https://x.com/enebinha/status/2062625778441797750?s=20"
+    },
+    {
+      "source_title": "Tutorial busca por imagem",
+      "title": "Tutorial busca por imagem",
+      "url": "https://x.com/enebinha/status/2079194784376541231?s=20"
+    },
+    {
+      "source_title": "Tutorial vendedor de Nike e Adidas",
+      "title": "Tutorial vendedor Nike e Adidas",
+      "url": "https://x.com/enebinha/status/2059980930387788281?s=20"
+    },
+    {
+      "source_title": "Guia de Batchs",
+      "title": "Guia de Batchs",
+      "url": "https://docs.google.com/spreadsheets/d/14Ksjfyoyp5shX1AWYah-OIF_i6wCtcH6/edit?usp=sharing&ouid=107008292719172340429&rtpof=true&sd=true"
+    },
+    {
+      "source_title": "Tutorial 1:1 Shopee",
+      "title": "Tutorial 1:1 Shopee",
+      "url": "https://x.com/enebinha/status/2082104052620603713"
+    }
+  ],
+  "community": [
+    {
+      "source_title": "TikTok",
+      "title": "TikTok",
+      "url": "https://tiktok.com/@enebinha"
+    },
+    {
+      "source_title": "Instagram",
+      "title": "Instagram",
+      "url": "https://instagram.com/enebinha"
+    },
+    {
+      "source_title": "X",
+      "title": "X",
+      "url": "https://twitter.com/enebinha"
+    },
+    {
+      "source_title": "Amazon",
+      "title": "Amazon",
+      "url": "https://amzn.to/43i5FXE"
+    },
+    {
+      "source_title": "Telegram",
+      "title": "Telegram",
+      "url": "https://t.me/c/3878286132/1"
+    },
+    {
+      "source_title": "Grupo ENEBINHA ¦ HUBBUY",
+      "title": "ENEBINHA HUBBUY",
+      "url": "https://t.me/enebinhacn"
+    }
+  ],
+  "brand_references": [
+    "Nike",
+    "Adidas",
+    "Jordan",
+    "Supreme",
+    "Stüssy",
+    "Carhartt",
+    "New Balance",
+    "Puma",
+    "The North Face",
+    "Palace",
+    "Louis Vuitton",
+    "Gucci",
+    "Prada",
+    "Dior",
+    "Balenciaga",
+    "Apple",
+    "Sony",
+    "Samsung",
+    "Logitech",
+    "Razer"
+  ],
+  "brand_logo_assets": [
+    {
+      "name": "Nike",
+      "url": "https://enebinha.netlify.app/images/logos/editorial/nike.svg",
+      "local_filename": "nike.svg"
+    },
+    {
+      "name": "Adidas",
+      "url": "https://enebinha.netlify.app/images/logos/editorial/adidas.svg",
+      "local_filename": "adidas.svg"
+    },
+    {
+      "name": "Jordan",
+      "url": "https://enebinha.netlify.app/images/logos/editorial/jordan.svg",
+      "local_filename": "jordan.svg"
+    },
+    {
+      "name": "Supreme",
+      "url": "https://enebinha.netlify.app/images/logos/editorial/supreme.svg",
+      "local_filename": "supreme.svg"
+    },
+    {
+      "name": "Stüssy",
+      "url": "https://enebinha.netlify.app/images/logos/editorial/stussy.svg",
+      "local_filename": "stussy.svg"
+    },
+    {
+      "name": "Carhartt",
+      "url": "https://enebinha.netlify.app/images/logos/editorial/carhartt.svg",
+      "local_filename": "carhartt.svg"
+    },
+    {
+      "name": "New Balance",
+      "url": "https://enebinha.netlify.app/images/logos/editorial/newbalance.svg",
+      "local_filename": "newbalance.svg"
+    },
+    {
+      "name": "Puma",
+      "url": "https://enebinha.netlify.app/images/logos/editorial/puma.svg",
+      "local_filename": "puma.svg"
+    },
+    {
+      "name": "The North Face",
+      "url": "https://enebinha.netlify.app/images/logos/editorial/thenorthface.svg",
+      "local_filename": "thenorthface.svg"
+    },
+    {
+      "name": "Palace",
+      "url": "https://enebinha.netlify.app/images/logos/editorial/palace.webp",
+      "local_filename": "palace.webp"
+    },
+    {
+      "name": "Louis Vuitton",
+      "url": "https://enebinha.netlify.app/images/logos/editorial/louisvuitton.svg",
+      "local_filename": "louisvuitton.svg"
+    },
+    {
+      "name": "Gucci",
+      "url": "https://enebinha.netlify.app/images/logos/editorial/gucci.svg",
+      "local_filename": "gucci.svg"
+    },
+    {
+      "name": "Prada",
+      "url": "https://enebinha.netlify.app/images/logos/editorial/prada.svg",
+      "local_filename": "prada.svg"
+    },
+    {
+      "name": "Dior",
+      "url": "https://enebinha.netlify.app/images/logos/editorial/dior.svg",
+      "local_filename": "dior.svg"
+    },
+    {
+      "name": "Balenciaga",
+      "url": "https://enebinha.netlify.app/images/logos/editorial/balenciaga.svg",
+      "local_filename": "balenciaga.svg"
+    },
+    {
+      "name": "Apple",
+      "url": "https://enebinha.netlify.app/images/logos/editorial/apple.svg",
+      "local_filename": "apple.svg"
+    },
+    {
+      "name": "Sony",
+      "url": "https://enebinha.netlify.app/images/logos/editorial/sony.svg",
+      "local_filename": "sony.svg"
+    },
+    {
+      "name": "Samsung",
+      "url": "https://enebinha.netlify.app/images/logos/editorial/samsung.svg",
+      "local_filename": "samsung.svg"
+    },
+    {
+      "name": "Logitech",
+      "url": "https://enebinha.netlify.app/images/logos/editorial/logitech.svg",
+      "local_filename": "logitech.svg"
+    },
+    {
+      "name": "Razer",
+      "url": "https://enebinha.netlify.app/images/logos/editorial/razer.svg",
+      "local_filename": "razer.svg"
+    }
+  ],
+  "disclosures": [
+    "Links de referência. A presença no catálogo não confirma disponibilidade ou atividade do fornecedor.",
+    "Marcas apresentadas como referências de produtos. Não indicam parceria ou afiliação oficial com o ENEBINHA.",
+    "Cadastro HubBuy é um link de indicação."
+  ],
+  "preserved_public_features": [
+    "share",
+    "theme_toggle",
+    "catalog_search",
+    "category_navigation",
+    "outbound_links_new_tab",
+    "source_attribution",
+    "brand_reference_gallery_collapsible",
+    "upcoming_links_message"
+  ]
+}
