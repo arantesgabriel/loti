@@ -1,13 +1,15 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Fragment } from "react";
-import { Bookmark, ShoppingCart, History, Folder, Plus, ChevronDown, Package, WalletCards, Settings, PanelLeftClose, PanelLeftOpen, Sun, Moon, ReceiptText, Ellipsis } from "lucide-react";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import { Bookmark, ShoppingCart, History, Folder, Plus, ChevronDown, ChevronRight, Package, WalletCards, Settings, PanelLeftClose, PanelLeftOpen, Sun, Moon, ReceiptText, Ellipsis, UserRound, UsersRound, Check, LoaderCircle } from "lucide-react";
 import { Avatar } from "../shared";
 import { useWorkspace } from "../workspace-provider";
 import { useTheme } from "../theme-provider";
 import { Confirm } from "../ui/surface";
+import { profileSettingsCategories, requestProfileSettingsCategory, type ProfileSettingsCategory } from "../profile/settings-categories";
 import "./sidebar.css";
 
 const collapseKey = "loti.sidebar.collapsed";
@@ -19,9 +21,30 @@ const nav = [{ href: "/favorites", label: "Favoritos", short: "Favoritos", icon:
 const hubbuyAccountsNav = { href: "/packages/accounts", label: "Contas HubBuy", short: "Contas", icon: WalletCards };
 const moreNav = { href: "/more", label: "Mais", short: "Mais", icon: Ellipsis };
 
-function workspaceLabel(data: ReturnType<typeof useWorkspace>["data"], workspaceId: string) {
-  const workspace = data.workspaces.find(item => item.id === workspaceId);
+function workspaceLabel(workspace: ReturnType<typeof useWorkspace>["data"]["workspaces"][number] | undefined) {
   return workspace?.kind === "personal" ? "Espaço pessoal" : workspace?.name ?? "Espaço";
+}
+
+function workspaceTypeLabel(workspace: ReturnType<typeof useWorkspace>["data"]["workspaces"][number] | undefined) {
+  return workspace?.kind === "personal" ? "Pessoal · só você" : "Compartilhado";
+}
+
+function WorkspaceRadioOptions({ data, busy, onChange }: {
+  data: ReturnType<typeof useWorkspace>["data"];
+  busy: boolean;
+  onChange: (workspaceId: string) => void;
+}) {
+  return <DropdownMenu.RadioGroup className="workspace-menu-options" aria-label="Espaços disponíveis" value={data.workspaceId} onValueChange={onChange}>
+    {data.workspaces.map(workspace => {
+      const OptionIcon = workspace.kind === "personal" ? UserRound : UsersRound;
+      const label = workspaceLabel(workspace);
+      return <DropdownMenu.RadioItem key={workspace.id} className="workspace-menu-option" value={workspace.id} disabled={busy}>
+        <span className="workspace-menu-option-icon"><OptionIcon size={17} aria-hidden="true" /></span>
+        <span className="workspace-menu-option-copy"><strong title={label}>{label}</strong><small>{workspaceTypeLabel(workspace)}</small></span>
+        <DropdownMenu.ItemIndicator className="workspace-menu-option-check"><Check size={16} strokeWidth={2.3} aria-hidden="true" /></DropdownMenu.ItemIndicator>
+      </DropdownMenu.RadioItem>;
+    })}
+  </DropdownMenu.RadioGroup>;
 }
 
 function WorkspaceContextControl({ data, busy, switching, onChange, compact = false }: {
@@ -31,21 +54,83 @@ function WorkspaceContextControl({ data, busy, switching, onChange, compact = fa
   onChange: (workspaceId: string) => void;
   compact?: boolean;
 }) {
-  const current = workspaceLabel(data, data.workspaceId);
-  if (data.workspaces.length <= 1) return <div className={"workspace-context workspace-context-static" + (compact ? " compact" : "")} aria-label={"Espaço atual: " + current}>
+  const currentWorkspace = data.workspaces.find(item => item.id === data.workspaceId);
+  const current = workspaceLabel(currentWorkspace);
+  const status = switching ? "Trocando de espaço…" : busy ? "Salvando alterações…" : null;
+  const statusId = "workspace-status-" + useId().replace(/:/g, "");
+  const Icon = currentWorkspace?.kind === "personal" ? UserRound : UsersRound;
+  const className = "workspace-context" + (compact ? " compact" : "");
+
+  if (data.workspaces.length <= 1) return <div className={className + " workspace-context-static"} role="group" aria-label={`Espaço atual: ${current} (${workspaceTypeLabel(currentWorkspace)})`}>
     <span className="workspace-context-label">Espaço atual</span>
-    <strong title={current}>{current}</strong>
-  </div>;
-  return <label className={"workspace-context" + (compact ? " compact" : "")}>
-    <span className="workspace-context-label">Espaço atual</span>
-    <span className="workspace-context-select">
-      <select aria-label="Espaço atual" value={data.workspaceId} disabled={busy} aria-busy={switching} onChange={event => onChange(event.target.value)}>
-        {data.workspaces.map(workspace => <option key={workspace.id} value={workspace.id}>{workspace.kind === "personal" ? "Espaço pessoal" : workspace.name}</option>)}
-      </select>
-      <ChevronDown size={15} aria-hidden="true" />
+    <span className="workspace-context-trigger">
+      <span className="workspace-context-icon"><Icon size={18} aria-hidden="true" /></span>
+      <span className="workspace-context-copy"><strong className="workspace-context-name" title={current}>{current}</strong><span className="workspace-context-kind">{workspaceTypeLabel(currentWorkspace)}</span></span>
     </span>
-    {switching && <span className="workspace-context-status" role="status">Carregando espaço…</span>}
-  </label>;
+  </div>;
+
+  return <div className={className} aria-busy={busy}>
+    <span className="workspace-context-label">Espaço atual</span>
+    <DropdownMenu.Root modal={false}>
+      <DropdownMenu.Trigger asChild>
+        <button type="button" className="workspace-context-trigger" disabled={busy} aria-label={`Espaço atual: ${current} (${workspaceTypeLabel(currentWorkspace)}). Selecionar espaço`} title={compact ? `Espaço atual: ${current}. Selecionar espaço` : undefined} aria-describedby={status ? statusId : undefined}>
+          <span className="workspace-context-icon"><Icon size={18} aria-hidden="true" /></span>
+          <span className="workspace-context-copy"><strong className="workspace-context-name" title={current}>{current}</strong><span className="workspace-context-kind">{workspaceTypeLabel(currentWorkspace)}</span></span>
+          {switching ? <LoaderCircle className="workspace-context-loader" size={16} aria-hidden="true" /> : <ChevronDown className="workspace-context-caret" size={16} aria-hidden="true" />}
+        </button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content className="workspace-menu" side="right" align="start" sideOffset={8} collisionPadding={12} aria-label="Seus espaços">
+          <DropdownMenu.Label className="workspace-menu-label">Seus espaços</DropdownMenu.Label>
+          <WorkspaceRadioOptions data={data} busy={busy} onChange={onChange} />
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+    {status && <span className="workspace-context-status" id={statusId} role="status">{status}</span>}
+  </div>;
+}
+
+function MobileAccountMenu({ data, busy, switching, onWorkspaceChange, onSettingsCategory }: {
+  data: ReturnType<typeof useWorkspace>["data"];
+  busy: boolean;
+  switching: boolean;
+  onWorkspaceChange: (workspaceId: string) => void;
+  onSettingsCategory: (category: ProfileSettingsCategory) => void;
+}) {
+  const currentWorkspace = data.workspaces.find(item => item.id === data.workspaceId);
+  const CurrentWorkspaceIcon = currentWorkspace?.kind === "personal" ? UserRound : UsersRound;
+  return <DropdownMenu.Root modal={false}>
+    <DropdownMenu.Trigger asChild>
+      <button className="mobile-account-menu-trigger" type="button" aria-label="Abrir menu de navegação e conta" aria-busy={switching} title="Menu de navegação e conta">
+        <Avatar name={data.currentUser.name} />
+        {switching ? <LoaderCircle className="mobile-account-menu-trigger-indicator is-loading" size={13} aria-hidden="true" /> : <ChevronDown className="mobile-account-menu-trigger-indicator" size={13} aria-hidden="true" />}
+      </button>
+    </DropdownMenu.Trigger>
+    <DropdownMenu.Portal>
+      <DropdownMenu.Content className="mobile-account-menu" side="bottom" align="end" sideOffset={9} collisionPadding={12} aria-label="Menu de navegação e conta">
+        <DropdownMenu.Label className="mobile-account-menu-user">
+          <Avatar name={data.currentUser.name} />
+          <span className="mobile-account-menu-user-copy"><strong>{data.currentUser.name}</strong><small>{data.currentUser.email}</small></span>
+        </DropdownMenu.Label>
+        <DropdownMenu.Separator className="mobile-account-menu-separator" />
+        <DropdownMenu.Label className="mobile-account-menu-section-label">Espaço atual</DropdownMenu.Label>
+        {data.workspaces.length > 1
+          ? <WorkspaceRadioOptions data={data} busy={busy} onChange={onWorkspaceChange} />
+          : <div className="mobile-account-menu-current-space">
+            <span className="workspace-menu-option-icon"><CurrentWorkspaceIcon size={17} aria-hidden="true" /></span>
+            <span className="workspace-menu-option-copy"><strong>{workspaceLabel(currentWorkspace)}</strong><small>{workspaceTypeLabel(currentWorkspace)}</small></span>
+          </div>}
+        {busy && <span className="mobile-account-menu-status" role="status">{switching ? "Trocando de espaço…" : "Aguarde a operação atual antes de trocar."}</span>}
+        <DropdownMenu.Separator className="mobile-account-menu-separator" />
+        <DropdownMenu.Label className="mobile-account-menu-section-label">Configurações</DropdownMenu.Label>
+        <div className="mobile-account-menu-categories" role="group" aria-label="Categorias de configurações">
+          {profileSettingsCategories.map(category => <DropdownMenu.Item key={category.id} className="mobile-account-menu-category" onSelect={() => onSettingsCategory(category.id)}>
+            <category.Icon size={18} aria-hidden="true" /><span>{category.label}</span><ChevronRight className="mobile-account-menu-category-arrow" size={16} aria-hidden="true" />
+          </DropdownMenu.Item>)}
+        </div>
+      </DropdownMenu.Content>
+    </DropdownMenu.Portal>
+  </DropdownMenu.Root>;
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -108,6 +193,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     if (result === "confirm") setPendingWorkspaceId(workspaceId);
   }
 
+  function openSettingsCategory(category: ProfileSettingsCategory) {
+    if (path === "/profile") requestProfileSettingsCategory(category);
+    else router.push("/profile?section=" + encodeURIComponent(category));
+  }
+
   async function confirmWorkspaceChange() {
     if (!pendingWorkspaceId) return;
     const target = pendingWorkspaceId;
@@ -141,8 +231,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     </aside>
     <div className="app-content">
       <header className="mobile-header">
-        <div className="mobile-header-top"><Link className="brand" href="/favorites"><Bookmark size={30} fill="currentColor" strokeWidth={0} aria-hidden="true"/><span>Loti</span></Link><div className="mobile-header-actions"><button className="sidebar-theme mobile-header-theme" type="button" role="switch" aria-label="Tema escuro" aria-checked={resolvedTheme === "dark"} title={resolvedTheme === "dark" ? "Ativar tema claro" : "Ativar tema escuro"} onClick={() => setPreference(resolvedTheme === "dark" ? "light" : "dark")}><Sun className="theme-sun" size={22} aria-hidden="true"/><Moon className="theme-moon" size={21} aria-hidden="true"/><span className="theme-track" aria-hidden="true"><span className="theme-thumb"/></span></button><Link href="/profile" className="profile-link" aria-label="Perfil"><Avatar name={data.currentUser.name}/></Link></div></div>
-        <WorkspaceContextControl data={data} busy={busy} switching={switching} onChange={requestWorkspaceChange} compact />
+        <div className="mobile-header-top"><Link className="brand" href="/favorites"><Bookmark size={30} fill="currentColor" strokeWidth={0} aria-hidden="true"/><span>Loti</span></Link><div className="mobile-header-actions"><button className="sidebar-theme mobile-header-theme" type="button" role="switch" aria-label="Tema escuro" aria-checked={resolvedTheme === "dark"} title={resolvedTheme === "dark" ? "Ativar tema claro" : "Ativar tema escuro"} onClick={() => setPreference(resolvedTheme === "dark" ? "light" : "dark")}><Sun className="theme-sun" size={22} aria-hidden="true"/><Moon className="theme-moon" size={21} aria-hidden="true"/><span className="theme-track" aria-hidden="true"><span className="theme-thumb"/></span></button><MobileAccountMenu data={data} busy={busy} switching={switching} onWorkspaceChange={requestWorkspaceChange} onSettingsCategory={openSettingsCategory} /></div></div>
       </header>
       <main id="main" className="page-content" key={data.workspaceId}>{children}</main>
     </div>
