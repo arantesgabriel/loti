@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { createRequire } from "node:module";
 import path from "node:path";
+import { login } from "./helpers";
 import {
   ENEBINHA_BRAND_REFERENCES,
   ENEBINHA_COMMUNITY,
@@ -14,9 +15,10 @@ import {
 
 const require = createRequire(import.meta.url);
 const axePath = require.resolve("axe-core/axe.min.js");
-const qaDir = path.resolve(process.cwd(), "artifacts/qa/enebinha");
+const qaDir = path.resolve(process.cwd(), "artifacts/qa/enebinha-v22");
 
-test.describe("Public /enebinha curation page (V2.1 + D7)", () => {
+test.describe("Public /enebinha curation page (V2.2; D7 assets pending)", () => {
+  test.use({ hasTouch: true });
   test.describe.configure({ timeout: 90_000 });
   test("renders public page without auth, preserves all 89 links, 20 reference brands, mascot, and D7 marquee", async ({
     page,
@@ -26,7 +28,7 @@ test.describe("Public /enebinha curation page (V2.1 + D7)", () => {
 
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.emulateMedia({ reducedMotion: "no-preference", colorScheme: "light" });
-    await page.goto("/enebinha", { waitUntil: "domcontentloaded" });
+    await page.goto("/enebinha", { waitUntil: "networkidle" });
 
     // 1. Header & Theme switch
     await expect(page.getByTestId("enebinha-header")).toBeVisible();
@@ -74,6 +76,7 @@ test.describe("Public /enebinha curation page (V2.1 + D7)", () => {
     await expect(
       primarySequence.locator('[data-testid^="marquee-logo-slot-"]')
     ).toHaveCount(73);
+    await expect(page.getByText("PEND", { exact: true })).toHaveCount(0);
 
     // Pause / Resume control
     const marqueeToggle = page.getByTestId("supplier-marquee-toggle");
@@ -104,6 +107,21 @@ test.describe("Public /enebinha curation page (V2.1 + D7)", () => {
     // Search clear button is hidden when input is empty
     await expect(page.getByTestId("enebinha-search-clear")).toHaveCount(0);
 
+    // Initial category is deliberately compact; expansion is reversible.
+    await expect(page.locator('[data-testid^="category-section-"]')).toHaveCount(1);
+    await expect(page.locator('[data-testid^="supplier-link-"]')).toHaveCount(6);
+    await page.getByTestId("category-expand-eletronicos-e-perifericos").click();
+    await expect(page.locator('[data-testid^="supplier-link-"]')).toHaveCount(17);
+    await page.getByTestId("category-expand-eletronicos-e-perifericos").click();
+    await expect(page.locator('[data-testid^="supplier-link-"]')).toHaveCount(6);
+    // Search reaches other categories without first choosing Todos.
+    await page.getByTestId("enebinha-search-input").fill("Husky Reps");
+    await expect(page.locator('[data-testid^="supplier-link-"]')).toHaveCount(1);
+    await page.getByTestId("enebinha-search-clear").click();
+    await page.getByTestId("category-filter-all").click();
+    await expect(page.locator("aside")).toHaveCount(0);
+    await expect(page.getByTestId("category-bar").getByRole("button")).toHaveCount(8);
+    await expect(page.locator('[data-testid^="supplier-link-"]')).toHaveCount(21);
     // Expand all 73 supplier links and verify every single URL is rendered
     await page.getByTestId("toggle-expand-all-suppliers").click();
     const renderedSupplierLinks = page.locator('[data-testid^="supplier-link-"]');
@@ -116,6 +134,8 @@ test.describe("Public /enebinha curation page (V2.1 + D7)", () => {
 
     // Category filter check
     await page.getByTestId("category-filter-relogios-e-oculos").click();
+    await expect(page.locator('[data-testid^="supplier-link-"]')).toHaveCount(6);
+    await page.getByTestId("category-expand-relogios-e-oculos").click();
     await expect(page.locator('[data-testid^="supplier-link-"]')).toHaveCount(10);
     await page.getByTestId("category-filter-all").click();
 
@@ -139,6 +159,8 @@ test.describe("Public /enebinha curation page (V2.1 + D7)", () => {
     await expect(page.getByTestId("panel-guias")).toBeVisible();
     const guideLinks = page.locator('[data-testid^="guide-link-"]');
     await expect(guideLinks).toHaveCount(8);
+    await expect(page.getByTestId("guide-link-guide-01")).toContainText("Abrir guia");
+    await expect(page.getByTestId("category-bar")).toHaveCount(0);
     expect(
       await guideLinks.evaluateAll((els) =>
         els.map((el) => (el as HTMLAnchorElement).getAttribute("href"))
@@ -150,6 +172,7 @@ test.describe("Public /enebinha curation page (V2.1 + D7)", () => {
     await expect(page.getByTestId("panel-comunidade")).toBeVisible();
     const communityLinks = page.locator('[data-testid^="community-link-"]');
     await expect(communityLinks).toHaveCount(6);
+    await expect(page.getByTestId("category-bar")).toHaveCount(0);
     expect(
       await communityLinks.evaluateAll((els) =>
         els.map((el) => (el as HTMLAnchorElement).getAttribute("href"))
@@ -181,13 +204,13 @@ test.describe("Public /enebinha curation page (V2.1 + D7)", () => {
 
     expect(errors).toEqual([]);
   });
-  test("respects prefers-reduced-motion: reduce and mobile category sheet at 390x844 and 320x568", async ({
+  test("respects prefers-reduced-motion: reduce and horizontal categories at 390x844 and 320x568", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.emulateMedia({ reducedMotion: "reduce", colorScheme: "dark" });
     await page.addInitScript(() => localStorage.setItem("loti.theme", "dark"));
-    await page.goto("/enebinha", { waitUntil: "domcontentloaded" });
+    await page.goto("/enebinha", { waitUntil: "networkidle" });
 
     // Reduced motion disables continuous clone track and pause button
     const marquee = page.getByTestId("supplier-marquee");
@@ -202,14 +225,15 @@ test.describe("Public /enebinha curation page (V2.1 + D7)", () => {
       .evaluate((el) => window.getComputedStyle(el).filter);
     expect(mascotFilter).toBe("none");
 
-    // Mobile category drawer ("Mais +") allows selecting all 7 categories
-    const moreBtn = page.getByTestId("mobile-categories-more-btn");
-    await expect(moreBtn).toBeVisible();
-    await moreBtn.click();
-    const sheet = page.getByTestId("mobile-categories-sheet");
-    await expect(sheet).toBeVisible();
-    await page.getByTestId("mobile-category-option-automotivos-e-pecas").click();
-    await expect(sheet).toHaveCount(0);
+    // The same complete rail is touch-scrollable at every breakpoint.
+    const rail = page.getByTestId("category-bar");
+    await expect(rail.getByRole("button")).toHaveCount(8);
+    const automotive = page.getByTestId("category-filter-automotivos-e-pecas");
+    await automotive.scrollIntoViewIfNeeded();
+    await automotive.click();
+    await expect(automotive).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator('[data-testid^="supplier-link-"]')).toHaveCount(6);
+    await page.getByTestId("category-expand-automotivos-e-pecas").click();
     await expect(page.locator('[data-testid^="supplier-link-"]')).toHaveCount(8);
 
     // Check 320x568 viewport zero horizontal overflow
@@ -224,6 +248,23 @@ test.describe("Public /enebinha curation page (V2.1 + D7)", () => {
     });
   });
 
+  test("keyboard tabs, theme system, and 200% zoom equivalent remain usable", async ({ page }) => {
+    await page.setViewportSize({ width: 720, height: 450 });
+    await page.goto("/enebinha");
+    await page.getByTestId("tab-fornecedores").focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(page.getByTestId("tab-guias")).toBeFocused();
+    await expect(page.getByTestId("panel-guias")).toBeVisible();
+    await page.getByTestId("enebinha-theme-menu").click();
+    await page.getByRole("radio", { name: "Sistema", exact: true }).check();
+    await page.keyboard.press("Escape");
+    await page.emulateMedia({ colorScheme: "dark" });
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    await page.emulateMedia({ colorScheme: "light" });
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
+
   const viewports = [
     { width: 320, height: 568, name: "320x568" },
     { width: 390, height: 844, name: "390x844" },
@@ -232,16 +273,112 @@ test.describe("Public /enebinha curation page (V2.1 + D7)", () => {
     { width: 1920, height: 1080, name: "1920x1080" },
   ] as const;
 
+  test("section queries persist independently and every matching guide/channel remains reachable", async ({ page }) => {
+    await page.goto("/enebinha");
+    const input = page.getByTestId("enebinha-search-input");
+    await input.fill("Husky Reps");
+    await page.getByTestId("tab-guias").click();
+    await expect(input).toHaveValue("");
+    await input.fill("Batchs");
+    await expect(page.locator('[data-testid^="guide-link-"]')).toHaveCount(1);
+    await expect(page.getByTestId("guide-link-guide-07")).toBeVisible();
+    await page.getByTestId("tab-comunidade").click();
+    await expect(input).toHaveValue("");
+    await input.fill("Telegram");
+    await expect(page.locator('[data-testid^="community-link-"]')).toHaveCount(2);
+    await input.fill("inexistente-xyz");
+    await expect(page.getByTestId("enebinha-empty-state")).toBeVisible();
+    await page.getByTestId("enebinha-empty-reset").click();
+    await expect(page.locator('[data-testid^="community-link-"]')).toHaveCount(6);
+    await page.getByTestId("tab-guias").click();
+    await expect(input).toHaveValue("Batchs");
+    await input.fill("inexistente-xyz");
+    await expect(page.getByTestId("enebinha-empty-state")).toBeVisible();
+    await page.getByTestId("enebinha-empty-reset").click();
+    await expect(page.locator('[data-testid^="guide-link-"]')).toHaveCount(8);
+    await page.getByTestId("tab-fornecedores").click();
+    await expect(input).toHaveValue("Husky Reps");
+    await page.getByTestId("category-filter-all").click();
+    await expect(input).toHaveValue("");
+  });
+
+  test("supplier ticker moves left with a seamless clone, pauses on interaction and outside the viewport", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/enebinha");
+    const marquee = page.getByTestId("supplier-marquee");
+    const track = page.getByTestId("supplier-marquee-track");
+    const primary = page.getByTestId("supplier-marquee-primary-sequence");
+    const clone = page.getByTestId("supplier-marquee-clone-sequence");
+    const firstWidth = await primary.evaluate(el => el.getBoundingClientRect().width);
+    expect(await clone.evaluate(el => el.getBoundingClientRect().width)).toBeCloseTo(firstWidth, 1);
+    const hrefs = await primary.locator("a").evaluateAll(els => els.map(el => ({ id: el.dataset.supplierId, href: el.getAttribute("href") })));
+    for (const link of hrefs) expect(link.href).toBe(ENEBINHA_SUPPLIERS.find(s => s.id === link.id)?.url);
+    await page.mouse.move(1, 1);
+    const x = () => track.evaluate(el => new DOMMatrixReadOnly(getComputedStyle(el).transform).m41);
+    const before = await x();
+    await page.waitForTimeout(500);
+    expect(await x()).toBeLessThan(before - 10);
+    await marquee.hover();
+    const paused = await x();
+    await page.waitForTimeout(200);
+    expect(await x()).toBeCloseTo(paused, 1);
+    await page.mouse.move(1, 1);
+    await page.getByTestId("enebinha-footer").scrollIntoViewIfNeeded();
+    await expect(marquee).toHaveAttribute("data-paused", "true");
+  });
+
+  test("public and authenticated switches share exact artwork, thumb, persistence and keyboard behavior", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await login(page, "theme-qa", "Theme-QA-Only-2026!");
+    const switchMetrics = () => page.getByRole("switch", { name: "Tema escuro" }).filter({ visible: true }).evaluate(el => {
+      const read = (selector: string) => {
+        const node = el.querySelector(selector)!;
+        const style = getComputedStyle(node);
+        return { width: style.width, height: style.height, color: style.color, background: style.backgroundColor, transform: style.transform, radius: style.borderRadius, html: node.innerHTML };
+      };
+      return [read(".theme-sun"), read(".theme-moon"), read(".theme-track"), read(".theme-thumb")];
+    });
+    const officialLight = await switchMetrics();
+    await page.getByRole("switch", { name: "Tema escuro" }).filter({ visible: true }).screenshot({ path: path.join(qaDir, "official-switch-light.png") });
+    await page.getByRole("switch", { name: "Tema escuro" }).filter({ visible: true }).click();
+    const officialDark = await switchMetrics();
+    await page.getByRole("switch", { name: "Tema escuro" }).filter({ visible: true }).screenshot({ path: path.join(qaDir, "official-switch-dark.png") });
+    await page.goto("/enebinha");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+    expect(await switchMetrics()).toEqual(officialDark);
+    const toggle = page.getByRole("switch", { name: "Tema escuro" });
+    await toggle.screenshot({ path: path.join(qaDir, "public-switch-dark.png") });
+    await toggle.focus();
+    await page.keyboard.press("Space");
+    await expect(toggle).toHaveAttribute("aria-checked", "false");
+    expect(await switchMetrics()).toEqual(officialLight);
+    await toggle.screenshot({ path: path.join(qaDir, "public-switch-light.png") });
+    await page.getByTestId("enebinha-theme-menu").click();
+    await page.getByRole("radio", { name: "Sistema", exact: true }).check();
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("enebinha-theme-menu")).toBeFocused();
+    await page.reload();
+    await expect(page.locator("html")).toHaveAttribute("data-theme-preference", "system");
+    await page.emulateMedia({ colorScheme: "dark" });
+    await expect(toggle).toHaveAttribute("aria-checked", "true");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await toggle.tap();
+    await expect(toggle).toHaveAttribute("aria-checked", "false");
+  });
+
   for (const vp of viewports) {
     test(`visual QA, zero horizontal overflow, and WCAG AA axe audit at ${vp.name} (light & dark)`, async ({
       page,
     }) => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       await page.emulateMedia({ reducedMotion: "no-preference", colorScheme: "light" });
-      await page.goto("/enebinha", { waitUntil: "domcontentloaded" });
+      await page.goto("/enebinha", { waitUntil: "networkidle" });
 
       // Light mode checks
-      await page.getByTestId("enebinha-theme-light").click();
+      await page.getByTestId("enebinha-theme-menu").click();
+      await page.getByRole("radio", { name: "Claro", exact: true }).check();
+      await page.keyboard.press("Escape");
       await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
       expect(
         await page.evaluate(
@@ -277,7 +414,9 @@ test.describe("Public /enebinha curation page (V2.1 + D7)", () => {
       });
 
       // Dark mode checks
-      await page.getByTestId("enebinha-theme-dark").click();
+      await page.getByTestId("enebinha-theme-menu").click();
+      await page.getByRole("radio", { name: "Escuro", exact: true }).check();
+      await page.keyboard.press("Escape");
       await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
       expect(
         await page.evaluate(

@@ -4,10 +4,10 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Fragment } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { Bookmark, ShoppingCart, History, Folder, Plus, ChevronDown, ChevronRight, Package, WalletCards, Settings, PanelLeftClose, PanelLeftOpen, Sun, Moon, ReceiptText, Ellipsis, UserRound, UsersRound, Check, LoaderCircle } from "lucide-react";
+import { Bookmark, ShoppingCart, History, Folder, Plus, ChevronDown, ChevronRight, Package, WalletCards, Settings, PanelLeftClose, PanelLeftOpen, ReceiptText, Ellipsis, UserRound, UsersRound, Check, LoaderCircle } from "lucide-react";
 import { Avatar } from "../shared";
 import { useWorkspace } from "../workspace-provider";
-import { useTheme } from "../theme-provider";
+import { ThemeSwitch } from "../theme-switch";
 import { Confirm } from "../ui/surface";
 import { profileSettingsCategories, requestProfileSettingsCategory, type ProfileSettingsCategory } from "../profile/settings-categories";
 import "./sidebar.css";
@@ -135,7 +135,6 @@ function MobileAccountMenu({ data, busy, switching, onWorkspaceChange, onSetting
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const collapsed = useSyncExternalStore(subscribeCollapse, getCollapsed, () => false);
-  const { resolvedTheme, setPreference } = useTheme();
   const router = useRouter();
   const path = usePathname(), params = useSearchParams();
   const { data, busy, switching, switchWorkspace } = useWorkspace();
@@ -226,12 +225,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <Link className="collection-link collection-create" href="/favorites?newCollection=1"><Plus size={17} aria-hidden="true"/>Nova coleção</Link>
         {!personal && otherOwners.length > 0 && <details className="group-collections" open={!!selectedCollection && !mine.some(collection => collection.id === selectedCollection)}><summary>Coleções do grupo<ChevronDown size={15} aria-hidden="true"/></summary>{otherOwners.map(member => <div className="collection-owner-group" key={member.id}><div className="collection-owner-heading"><Avatar name={member.name}/><span>De {member.name}</span></div>{collectionLinks(member.id)}</div>)}</details>}
       </nav>}
-      <div className="sidebar-bottom"><button className="sidebar-theme" type="button" role="switch" aria-label="Tema escuro" aria-checked={resolvedTheme === "dark"} title={resolvedTheme === "dark" ? "Ativar tema claro" : "Ativar tema escuro"} onClick={() => setPreference(resolvedTheme === "dark" ? "light" : "dark")}><Sun className="theme-sun" size={22} aria-hidden="true"/><Moon className="theme-moon" size={21} aria-hidden="true"/><span className="theme-track" aria-hidden="true"><span className="theme-thumb"/></span></button></div>
+      <div className="sidebar-bottom"><ThemeSwitch /></div>
       <Link className={"sidebar-profile" + (path === "/profile" ? " selected" : "")} href="/profile" aria-label="Perfil e configurações" title={collapsed ? "Perfil e configurações" : data.currentUser.email} aria-current={path === "/profile" ? "page" : undefined}><span className="sidebar-account-avatar"><Avatar name={data.currentUser.name}/><Settings className="sidebar-account-badge" size={13} aria-hidden="true"/></span><span className="sidebar-label"><strong>{data.currentUser.name}</strong><small>Conta e configurações</small></span><Settings className="sidebar-account-settings" size={18} aria-hidden="true"/></Link>
     </aside>
     <div className="app-content">
       <header className="mobile-header">
-        <div className="mobile-header-top"><Link className="brand" href="/favorites"><Bookmark size={30} fill="currentColor" strokeWidth={0} aria-hidden="true"/><span>Loti</span></Link><div className="mobile-header-actions"><button className="sidebar-theme mobile-header-theme" type="button" role="switch" aria-label="Tema escuro" aria-checked={resolvedTheme === "dark"} title={resolvedTheme === "dark" ? "Ativar tema claro" : "Ativar tema escuro"} onClick={() => setPreference(resolvedTheme === "dark" ? "light" : "dark")}><Sun className="theme-sun" size={22} aria-hidden="true"/><Moon className="theme-moon" size={21} aria-hidden="true"/><span className="theme-track" aria-hidden="true"><span className="theme-thumb"/></span></button><MobileAccountMenu data={data} busy={busy} switching={switching} onWorkspaceChange={requestWorkspaceChange} onSettingsCategory={openSettingsCategory} /></div></div>
+        <div className="mobile-header-top"><Link className="brand" href="/favorites"><Bookmark size={30} fill="currentColor" strokeWidth={0} aria-hidden="true"/><span>Loti</span></Link><div className="mobile-header-actions"><ThemeSwitch className="mobile-header-theme" /><MobileAccountMenu data={data} busy={busy} switching={switching} onWorkspaceChange={requestWorkspaceChange} onSettingsCategory={openSettingsCategory} /></div></div>
       </header>
       <main id="main" className="page-content" key={data.workspaceId}>{children}</main>
     </div>

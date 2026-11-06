@@ -10,6 +10,9 @@ async function capture(page: Page, name: string) {
 }
 
 async function choose(page: Page, label: "Claro" | "Escuro" | "Sistema") {
+  // Appearance is a settings tab; the profile landing tab contains account fields.
+  const appearance = page.getByRole("tab", { name: "Aparência", exact: true });
+  if (await appearance.count()) await appearance.click();
   await page.getByRole("radio", { name: label, exact: true }).check();
   await expect(page.getByRole("radio", { name: label, exact: true })).toBeChecked();
 }
@@ -37,7 +40,7 @@ test("preference persists through reload, navigation and logout; System responds
   page.on("console", message => { if (message.type() === "error" && /hydrat/i.test(message.text())) errors.push(message.text()); });
   await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
   await login(page);
-  await page.goto("/profile");
+  await page.goto("/profile?section=appearance");
   await choose(page, "Escuro");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.reload();
@@ -54,6 +57,7 @@ test("preference persists through reload, navigation and logout; System responds
   await page.keyboard.press("ArrowRight");
   await expect(page.getByRole("radio", { name: "Escuro", exact: true })).toBeChecked();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await page.goto("/profile?section=account");
   await page.getByRole("button", { name: "Sair da conta", exact: true }).click();
   await page.waitForURL("**/login");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
@@ -89,7 +93,7 @@ test("blocked browser storage does not prevent changing or using the theme", asy
     Object.defineProperty(window, "localStorage", { configurable: true, get() { throw new DOMException("Blocked", "SecurityError"); } });
   });
   await login(page);
-  await page.goto("/profile");
+  await page.goto("/profile?section=appearance");
   await choose(page, "Escuro");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await page.getByRole("link", { name: "Favoritos", exact: true }).first().click();
@@ -101,7 +105,7 @@ test("both themes cover the public and authenticated routes at mobile and deskto
   await page.emulateMedia({ reducedMotion: "reduce" });
   await login(page);
   for (const theme of ["dark", "light"] as const) {
-    await page.goto("/profile");
+    await page.goto("/profile?section=appearance");
     await choose(page, theme === "dark" ? "Escuro" : "Claro");
     for (const width of [320, 390, 768, 1024, 1440]) {
       await page.setViewportSize({ width, height: 1000 });
@@ -149,7 +153,7 @@ test("theme changes preserve financial data, paid states and finalized snapshots
   const beforeApp = await (await page.request.get("/api/app")).json();
   const snapshots = { purchases: beforeApp.purchases, items: beforeApp.items };
   for (const theme of ["dark", "light"] as const) {
-    await page.goto("/profile");
+    await page.goto("/profile?section=appearance");
     await choose(page, theme === "dark" ? "Escuro" : "Claro");
     for (const width of [390, 1440]) {
       await page.setViewportSize({ width, height: 1000 });
