@@ -4,7 +4,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Fragment } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { Bookmark, ShoppingCart, History, Folder, Plus, ChevronDown, ChevronRight, Package, WalletCards, Settings, PanelLeftClose, PanelLeftOpen, ReceiptText, Ellipsis, UserRound, UsersRound, Check, LoaderCircle } from "lucide-react";
+import { Bookmark, ShoppingCart, History, Folder, Plus, ChevronDown, ChevronRight, Package, WalletCards, PanelLeftClose, PanelLeftOpen, ReceiptText, Ellipsis, UserRound, UsersRound, Check, LoaderCircle } from "lucide-react";
 import { Avatar } from "../shared";
 import { useWorkspace } from "../workspace-provider";
 import { ThemeSwitch } from "../theme-switch";
@@ -59,7 +59,7 @@ function WorkspaceContextControl({ data, busy, switching, onChange, compact = fa
   const status = switching ? "Trocando de espaço…" : busy ? "Salvando alterações…" : null;
   const statusId = "workspace-status-" + useId().replace(/:/g, "");
   const Icon = currentWorkspace?.kind === "personal" ? UserRound : UsersRound;
-  const className = "workspace-context workspace-context-footer" + (compact ? " compact" : "");
+  const className = "workspace-context sidebar-workspace" + (compact ? " compact" : "");
 
   if (data.workspaces.length <= 1) return <div className={className + " workspace-context-static"} role="group" aria-label={`Espaço atual: ${current} (${workspaceTypeLabel(currentWorkspace)})`}>
     <span className="workspace-context-label">Espaço atual</span>
@@ -80,7 +80,7 @@ function WorkspaceContextControl({ data, busy, switching, onChange, compact = fa
         </button>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
-        <DropdownMenu.Content className="workspace-menu" side="right" align="start" sideOffset={8} collisionPadding={12} aria-label="Seus espaços">
+        <DropdownMenu.Content className="workspace-menu" side="right" align="end" sideOffset={6} collisionPadding={12} aria-label="Seus espaços">
           <DropdownMenu.Label className="workspace-menu-label">Seus espaços</DropdownMenu.Label>
           <WorkspaceRadioOptions data={data} busy={busy} onChange={onChange} />
         </DropdownMenu.Content>
@@ -224,9 +224,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <Link className="collection-link collection-create" href="/favorites?newCollection=1"><Plus size={17} aria-hidden="true"/>Nova coleção</Link>
         {!personal && otherOwners.length > 0 && <details className="group-collections" open={!!selectedCollection && !mine.some(collection => collection.id === selectedCollection)}><summary>Coleções do grupo<ChevronDown size={15} aria-hidden="true"/></summary>{otherOwners.map(member => <div className="collection-owner-group" key={member.id}><div className="collection-owner-heading"><Avatar name={member.name}/><span>De {member.name}</span></div>{collectionLinks(member.id)}</div>)}</details>}
       </nav>}
-      <div className="sidebar-bottom"><ThemeSwitch /></div>
-      <WorkspaceContextControl data={data} busy={busy} switching={switching} onChange={requestWorkspaceChange} compact={collapsed}/>
-      <Link className={"sidebar-profile" + (path === "/profile" ? " selected" : "")} href="/profile" aria-label="Perfil e configurações" title={collapsed ? "Perfil e configurações" : data.currentUser.email} aria-current={path === "/profile" ? "page" : undefined}><span className="sidebar-account-avatar"><Avatar name={data.currentUser.name}/><Settings className="sidebar-account-badge" size={13} aria-hidden="true"/></span><span className="sidebar-label"><strong>{data.currentUser.name}</strong><small>Conta e configurações</small></span><Settings className="sidebar-account-settings" size={18} aria-hidden="true"/></Link>
+      <div className="sidebar-bottom">
+        <WorkspaceContextControl data={data} busy={busy} switching={switching} onChange={requestWorkspaceChange} compact={collapsed}/>
+        <div className="sidebar-account-card">
+          <Link className={"sidebar-profile" + (path === "/profile" ? " selected" : "")} href="/profile" aria-label="Perfil e configurações" title={collapsed ? "Perfil e configurações" : data.currentUser.email} aria-current={path === "/profile" ? "page" : undefined}>
+            <Avatar name={data.currentUser.name}/>
+            <span className="sidebar-label"><strong>{data.currentUser.name}</strong><small>Minha conta</small></span>
+            <ChevronRight className="sidebar-account-chevron" size={17} aria-hidden="true"/>
+          </Link>
+          <div className="sidebar-appearance">
+            <span className="sidebar-appearance-label">Aparência</span>
+            <ThemeSwitch />
+          </div>
+        </div>
+      </div>
     </aside>
     <div className="app-content">
       <header className="mobile-header">

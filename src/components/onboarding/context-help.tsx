@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { BookmarkPlus } from "lucide-react";
 import { useWorkspace } from "../workspace-provider";
 import { Button } from "../ui/button";
 import { useGuidance } from "./onboarding-provider";
@@ -27,15 +28,26 @@ export function ContextHelp({ kind, onAction, active = false }: {
     setManual(true); if (state) void command({ command: "help.reopen", helpId: id }).catch(() => {}); else void reload();
   }}>Ajuda com {kind === "favorites" ? "Favoritos" : "Compra atual"}</Button>;
   return <aside className="guidance-help" aria-label={`Ajuda com ${kind === "favorites" ? "Favoritos" : "Compra atual"}`}>
-    <h2>{copy.title}</h2>
-    <p>{copy.description}</p>
-    <Button variant="soft" onClick={onAction}>{kind === "favorites" ? "Adicionar favorito" : "Continuar na compra"}</Button>
-    {kind === "favorites" && <Link href="/purchase">Ou iniciar pela Compra atual</Link>}
-    <Button variant="ghost" disabled={pending} onClick={() => {
-      if (!state) { setManual(false); return; }
-      void command({ command: "help.set", helpId: id, proactive: false }).then(() => setManual(false)).catch(() => {});
-    }}>Dispensar esta dica</Button>
-    <Button variant="ghost" disabled={pending} onClick={() => void command({ command: "help.set", helpId: "all", proactive: false }).then(() => setManual(false)).catch(() => {})}>Não mostrar mais dicas</Button>
-    {error && <p role="alert">{error}</p>}
+    <div className="guidance-help-message">
+      <span className="guidance-help-icon" aria-hidden="true"><BookmarkPlus size={19} strokeWidth={1.8} /></span>
+      <div className="guidance-help-copy">
+        <h2>{copy.title}</h2>
+        <p>{copy.description}</p>
+      </div>
+    </div>
+    <div className="guidance-help-actions">
+      <div className="guidance-help-primary">
+        <Button onClick={onAction}>{kind === "favorites" ? "Adicionar favorito" : "Continuar na compra"}</Button>
+        {kind === "favorites" && <Link href="/purchase">Iniciar pela Compra atual</Link>}
+      </div>
+      <div className="guidance-help-dismiss" role="group" aria-label="Opções da dica">
+        <Button variant="ghost" size="sm" disabled={pending} onClick={() => {
+          if (!state) { setManual(false); return; }
+          void command({ command: "help.set", helpId: id, proactive: false }).then(() => setManual(false)).catch(() => {});
+        }}>Dispensar esta dica</Button>
+        <Button variant="ghost" size="sm" disabled={pending} onClick={() => void command({ command: "help.set", helpId: "all", proactive: false }).then(() => setManual(false)).catch(() => {})}>Não mostrar mais dicas</Button>
+      </div>
+    </div>
+    {error && <p className="guidance-help-error" role="alert">{error}</p>}
   </aside>;
 }
