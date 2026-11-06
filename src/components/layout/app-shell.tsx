@@ -59,7 +59,7 @@ function WorkspaceContextControl({ data, busy, switching, onChange, compact = fa
   const status = switching ? "Trocando de espaço…" : busy ? "Salvando alterações…" : null;
   const statusId = "workspace-status-" + useId().replace(/:/g, "");
   const Icon = currentWorkspace?.kind === "personal" ? UserRound : UsersRound;
-  const className = "workspace-context" + (compact ? " compact" : "");
+  const className = "workspace-context workspace-context-footer" + (compact ? " compact" : "");
 
   if (data.workspaces.length <= 1) return <div className={className + " workspace-context-static"} role="group" aria-label={`Espaço atual: ${current} (${workspaceTypeLabel(currentWorkspace)})`}>
     <span className="workspace-context-label">Espaço atual</span>
@@ -215,7 +215,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <Link className="brand" href="/favorites"><Bookmark size={30} fill="currentColor" strokeWidth={0} aria-hidden="true"/><span>Loti</span></Link>
         <button className="sidebar-collapse" type="button" onClick={toggleCollapsed} aria-label={collapsed ? "Expandir sidebar" : "Recolher sidebar"} aria-expanded={!collapsed} title={collapsed ? "Expandir sidebar" : "Recolher sidebar"}>{collapsed ? <PanelLeftOpen size={17} aria-hidden="true"/> : <PanelLeftClose size={17} aria-hidden="true"/>}</button>
       </div>
-      <WorkspaceContextControl data={data} busy={busy} switching={switching} onChange={requestWorkspaceChange} compact={collapsed}/>
       <nav aria-label="Principal">{desktopNav.map(item => <Fragment key={item.href}>
         <Link className={"nav-item" + (path.startsWith(item.href) && !(item.href === "/packages" && path === "/packages/accounts") ? " selected" : "")} href={item.href} aria-label={item.label} title={collapsed ? item.label : undefined} aria-current={path.startsWith(item.href) && !(item.href === "/packages" && path === "/packages/accounts") ? "page" : undefined}><item.icon size={19} aria-hidden="true"/><span className="sidebar-label">{item.label}</span></Link>
         {item.href === "/packages" && <Link className={"nav-item nav-item-accounts" + (path === hubbuyAccountsNav.href ? " selected" : "")} href={hubbuyAccountsNav.href} aria-label={hubbuyAccountsNav.label} title={collapsed ? hubbuyAccountsNav.label : undefined} aria-current={path === hubbuyAccountsNav.href ? "page" : undefined}><WalletCards size={19} aria-hidden="true"/><span className="sidebar-label">{hubbuyAccountsNav.label}</span></Link>}
@@ -226,6 +225,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {!personal && otherOwners.length > 0 && <details className="group-collections" open={!!selectedCollection && !mine.some(collection => collection.id === selectedCollection)}><summary>Coleções do grupo<ChevronDown size={15} aria-hidden="true"/></summary>{otherOwners.map(member => <div className="collection-owner-group" key={member.id}><div className="collection-owner-heading"><Avatar name={member.name}/><span>De {member.name}</span></div>{collectionLinks(member.id)}</div>)}</details>}
       </nav>}
       <div className="sidebar-bottom"><ThemeSwitch /></div>
+      <WorkspaceContextControl data={data} busy={busy} switching={switching} onChange={requestWorkspaceChange} compact={collapsed}/>
       <Link className={"sidebar-profile" + (path === "/profile" ? " selected" : "")} href="/profile" aria-label="Perfil e configurações" title={collapsed ? "Perfil e configurações" : data.currentUser.email} aria-current={path === "/profile" ? "page" : undefined}><span className="sidebar-account-avatar"><Avatar name={data.currentUser.name}/><Settings className="sidebar-account-badge" size={13} aria-hidden="true"/></span><span className="sidebar-label"><strong>{data.currentUser.name}</strong><small>Conta e configurações</small></span><Settings className="sidebar-account-settings" size={18} aria-hidden="true"/></Link>
     </aside>
     <div className="app-content">
