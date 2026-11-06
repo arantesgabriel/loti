@@ -3,7 +3,8 @@ import { login } from "./helpers";
 import { testEmailUrl } from "./email-helper";
 const origin = "http://localhost:3100";
 async function issue(page: Page, email: string) {
-  const response = await page.request.post("/api/group", { headers: { Origin: origin }, data: { operation: "issue", email } });
+  const context = await (await page.request.get("/api/app")).json();
+  const response = await page.request.post("/api/group", { headers: { Origin: origin }, data: { operation: "issue", workspaceId: context.workspaceId, email } });
   expect(response.status()).toBe(200);
   return (await response.json()).link as string;
 }
@@ -44,6 +45,8 @@ test("member generates a link and a new mobile user joins the group", async ({ p
   await invited.getByRole("link", { name: "Continuar no convite" }).click();
   await invited.getByRole("button", { name: "Aceitar convite", exact: true }).click();
   await expect(invited).toHaveURL(/\/favorites$/);
+  await expect(invited.getByRole("heading", { name: "Da bagunça à clareza." })).toBeVisible();
+  await invited.getByRole("button", { name: "Pular introdução por agora", exact: true }).click();
   await invited.reload();
   const data = await (await invited.request.get("/api/app")).json();
   expect(data.currentUser.email).toBe("new-invite@loti.test");

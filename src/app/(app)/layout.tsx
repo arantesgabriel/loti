@@ -7,6 +7,7 @@ import { WorkspaceProvider } from "@/components/workspace-provider";
 import { AppShell } from "@/components/layout/app-shell";
 import { ActivationPendingScreen } from "@/components/activation-pending-screen";
 import { activationState } from "@/lib/auth/activation";
+import { OnboardingProvider } from "@/components/onboarding/onboarding-provider";
 export const dynamic = "force-dynamic";
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   let data;
@@ -27,5 +28,5 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (activationPendingEmail) return <ActivationPendingScreen email={activationPendingEmail}/>;
   if (noWorkspace) return <main className="empty-state"><h1>Nenhum espaço disponível</h1><p>Sua conta ainda não tem um espaço pessoal ou compartilhado para acessar.</p><a href="/login">Voltar ao login</a></main>;
   if (denied || !data) return <main className="empty-state"><h1>Acesso restrito</h1><p>Peça ao responsável pelo grupo para adicionar sua conta ao espaço.</p><a href="/login">Voltar ao login</a></main>;
-  return <WorkspaceProvider initialData={data}><AppShell>{children}</AppShell></WorkspaceProvider>;
+  return <WorkspaceProvider initialData={data}><OnboardingProvider><AppShell>{children}</AppShell></OnboardingProvider></WorkspaceProvider>;
 }

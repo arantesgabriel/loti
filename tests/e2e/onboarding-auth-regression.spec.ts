@@ -1,0 +1,42 @@
+import { test, expect } from "@playwright/test";
+import { login } from "./helpers";
+import { testEmailUrl } from "./email-helper";
+test("new invite verifies and accepts before H3-C; group data does not become the viewer's milestone", async ({ page, browser }) => {
+  await login(page);
+  const issuerData = await (await page.request.get("/api/app")).json();
+  expect(issuerData.workspaceKind).toBe("shared");
+  const issued = await page.request.post("/api/group", { headers: { Origin: "http://localhost:3100" }, data: { operation: "issue", workspaceId: issuerData.workspaceId, email: "new-invite@loti.test" } });
+  expect(issued.status()).toBe(200);
+  const invitationSentAt = Date.now();
+  const { link } = await issued.json();
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const invited = await context.newPage();
+  await invited.setExtraHTTPHeaders({ "X-Forwarded-For": "203.0.113.210" });
+  await invited.goto(link);
+  await invited.getByLabel("Nome completo", { exact: true }).fill("Pessoa sintética convidada");
+  await invited.getByLabel("Senha", { exact: true }).fill("Invitation-E2E-2026!");
+  await invited.getByLabel("Confirmar senha", { exact: true }).fill("Invitation-E2E-2026!");
+  // The real local email limiter permits one provider send per second. Keep
+  // that protection enabled while pacing invitation and verification emails.
+  await expect.poll(() => Date.now() - invitationSentAt).toBeGreaterThan(1100);
+  await invited.getByRole("button", { name: "Criar conta e confirmar email" }).click();
+  await expect(invited.getByRole("heading", { name: "Confirme seu email" })).toBeVisible();
+  await expect(invited.locator(".h3c")).toHaveCount(0);
+  expect((await invited.request.get("/api/app")).status()).toBe(403);
+  await invited.goto(await testEmailUrl(invited.request, "new-invite@loti.test", "/api/auth/verify-email"));
+  await invited.getByRole("link", { name: "Continuar no convite" }).click();
+  await expect(invited.locator(".h3c")).toHaveCount(0);
+  await invited.getByRole("button", { name: "Aceitar convite", exact: true }).click();
+  await expect(invited).toHaveURL(/\/favorites$/);
+  await expect(invited.locator(".h3c")).toBeVisible();
+  const data = await (await invited.request.get("/api/app")).json();
+  expect(data.workspaceKind).toBe("shared");
+  expect(data.members.some((m: { id: string }) => m.id === data.currentUser.id)).toBe(true);
+  expect(data.favorites.length).toBeGreaterThan(0);
+  const state = await (await invited.request.get(`/api/onboarding?workspaceId=${data.workspaceId}`)).json();
+  expect(state.hasPendingInvitation).toBe(false); expect(state.milestones).toEqual([]);
+  await invited.getByRole("button", { name: "Pular introdução por agora", exact: true }).click();
+  await expect(invited.getByRole("heading", { name: "Favoritos", exact: true })).toBeVisible();
+  await invited.screenshot({ path: "artifacts/qa/onboarding/invited-after-acceptance.png", fullPage: true });
+  await context.close();
+});

@@ -13,6 +13,7 @@ import { normalizeText } from "@/lib/domain/categories";
 import { FavoriteEditor, type ClientFavorite } from "./favorite-editor";
 import { CollectionEditor } from "./collections";
 import type { ClientData } from "@/lib/domain/services";
+import { ContextHelp } from "../onboarding/context-help";
 const qcLabels = { not_reviewed: "Não avaliado", approved: "Aprovado", rejected: "Reprovado" };
 export function FavoritesScreen() {
   const { data, busy, mutate } = useWorkspace(); const router = useRouter(), params = useSearchParams();
@@ -65,6 +66,7 @@ export function FavoritesScreen() {
     return <Button asChild size="sm" variant={alreadyAdded ? "outline" : "soft"} className={`favorite-purchase-action${alreadyAdded ? " in-purchase" : ""}`}><Link href={alreadyAdded ? "/purchase" : addLink(f)} aria-label={alreadyAdded ? `Ver compra atual com ${f.name}` : `Adicionar ${f.name} à compra`}><>{alreadyAdded ? <Check size={16}/> : <Plus size={16}/>}<span>{alreadyAdded ? "Na compra" : "Compra"}</span></></Link></Button>;
   }
   return <><div className="page-heading"><div><h1>Favoritos</h1><p className="muted">{data.workspaceKind === "personal" ? "Seus produtos salvos, organizados do seu jeito." : "Produtos salvos pelo grupo, organizados do seu jeito."}</p></div><Button className="favorites-heading-add" onClick={() => setEditor("new")} aria-label="Novo favorito"><Plus size={19}/><span className="desktop-label">Novo favorito</span></Button></div>
+  <ContextHelp kind="favorites" onAction={() => setEditor("new")} active={!!editor || !!detail || !!remove || !!collectionEditor || queryNewCollection}/>
   <Button className="favorites-mobile-add" onClick={() => setEditor("new")} aria-label="Novo favorito"><Plus size={24}/></Button>
   <div hidden={!data.favorites.length} className={`favorites-browser${scrollFades.left ? " has-fade-left" : ""}${scrollFades.right ? " has-fade-right" : ""}`} ref={browserRef} role="group" aria-label="Filtrar favoritos por pessoa" style={{ "--selection-left": `${selection?.left ?? 0}px`, "--selection-width": `${selection?.width ?? 0}px` } as React.CSSProperties}>
     <span className={`favorite-selection${selection ? " ready" : ""}`} aria-hidden="true" />

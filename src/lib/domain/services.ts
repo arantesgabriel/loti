@@ -9,8 +9,9 @@ import { DomainError } from "./errors";
 import { purchaseServices } from "./purchase-services";
 import { allocateItemCost } from "./cost-sharing";
 import { serializeDomainTransaction } from "./transaction-lock";
+import { retryInsertTransaction, type InsertEvidence } from "./insert-evidence";
 
-export function createServices(db: AppDatabase, userId: string, initializeCosts?: Parameters<typeof purchaseServices>[2]) {
+export function createServices(db: AppDatabase, userId: string, initializeCosts?: Parameters<typeof purchaseServices>[2], insertEvidence?: InsertEvidence) {
   const guard = authorization(db, userId);
 
   async function collectionForFavorite(collectionId: string | null, workspaceId: string) {
@@ -65,6 +66,19 @@ export function createServices(db: AppDatabase, userId: string, initializeCosts?
 
   async function saveFavorite(input: unknown, id?: string, expectedWorkspaceId?: string) {
     const value = favoriteInput.parse(input);
+    if (!id && insertEvidence) return serializeDomainTransaction(() => retryInsertTransaction(() => db.transaction(async tx => {
+      const txGuard = authorization(tx, userId);
+      const access = expectedWorkspaceId ? await txGuard.requireActiveWorkspaceContext(expectedWorkspaceId) : await txGuard.requireWorkspaceAccess();
+      if (value.collectionId) {
+        const collection = await txGuard.requireCollectionOwner(value.collectionId);
+        if (collection.workspaceId !== access.workspaceId) throw new DomainError("Coleção de outro espaço.", 403);
+      }
+      const now = new Date();
+      const saved = await tx.insert(favorites).values({ id: crypto.randomUUID(), workspaceId: access.workspaceId, ownerId: userId, ...value,
+        platform: detectPlatform(value.url), canonicalProductKey: buildCanonicalProductKey(value.url), visualKey: resolveProductCategory(value.name), createdAt: now, updatedAt: now }).returning().get();
+      await insertEvidence(tx, { actorId: userId, workspaceId: access.workspaceId, source: "favorite" });
+      return saved;
+    })));
     const context = expectedWorkspaceId ? await guard.requireActiveWorkspaceContext(expectedWorkspaceId) : null;
     const favorite = id ? await guard.requireFavoriteOwner(id) : null;
     if (favorite && expectedWorkspaceId && favorite.workspaceId !== expectedWorkspaceId) throw new DomainError("O favorito pertence a outro espaço. Atualize a tela antes de salvar novamente.", 409, "WORKSPACE_CONTEXT_CHANGED");
@@ -108,7 +122,7 @@ export function createServices(db: AppDatabase, userId: string, initializeCosts?
     await db.insert(userPreferences).values({ userId, favoritesView: view, createdAt: now, updatedAt: now }).onConflictDoUpdate({ target: userPreferences.userId, set: { favoritesView: view, updatedAt: now } }).run();
   }
 
-  return { ...guard, ...purchaseServices(db, userId, initializeCosts), getData, selectWorkspace, saveFavorite, deleteFavorite, saveCollection, deleteCollection, setView };
+  return { ...guard, ...purchaseServices(db, userId, initializeCosts, insertEvidence), getData, selectWorkspace, saveFavorite, deleteFavorite, saveCollection, deleteCollection, setView };
 }
 
 export type WorkspaceData = Awaited<ReturnType<ReturnType<typeof createServices>["getData"]>>;

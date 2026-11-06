@@ -15,7 +15,9 @@ it("upgrades a populated database without changing group IDs, links, invitations
     const oldMigrations = join(directory, "old");
     await mkdir(join(oldMigrations, "meta"), { recursive: true });
     const journal = JSON.parse(await readFile("drizzle/meta/_journal.json", "utf8"));
-    journal.entries = journal.entries.slice(0, -1);
+    const boundary = journal.entries.findIndex((entry: { tag: string }) => entry.tag === "0028_legacy_account_review_guard");
+    if (boundary < 0) throw new Error("Missing personal-workspace migration baseline.");
+    journal.entries = journal.entries.slice(0, boundary + 1);
     await writeFile(join(oldMigrations, "meta/_journal.json"), JSON.stringify(journal));
     for (const entry of journal.entries) await copyFile(`drizzle/${entry.tag}.sql`, join(oldMigrations, `${entry.tag}.sql`));
     await migrate(db, { migrationsFolder: oldMigrations });

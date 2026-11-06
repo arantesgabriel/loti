@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { sqliteTable, text, integer, index, uniqueIndex, check, primaryKey, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, index, uniqueIndex, check, primaryKey, foreignKey, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 const timestamp = (name: string) => integer(name, { mode: "timestamp_ms" }).notNull();
 const dates = () => ({ createdAt: timestamp("created_at"), updatedAt: timestamp("updated_at") });
 // Better Auth's canonical field contract; passwords and sessions are managed by its adapter.
@@ -108,6 +108,78 @@ export const accountActivationRequirements = sqliteTable("account_activation_req
   source: text("source", { enum: ["public_signup", "invitation"] }).notNull(),
   createdAt: timestamp("created_at"),
 }, t => [check("account_activation_source", sql`${t.source} IN ('public_signup','invitation')`)]);
+
+// Guidance is user-scoped. Workspace context is authorized at every command,
+// never inferred from a profile answer or stored as a permission here.
+export const onboardingEnrollments = sqliteTable("onboarding_enrollments", {
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  flowKey: text("flow_key").notNull(),
+  cohort: text("cohort", { enum: ["existing", "new"] }).notNull(),
+  initialFlowVersion: integer("initial_flow_version").notNull(),
+  createdAt: timestamp("created_at"),
+}, t => [
+  primaryKey({ columns: [t.userId, t.flowKey] }),
+  check("onboarding_flow_key", sql`${t.flowKey} = 'h3c'`),
+  check("onboarding_cohort", sql`${t.cohort} IN ('existing','new')`),
+  check("onboarding_initial_version", sql`typeof(${t.initialFlowVersion}) = 'integer' AND ${t.initialFlowVersion} >= 1`),
+]);
+export const userGuidanceProfiles = sqliteTable("user_guidance_profiles", {
+  userId: text("user_id").primaryKey().references(() => user.id, { onDelete: "cascade" }),
+  experience: text("experience", { enum: ["unspecified", "never", "sometimes", "frequent", "expert"] }).notNull().default("unspecified"),
+  usageIntent: text("usage_intent", { enum: ["unspecified", "individual", "group", "both", "undecided"] }).notNull().default("unspecified"),
+  revision: integer("revision").notNull(), ...dates(),
+}, t => [
+  check("guidance_experience", sql`${t.experience} IN ('unspecified','never','sometimes','frequent','expert')`),
+  check("guidance_usage_intent", sql`${t.usageIntent} IN ('unspecified','individual','group','both','undecided')`),
+  check("guidance_profile_revision", sql`typeof(${t.revision}) = 'integer' AND ${t.revision} >= 1`),
+]);
+export const onboardingRuns = sqliteTable("onboarding_runs", {
+  userId: text("user_id").notNull(), flowKey: text("flow_key").notNull(), flowVersion: integer("flow_version").notNull(),
+  status: text("status", { enum: ["in_progress", "completed", "skipped"] }).notNull(),
+  currentStepId: text("current_step_id", { enum: ["introduction", "personalization", "entry"] }).notNull(),
+  startedAt: integer("started_at", { mode: "timestamp_ms" }),
+  closedAt: integer("closed_at", { mode: "timestamp_ms" }),
+  completedAt: integer("completed_at", { mode: "timestamp_ms" }),
+  skippedAt: integer("skipped_at", { mode: "timestamp_ms" }),
+  revision: integer("revision").notNull(), ...dates(),
+}, t => [
+  primaryKey({ columns: [t.userId, t.flowKey, t.flowVersion] }),
+  foreignKey({ columns: [t.userId, t.flowKey], foreignColumns: [onboardingEnrollments.userId, onboardingEnrollments.flowKey] }).onDelete("cascade"),
+  check("onboarding_run_version", sql`typeof(${t.flowVersion}) = 'integer' AND ${t.flowVersion} >= 1`),
+  check("onboarding_run_revision", sql`typeof(${t.revision}) = 'integer' AND ${t.revision} >= 1`),
+  check("onboarding_run_step", sql`${t.currentStepId} IN ('introduction','personalization','entry')`),
+  check("onboarding_run_state", sql`
+    (${t.status} = 'in_progress' AND ${t.completedAt} IS NULL AND ${t.skippedAt} IS NULL)
+    OR (${t.status} = 'completed' AND ${t.completedAt} IS NOT NULL AND ${t.skippedAt} IS NULL AND ${t.closedAt} IS NULL)
+    OR (${t.status} = 'skipped' AND ${t.skippedAt} IS NOT NULL AND ${t.completedAt} IS NULL AND ${t.closedAt} IS NULL)
+  `),
+]);
+export const onboardingHelpPreferences = sqliteTable("onboarding_help_preferences", {
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  helpId: text("help_id", { enum: ["all", "favorites.first-action", "purchase.first-item"] }).notNull(),
+  helpVersion: integer("help_version").notNull(), proactive: integer("proactive", { mode: "boolean" }).notNull(),
+  revision: integer("revision").notNull(), ...dates(),
+}, t => [
+  primaryKey({ columns: [t.userId, t.helpId, t.helpVersion] }),
+  check("onboarding_help_id", sql`${t.helpId} IN ('all','favorites.first-action','purchase.first-item')`),
+  check("onboarding_help_version", sql`typeof(${t.helpVersion}) = 'integer' AND ${t.helpVersion} >= 1`),
+  check("onboarding_help_revision", sql`typeof(${t.revision}) = 'integer' AND ${t.revision} >= 1`),
+  check("onboarding_help_proactive", sql`${t.proactive} IN (0,1)`),
+]);
+
+export const onboardingMilestones = sqliteTable("onboarding_milestones", {
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  milestone: text("milestone", { enum: ["M1", "M2"] }).notNull(),
+  workspaceId: text("workspace_id").references(() => workspaces.id, { onDelete: "set null" }),
+  evidence: text("evidence", { enum: ["committed", "preexisting"] }).notNull(),
+  source: text("source", { enum: ["favorite", "purchase_item"] }).notNull(),
+  occurredAt: integer("occurred_at", { mode: "timestamp_ms" }),
+  recordedAt: timestamp("recorded_at"),
+}, t => [primaryKey({ columns: [t.userId, t.milestone] }),
+  check("onboarding_milestone_key", sql`${t.milestone} IN ('M1','M2')`),
+  check("onboarding_milestone_source", sql`${t.source} IN ('favorite','purchase_item') AND (${t.milestone} <> 'M2' OR ${t.source} = 'purchase_item')`),
+  check("onboarding_milestone_evidence", sql`(${t.evidence} = 'committed' AND ${t.occurredAt} IS NOT NULL) OR (${t.evidence} = 'preexisting' AND ${t.occurredAt} IS NULL)`),
+]);
 
 export const workspaceCostSettings = sqliteTable("workspace_cost_settings", {
   workspaceId: text("workspace_id").primaryKey().references(() => workspaces.id),

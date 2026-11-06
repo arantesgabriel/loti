@@ -12,7 +12,9 @@ afterEach(() => client.client.close());
 
 it("upgrades a populated 0030 database without changing group, invitation, snapshot or financial rows", async () => {
   const journal = JSON.parse(readFileSync("drizzle/meta/_journal.json", "utf8")) as { entries: { tag: string }[] };
-  const entries = journal.entries.slice(0, -1);
+  const boundary = journal.entries.findIndex(entry => entry.tag === "0030_public_signup_activation");
+  if (boundary < 0) throw new Error("Missing referral migration baseline.");
+  const entries = journal.entries.slice(0, boundary + 1);
   journal.entries = entries;
   const folder = resolve(`artifacts/qa/referral-upgrade-${process.pid}-${randomUUID()}`);
   mkdirSync(`${folder}/meta`, { recursive: true });

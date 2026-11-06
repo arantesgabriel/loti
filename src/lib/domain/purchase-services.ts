@@ -10,6 +10,7 @@ import { DomainError } from "./errors";
 import { allocateItemCost, type CostParticipant, type SharingMode } from "./cost-sharing";
 import { serializeDomainTransaction } from "./transaction-lock";
 import { initializePurchaseCosts } from "./purchase-cost-initialization";
+import { retryInsertTransaction, type InsertEvidence } from "./insert-evidence";
 
 function isUniqueConstraint(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
@@ -32,12 +33,12 @@ function checkedComposition(quantity: number, unitPriceCents: number | null, sha
   }
 }
 
-export function purchaseServices(db: AppDatabase, userId: string, initializeCosts = initializePurchaseCosts) {
+export function purchaseServices(db: AppDatabase, userId: string, initializeCosts = initializePurchaseCosts, insertEvidence?: InsertEvidence) {
   const guard = authorization(db, userId);
   type PurchaseTransaction = Parameters<Parameters<AppDatabase["transaction"]>[0]>[0];
 
-  async function transact<T>(operation: (tx: PurchaseTransaction) => Promise<T>): Promise<T> {
-    return serializeDomainTransaction(() => db.transaction(operation));
+  async function transact<T>(operation: (tx: PurchaseTransaction) => Promise<T>, retryInsert = false): Promise<T> {
+    return serializeDomainTransaction(() => retryInsert ? retryInsertTransaction(() => db.transaction(operation)) : db.transaction(operation));
   }
 
   async function savePurchase(input: unknown, id?: string, expectedWorkspaceId?: string) {
@@ -93,8 +94,9 @@ export function purchaseServices(db: AppDatabase, userId: string, initializeCost
       const now = new Date(), id = crypto.randomUUID();
       const item = await tx.insert(purchaseItems).values({ id, purchaseId: purchase.id, sourceFavoriteId: favorite.id, personId: value.personId, sharingMode: composition.sharingMode, createdBy: userId, name: favorite.name, url: favorite.url, platform: favorite.platform, visualKey: favorite.visualKey, variant: value.variant ?? null, notes: value.notes ?? null, quantity: value.quantity, unitPriceCents: value.unitPriceCents, cartStatus: "pending", createdAt: now, updatedAt: now }).returning().get();
       await persistParticipants(tx, id, composition.stored);
+      await insertEvidence?.(tx, { actorId: userId, workspaceId: purchase.workspaceId, source: "purchase_item" });
       return item;
-    });
+    }, !!insertEvidence);
   }
 
   async function saveManualItem(input: unknown, id?: string, expectedWorkspaceId?: string) {
@@ -116,8 +118,9 @@ export function purchaseServices(db: AppDatabase, userId: string, initializeCost
       const newId = crypto.randomUUID(), now = new Date();
       const item = await tx.insert(purchaseItems).values({ id: newId, purchaseId: purchase.id, sourceFavoriteId: null, ...fields, createdBy: userId, cartStatus: "pending", createdAt: now }).returning().get();
       await persistParticipants(tx, newId, composition.stored);
+      await insertEvidence?.(tx, { actorId: userId, workspaceId: purchase.workspaceId, source: "purchase_item" });
       return item;
-    });
+    }, !id && !!insertEvidence);
   }
 
   async function removePurchaseItem(id: string, expectedWorkspaceId?: string) {

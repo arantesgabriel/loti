@@ -15,6 +15,7 @@ import { ProfileNameForm } from "@/components/profile/profile-name-form";
 import { ProfilePasswordForm } from "@/components/profile/profile-password-form";
 import { ProfileTheme } from "@/components/profile/profile-theme";
 import { ReferralLink } from "@/components/profile/referral-link";
+import { GuidancePreferences } from "@/components/onboarding/guidance-preferences";
 
 const categories = [
   { id: "profile", label: "Perfil", Icon: UserRound },
@@ -39,12 +40,14 @@ export default function Profile() {
   const [formPending, setFormPending] = useState(false);
   const [logoutBusy, setLogoutBusy] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [guidanceDirty, setGuidanceDirty] = useState(false);
+  const unsaved = hasUnsavedChanges || guidanceDirty;
   const [discardTarget, setDiscardTarget] = useState<SettingsCategory | null>(null);
   const [compactTabs, setCompactTabs] = useState(false);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const busy = formPending || logoutBusy;
 
-  useEffect(() => registerWorkspaceDraft("profile", hasUnsavedChanges), [hasUnsavedChanges, registerWorkspaceDraft]);
+  useEffect(() => registerWorkspaceDraft("profile", unsaved), [unsaved, registerWorkspaceDraft]);
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 900px)");
@@ -56,7 +59,7 @@ export default function Profile() {
 
   function requestCategory(category: SettingsCategory) {
     if (category === activeCategory || busy) return false;
-    if (hasUnsavedChanges) {
+    if (unsaved) {
       setDiscardTarget(category);
       return false;
     }
@@ -82,6 +85,7 @@ export default function Profile() {
     setActiveCategory(target);
     setDiscardTarget(null);
     setHasUnsavedChanges(false);
+    setGuidanceDirty(false);
     requestAnimationFrame(() => tabRefs.current[categories.findIndex(category => category.id === target)]?.focus());
   }
 
@@ -168,6 +172,7 @@ export default function Profile() {
             onDirtyChange={setHasUnsavedChanges}
           />
           <ReferralLink />
+          <GuidancePreferences onDirtyChange={setGuidanceDirty} />
         </div>}
 
         {activeCategory === "appearance" && <ProfileTheme />}
