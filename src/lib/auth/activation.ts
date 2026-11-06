@@ -11,6 +11,10 @@ export const publicSignupSchema = z.object({
   email: z.email().max(254).trim().toLowerCase(),
   password: z.string().min(12).max(128),
   confirmPassword: z.string().min(12).max(128),
+  referralToken: z.preprocess(
+    value => typeof value === "string" && /^[A-Za-z0-9_-]{43}$/.test(value) ? value : undefined,
+    z.string().optional(),
+  ),
 }).refine(value => value.password === value.confirmPassword, {
   path: ["confirmPassword"], message: "As senhas precisam ser iguais.",
 });

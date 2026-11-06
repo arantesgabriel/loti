@@ -91,6 +91,16 @@ export const authEmailDeliveries = sqliteTable("auth_email_deliveries", {
   createdAt: timestamp("created_at"), expiresAt: timestamp("expires_at"), consumedAt: integer("consumed_at", { mode: "timestamp_ms" }),
 }, t => [index("auth_email_expiry_idx").on(t.expiresAt), check("auth_email_kind", sql`${t.kind} IN ('reset','verification','invitation')`), check("auth_email_state", sql`${t.state} IN ('reserved','sent','failed','uncertain')`)]);
 
+export const referralLinks = sqliteTable("referral_links", {
+  id: text("id").primaryKey(), referrerUserId: text("referrer_user_id").notNull().unique().references(() => user.id),
+  token: text("token").notNull().unique(), tokenHash: text("token_hash").notNull().unique(), createdAt: timestamp("created_at"),
+});
+export const referralAttributions = sqliteTable("referral_attributions", {
+  id: text("id").primaryKey(), linkId: text("link_id").notNull().references(() => referralLinks.id),
+  referrerUserId: text("referrer_user_id").notNull().references(() => user.id), referredUserId: text("referred_user_id").notNull().unique().references(() => user.id),
+  capturedAt: timestamp("captured_at"), confirmedAt: integer("confirmed_at", { mode: "timestamp_ms" }),
+}, t => [check("referral_not_self", sql`${t.referrerUserId} <> ${t.referredUserId}`), index("referral_referrer_idx").on(t.referrerUserId)]);
+
 // Presence marks accounts created through a flow that requires email activation.
 // Older/operator accounts have no row and retain their existing access behavior.
 export const accountActivationRequirements = sqliteTable("account_activation_requirements", {

@@ -7584,6 +7584,13 @@ details .details-fields {
 .settings-identity h3 { font-size: 16px; font-weight: 630; line-height: 1.35; overflow-wrap: anywhere; }
 .settings-identity p { margin: 3px 0 0; font-size: 13px; overflow-wrap: anywhere; }
 .settings-profile-form { margin-top: 20px; }
+.profile-referral { display: grid; gap: 10px; margin-top: 22px; padding-top: 20px; border-top: 1px solid var(--border); }
+.profile-referral h3 { font-size: 15px; font-weight: 600; }
+.profile-referral > p { margin: 0; max-width: 580px; font-size: 13px; line-height: 1.5; }
+.profile-referral-link { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: end; gap: 8px; }
+.profile-referral-link label { grid-column: 1 / -1; font-size: 13px; font-weight: 550; }
+.profile-referral-link input { min-width: 0; min-height: 44px; padding: 0 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--foreground); }
+.profile-referral-link [role="status"] { grid-column: 1 / -1; color: var(--primary-ink); font-size: 13px; }
 .settings-profile-form > label { margin: 0; color: var(--foreground); font-size: 13px; font-weight: 550; }
 .settings-profile-form > .button { margin-top: 2px; }
 .settings-theme-options { max-width: 600px; }
@@ -7647,6 +7654,8 @@ details .details-fields {
   .settings-panel { border-radius: 12px; }
   .settings-navigation { padding: 12px 10px 10px; }
   .settings-content { padding: 20px 16px; }
+  .profile-referral-link { grid-template-columns: minmax(0, 1fr); }
+  .profile-referral-link label, .profile-referral-link input, .profile-referral-link .button, .profile-referral-link [role="status"] { grid-column: 1; }
   .settings-content-heading { margin-bottom: 20px; }
   .settings-identity { gap: 12px; }
   .settings-identity > .avatar { width: 44px; height: 44px; font-size: 16px; }

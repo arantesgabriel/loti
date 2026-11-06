@@ -218,6 +218,13 @@
       "when": 1793890261238,
       "tag": "0030_public_signup_activation",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "6",
+      "when": 1793890261239,
+      "tag": "0031_referral_attributions",
+      "breakpoints": true
     }
   ]
 }

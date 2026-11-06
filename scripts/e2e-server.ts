@@ -64,6 +64,8 @@ try {
   const { eq } = await import("drizzle-orm");
   const manager = await qcManagerFixture.db.select({ id: user.id }).from(user).where(eq(user.email, "gabriel@loti.test")).get();
   if (!manager) throw new Error("The isolated QC E2E manager could not be provisioned.");
+  // Referral E2E needs one synthetic, email-confirmed referrer; this DB is disposable.
+  await qcManagerFixture.db.update(user).set({ emailVerified: true }).where(eq(user.id, manager.id)).run();
   process.env.LOTI_QC_MANAGER_USER_ID = manager.id;
   const { ensurePersonalWorkspace } = await import("../src/lib/domain/personal-workspaces");
   await ensurePersonalWorkspace(qcManagerFixture.db, manager.id);

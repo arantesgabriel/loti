@@ -13,6 +13,7 @@ import { DomainError } from "../domain/errors";
 import * as schema from "../db/schema";
 import { authOrigin } from "./origin";
 import { passwordChangeSchema, profileNameSchema } from "./profile-validation";
+import { confirmReferralAttribution } from "../domain/referrals";
 export type AuthOptions = { emailTransport?: EmailTransport; scheduleEmail?: (task: () => Promise<void>) => void; activationResendRecipient?: string };
 export function createAuth(db: AuthDatabase, operator = false, options: AuthOptions = {}) {
   const mail = emailService(db, options.emailTransport);
@@ -51,6 +52,7 @@ export function createAuth(db: AuthDatabase, operator = false, options: AuthOpti
           isNull(authEmailDeliveries.consumedAt), gt(authEmailDeliveries.expiresAt, new Date()),
         )).returning({ id: authEmailDeliveries.id }).get();
         if (!claimed) throw APIError.from("BAD_REQUEST", { code: "INVALID_TOKEN", message: "Link inválido ou já utilizado." });
+        await confirmReferralAttribution(db as AppDatabase, user.id);
       },
     },
     verification: { storeIdentifier: "hashed" },
