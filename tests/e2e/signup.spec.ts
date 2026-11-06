@@ -39,6 +39,8 @@ test("public signup confirms email before opening a personal workspace", async (
   expect((await verification.request.get("/api/app")).status()).toBe(401);
 
   await pending.getByRole("button", { name: "Já confirmei meu email", exact: true }).click();
+  await expect(pending.getByRole("heading", { name: "Da bagunça à clareza." })).toBeVisible();
+  await pending.getByRole("button", { name: "Pular introdução por agora", exact: true }).click();
   await expect(pending.getByRole("heading", { name: "Favoritos", exact: true })).toBeVisible();
   const data = await (await pending.request.get("/api/app")).json();
   expect(data.currentUser.email).toBe(email);

@@ -13,6 +13,7 @@ type Workspace = {
   data: ClientData;
   busy: boolean;
   switching: boolean;
+  hasOpenEditor: boolean;
   mutate: (operation: Operation, input?: unknown, id?: string, message?: string) => Promise<boolean>;
   refresh: () => Promise<RefreshResult>;
   updateProfileName: (name: string) => Promise<RefreshResult>;
@@ -28,6 +29,7 @@ export function WorkspaceProvider({ initialData, children }: { initialData: Clie
   const dataRef = useRef(initialData), activeWorkspaceId = useRef(initialData.workspaceId);
   const dataVersion = useRef(0), switchingRef = useRef(false), pendingMutations = useRef(0);
   const drafts = useRef(new Map<string, boolean>());
+  const [hasOpenEditor, setHasOpenEditor] = useState(false);
   const pendingContextData = useRef<{ data: ClientData; version: number } | null>(null);
 
   function publish(nextData: ClientData) {
@@ -39,8 +41,10 @@ export function WorkspaceProvider({ initialData, children }: { initialData: Clie
 
   const registerWorkspaceDraft = useCallback((key: string, dirty: boolean) => {
     drafts.current.set(key, dirty);
+    setHasOpenEditor(true);
     return () => {
       drafts.current.delete(key);
+      setHasOpenEditor(drafts.current.size > 0);
       if (![...drafts.current.values()].some(Boolean) && pendingContextData.current) {
         const pending = pendingContextData.current;
         pendingContextData.current = null;
@@ -112,6 +116,7 @@ export function WorkspaceProvider({ initialData, children }: { initialData: Clie
       if (version === dataVersion.current && nextData.workspaceId === expectedWorkspaceId && activeWorkspaceId.current === expectedWorkspaceId) publish(nextData);
       else if (activeWorkspaceId.current === expectedWorkspaceId) void refresh();
       toast.success(message);
+      window.dispatchEvent(new Event("loti:domain-committed"));
       return true;
     } catch {
       toast.error("Não foi possível conectar. Tente novamente.");
@@ -173,7 +178,7 @@ export function WorkspaceProvider({ initialData, children }: { initialData: Clie
     }
   }
 
-  return <Context.Provider value={{ data, busy, switching, mutate, refresh, updateProfileName, switchWorkspace, registerWorkspaceDraft }}>
+  return <Context.Provider value={{ data, busy, switching, hasOpenEditor, mutate, refresh, updateProfileName, switchWorkspace, registerWorkspaceDraft }}>
     {children}<Toaster theme={resolvedTheme} richColors position="top-right" closeButton />
   </Context.Provider>;
 }

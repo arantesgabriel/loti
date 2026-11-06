@@ -225,6 +225,20 @@
       "when": 1793890261239,
       "tag": "0031_referral_attributions",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1793975294487,
+      "tag": "0032_onboarding_state",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1793979691672,
+      "tag": "0033_onboarding_milestones",
+      "breakpoints": true
     }
   ]
 }

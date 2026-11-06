@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { LockKeyhole, LogOut, Moon, Settings, UserRound, Users } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { LogOut, Users } from "lucide-react";
 import { toast } from "sonner";
 import { resetQcClient } from "@/components/qc/qc-client-state";
 import { useWorkspace } from "@/components/workspace-provider";
@@ -15,36 +15,27 @@ import { ProfileNameForm } from "@/components/profile/profile-name-form";
 import { ProfilePasswordForm } from "@/components/profile/profile-password-form";
 import { ProfileTheme } from "@/components/profile/profile-theme";
 import { ReferralLink } from "@/components/profile/referral-link";
-
-const categories = [
-  { id: "profile", label: "Perfil", Icon: UserRound },
-  { id: "appearance", label: "Aparência", Icon: Moon },
-  { id: "security", label: "Segurança", Icon: LockKeyhole },
-  { id: "account", label: "Ações da conta", Icon: Settings },
-] as const;
-
-type SettingsCategory = (typeof categories)[number]["id"];
-
-const categoryCopy: Record<SettingsCategory, { title: string; description: string }> = {
-  profile: { title: "Perfil", description: "Gerencie suas informações pessoais." },
-  appearance: { title: "Aparência", description: "Escolha como o Loti aparece para você." },
-  security: { title: "Segurança", description: "Altere sua senha para manter sua conta protegida." },
-  account: { title: "Ações da conta", description: "Gerencie o acesso ao seu grupo e à sua sessão." },
-};
+import { GuidancePreferences } from "@/components/onboarding/guidance-preferences";
+import { isProfileSettingsCategory, profileSettingsCategories as categories, profileSettingsCategoryCopy as categoryCopy, profileSettingsCategoryEvent, type ProfileSettingsCategory } from "@/components/profile/settings-categories";
 
 export default function Profile() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data, registerWorkspaceDraft } = useWorkspace();
-  const [activeCategory, setActiveCategory] = useState<SettingsCategory>("profile");
+  const [manualCategory, setManualCategory] = useState<ProfileSettingsCategory | null>(null);
   const [formPending, setFormPending] = useState(false);
   const [logoutBusy, setLogoutBusy] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [discardTarget, setDiscardTarget] = useState<SettingsCategory | null>(null);
+  const [guidanceDirty, setGuidanceDirty] = useState(false);
+  const unsaved = hasUnsavedChanges || guidanceDirty;
+  const [discardTarget, setDiscardTarget] = useState<ProfileSettingsCategory | null>(null);
   const [compactTabs, setCompactTabs] = useState(false);
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const busy = formPending || logoutBusy;
+  const requestedCategory = searchParams.get("section");
+  const activeCategory = manualCategory ?? (isProfileSettingsCategory(requestedCategory) ? requestedCategory : "profile");
 
-  useEffect(() => registerWorkspaceDraft("profile", hasUnsavedChanges), [hasUnsavedChanges, registerWorkspaceDraft]);
+  useEffect(() => registerWorkspaceDraft("profile", unsaved), [unsaved, registerWorkspaceDraft]);
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 900px)");
@@ -54,15 +45,24 @@ export default function Profile() {
     return () => media.removeEventListener("change", updateOrientation);
   }, []);
 
-  function requestCategory(category: SettingsCategory) {
+  const requestCategory = useCallback((category: ProfileSettingsCategory) => {
     if (category === activeCategory || busy) return false;
-    if (hasUnsavedChanges) {
+    if (unsaved) {
       setDiscardTarget(category);
       return false;
     }
-    setActiveCategory(category);
+    setManualCategory(category);
     return true;
-  }
+  }, [activeCategory, busy, unsaved]);
+
+  useEffect(() => {
+    const handleSettingsCategory = (event: Event) => {
+      const category = (event as CustomEvent<ProfileSettingsCategory>).detail;
+      if (isProfileSettingsCategory(category)) requestCategory(category);
+    };
+    window.addEventListener(profileSettingsCategoryEvent, handleSettingsCategory);
+    return () => window.removeEventListener(profileSettingsCategoryEvent, handleSettingsCategory);
+  }, [requestCategory]);
 
   function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     let nextIndex: number | undefined;
@@ -79,9 +79,10 @@ export default function Profile() {
   function confirmDiscard() {
     if (!discardTarget) return;
     const target = discardTarget;
-    setActiveCategory(target);
+    setManualCategory(target);
     setDiscardTarget(null);
     setHasUnsavedChanges(false);
+    setGuidanceDirty(false);
     requestAnimationFrame(() => tabRefs.current[categories.findIndex(category => category.id === target)]?.focus());
   }
 
@@ -168,6 +169,7 @@ export default function Profile() {
             onDirtyChange={setHasUnsavedChanges}
           />
           <ReferralLink />
+          <GuidancePreferences onDirtyChange={setGuidanceDirty} />
         </div>}
 
         {activeCategory === "appearance" && <ProfileTheme />}

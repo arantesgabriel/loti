@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { createServices } from "@/lib/domain/services";
 import { DomainError } from "@/lib/domain/errors";
 import { usesOrdersWorkflow } from "@/lib/domain/orders-workflow";
+import { recordCommittedInsert } from "@/lib/onboarding/milestones";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const requestSchema = z.object({ operation: z.enum(["workspace.select", "favorite.save", "favorite.delete", "collection.save", "collection.delete", "preference.view", "purchase.save", "purchase.finalize", "item.favorite", "item.save", "item.delete", "item.status", "item.status.person"]), id: z.string().min(1).optional(), input: z.unknown().optional(), workspaceId: z.string().min(1).optional() }).strict();
@@ -24,7 +25,7 @@ export async function POST(request: Request) {
     const user = await requireUser();
     const body = requestSchema.parse(await request.json());
     if (body.operation === "purchase.finalize" && await usesOrdersWorkflow(db) && request.headers.get("X-Loti-Workflow") !== "orders-v2") throw new DomainError("O fluxo de pedidos mudou. Atualize a página antes de finalizar.",409,"ORDERS_WORKFLOW_UPGRADE_REQUIRED");
-    const service = createServices(db, user.id);
+    const service = createServices(db, user.id, undefined, recordCommittedInsert);
     const id = () => z.string().min(1).parse(body.id);
     const workspaceId = body.workspaceId;
     if (body.operation !== "workspace.select" && !workspaceId) throw new DomainError("Atualize a tela para confirmar o espaço antes de salvar.", 409, "EXPECTED_WORKSPACE_REQUIRED");
