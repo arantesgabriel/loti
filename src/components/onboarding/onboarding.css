@@ -205,12 +205,46 @@
   .h3c-primary:active { transform: none; }
 }
 .guidance-preferences { margin-top: 28px; border-top: 1px solid var(--border); padding-top: 24px; }
-.guidance-preferences .h3c-questions { max-width: 720px; }
-.guidance-preferences .h3c-chips { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.guidance-preferences-heading { margin-bottom: 18px; }
+.guidance-preferences-heading h3 { font-size: 16px; font-weight: 630; line-height: 1.35; }
+.guidance-preferences-heading p { max-width: 640px; margin: 5px 0 0; font-size: 13px; line-height: 1.5; }
+.guidance-preferences .h3c-questions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; max-width: 880px; }
+.guidance-preferences-questions fieldset { min-width: 0; margin: 0; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.guidance-preferences-questions legend { width: 100%; font-size: 13px; line-height: 1.4; }
+.guidance-preferences .h3c-questions fieldset .h3c-chips { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; margin-top: 12px; }
+.guidance-preferences .h3c-chip > span { min-height: 42px; padding: 9px 11px; border-color: var(--border); color: var(--foreground); background: var(--surface-muted); font-size: 12px; }
+.guidance-preferences .h3c-chip input:checked + span { color: var(--primary-ink); background: var(--primary-soft); border-color: var(--primary-ink); }
+.guidance-preferences .h3c-chip input:focus-visible + span { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .guidance-preferences .h3c-desktop { display: initial !important; }
 .guidance-preferences .h3c-mobile { display: none !important; }
 .guidance-preferences .h3c-chip > span { transition: none; }
-.guidance-preferences .h3c-text { margin-right: 20px; }
+.guidance-preferences-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; max-width: 880px; min-height: 64px; padding: 10px 0 14px; border-bottom: 1px solid var(--border); }
+.guidance-preferences .h3c-text { margin: 0; color: var(--muted); font-size: 13px !important; }
+.guidance-preferences .h3c-text:disabled { cursor: not-allowed; opacity: .55; }
+.guidance-preferences-save { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap; }
+.guidance-preferences-save [role="status"] { color: var(--primary-ink); font-size: 12px; }
+.guidance-preferences-help { display: grid; max-width: 880px; }
+.guidance-preferences-help-setting, .guidance-preferences-intro { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 68px; padding: 12px 0; }
+.guidance-preferences-intro { border-top: 1px solid var(--border); }
+.guidance-preferences-help h4 { font-size: 13px; font-weight: 600; line-height: 1.4; }
+.guidance-preferences-help p { margin: 3px 0 0; font-size: 12px; line-height: 1.45; }
+.guidance-preferences-help .button { flex: 0 0 auto; min-height: 40px; }
+.guidance-preferences > .error { max-width: 880px; }
+@media (max-width: 700px) {
+  .guidance-preferences .h3c-questions { grid-template-columns: minmax(0,1fr); gap: 10px; }
+  .guidance-preferences-questions fieldset { padding: 14px; }
+}
+@media (max-width: 520px) {
+  .guidance-preferences { margin-top: 24px; padding-top: 20px; }
+  .guidance-preferences-actions { align-items: flex-start; flex-direction: column; gap: 8px; padding: 10px 0 14px; }
+  .guidance-preferences-save { width: 100%; justify-content: space-between; }
+  .guidance-preferences-save > .button { margin-left: auto; }
+  .guidance-preferences-help-setting, .guidance-preferences-intro { align-items: flex-start; }
+  .guidance-preferences-help-setting { flex-direction: column; gap: 10px; }
+  .guidance-preferences-help-setting > .button { align-self: flex-start; }
+  .guidance-preferences-intro { flex-direction: column; gap: 10px; }
+  .guidance-preferences-intro > .button { max-width: 100%; white-space: normal; text-align: left; }
+}
 .guidance-help { margin: 0 0 20px; padding: 18px 20px; border: 1px solid var(--border); background: var(--surface-muted); border-radius: 12px; }
 .guidance-help h2 { font-size: 15px; margin: 0 0 5px; }
 .guidance-help p { font-size: 13px; color: var(--muted); margin: 0 0 8px; }

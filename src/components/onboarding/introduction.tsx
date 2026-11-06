@@ -12,10 +12,10 @@ const cards = [
   { title: "Pacotes", Icon: Package, description: "Organize envios, etapas e custos.", short: "Organize seus envios" },
 ];
 
-export function ProfileQuestions({ experience, intent, onExperience, onIntent }: {
-  experience: Experience; intent: UsageIntent; onExperience: (v: Experience) => void; onIntent: (v: UsageIntent) => void;
+export function ProfileQuestions({ experience, intent, onExperience, onIntent, className }: {
+  experience: Experience; intent: UsageIntent; onExperience: (v: Experience) => void; onIntent: (v: UsageIntent) => void; className?: string;
 }) {
-  return <div className="h3c-questions">
+  return <div className={"h3c-questions" + (className ? ` ${className}` : "")}>
     <fieldset role="radiogroup"><legend><span className="h3c-desktop">Qual é sua experiência com importação?</span><span className="h3c-mobile">Sua experiência</span></legend>
       <div className="h3c-chips">{experiences.map(([value, label]) => <label key={value} className="h3c-chip">
         <input type="radio" name="guidance-experience" value={value} checked={experience === value} onChange={() => onExperience(value)} />
