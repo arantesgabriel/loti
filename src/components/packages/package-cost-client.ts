@@ -3,9 +3,13 @@ import type { CostTrackingView } from "@/lib/domain/package-cost-reading";
 export type CostTrackingSummary = Pick<CostTrackingView, "tracking" | "purchase" | "packages" | "charges" | "calculation" | "items" | "refundsSummary">;
 export type CostResponse<T> = { ok: boolean; status: number; data?: T; error?: string; code?: string };
 
-export async function costRequest<T>(url: string, operation?: Record<string, unknown>): Promise<CostResponse<T>> {
+export async function costRequest<T>(url: string, operation?: Record<string, unknown>, workspaceId?: string): Promise<CostResponse<T>> {
   try {
-    const response = await fetch(url, operation ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(operation) } : { cache: "no-store" });
+    const target = workspaceId && !operation
+      ? (() => { const parsed = new URL(url, window.location.origin); parsed.searchParams.set("workspaceId", workspaceId); return parsed.pathname + parsed.search; })()
+      : url;
+    if (operation && workspaceId && operation.workspaceId && operation.workspaceId !== workspaceId) return { ok: false, status: 409, code: "WORKSPACE_CONTEXT_CHANGED", error: "O espaço ativo mudou. Atualize a tela antes de salvar novamente." };
+    const response = await fetch(target, operation ? { method: "POST", headers: { "Content-Type": "application/json", "X-Loti-Workflow":"orders-v2" }, body: JSON.stringify({ ...operation, ...(workspaceId ? { workspaceId } : {}) }) } : { cache: "no-store" });
     const result = await response.json();
     return { ok: response.ok, status: response.status, data: result.data as T | undefined, error: result.error as string | undefined, code: result.code as string | undefined };
   } catch {

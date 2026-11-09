@@ -10,6 +10,7 @@ import { DomainError } from "./errors";
 import { allocateItemCost, type CostParticipant, type SharingMode } from "./cost-sharing";
 import { serializeDomainTransaction } from "./transaction-lock";
 import { initializePurchaseCosts } from "./purchase-cost-initialization";
+import { retryInsertTransaction, type InsertEvidence } from "./insert-evidence";
 
 function isUniqueConstraint(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
@@ -32,26 +33,28 @@ function checkedComposition(quantity: number, unitPriceCents: number | null, sha
   }
 }
 
-export function purchaseServices(db: AppDatabase, userId: string) {
+export function purchaseServices(db: AppDatabase, userId: string, initializeCosts = initializePurchaseCosts, insertEvidence?: InsertEvidence) {
   const guard = authorization(db, userId);
   type PurchaseTransaction = Parameters<Parameters<AppDatabase["transaction"]>[0]>[0];
 
-  async function transact<T>(operation: (tx: PurchaseTransaction) => Promise<T>): Promise<T> {
-    return serializeDomainTransaction(() => db.transaction(operation));
+  async function transact<T>(operation: (tx: PurchaseTransaction) => Promise<T>, retryInsert = false): Promise<T> {
+    return serializeDomainTransaction(() => retryInsert ? retryInsertTransaction(() => db.transaction(operation)) : db.transaction(operation));
   }
 
-  async function savePurchase(input: unknown, id?: string) {
+  async function savePurchase(input: unknown, id?: string, expectedWorkspaceId?: string) {
     const value = purchaseInput.parse(input);
     try {
       return await transact(async tx => {
         const txGuard = authorization(tx, userId);
+        if (expectedWorkspaceId) await txGuard.requireActiveWorkspaceContext(expectedWorkspaceId);
         if (id) {
-          await txGuard.requireEditablePurchase(id);
+          const purchase = await txGuard.requireEditablePurchase(id);
+          if (expectedWorkspaceId && purchase.workspaceId !== expectedWorkspaceId) throw new DomainError("A compra pertence a outro espaço. Atualize a tela antes de salvar novamente.", 409, "WORKSPACE_CONTEXT_CHANGED");
           const updated = await tx.update(purchases).set(value).where(and(eq(purchases.id, id), eq(purchases.status, "active"))).returning().get();
           if (!updated) throw new DomainError("Esta compra foi finalizada e não pode ser alterada.", 409);
           return updated;
         }
-        const { workspaceId } = await txGuard.requireWorkspaceMember();
+        const { workspaceId } = expectedWorkspaceId ? await txGuard.requireWorkspaceAccess(expectedWorkspaceId) : await txGuard.requireWorkspaceAccess();
         const active = await tx.select().from(purchases).where(and(eq(purchases.workspaceId, workspaceId), eq(purchases.status, "active"))).get();
         if (active) throw new DomainError("Já existe uma compra ativa neste espaço.", 409);
         return tx.insert(purchases).values({ id: crypto.randomUUID(), workspaceId, ...value, status: "active", createdBy: userId, createdAt: new Date(), finalizedAt: null }).returning().get();
@@ -62,10 +65,14 @@ export function purchaseServices(db: AppDatabase, userId: string) {
     }
   }
 
-  async function requireEditableItem(tx: Parameters<Parameters<AppDatabase["transaction"]>[0]>[0], id: string) {
+  async function requireEditableItem(tx: Parameters<Parameters<AppDatabase["transaction"]>[0]>[0], id: string, expectedWorkspaceId?: string) {
     const item = await tx.select().from(purchaseItems).where(eq(purchaseItems.id, id)).get();
     if (!item) throw new DomainError("Item não encontrado.", 404);
     const purchase = await authorization(tx, userId).requireEditablePurchase(item.purchaseId);
+    if (expectedWorkspaceId) {
+      await authorization(tx, userId).requireActiveWorkspaceContext(expectedWorkspaceId);
+      if (purchase.workspaceId !== expectedWorkspaceId) throw new DomainError("O item pertence a outro espaço. Atualize a tela antes de salvar novamente.", 409, "WORKSPACE_CONTEXT_CHANGED");
+    }
     return { item, purchase };
   }
 
@@ -74,11 +81,12 @@ export function purchaseServices(db: AppDatabase, userId: string) {
     await tx.insert(purchaseItemParticipants).values(stored.map(participant => ({ purchaseItemId: itemId, ...participant }))).run();
   }
 
-  async function addFavoriteToPurchase(input: unknown) {
+  async function addFavoriteToPurchase(input: unknown, expectedWorkspaceId?: string) {
     const value = favoriteToItemInput.parse(input);
     return transact(async tx => {
       const txGuard = authorization(tx, userId);
-      const purchase = await txGuard.requireActivePurchase();
+      if (expectedWorkspaceId) await txGuard.requireActiveWorkspaceContext(expectedWorkspaceId);
+      const purchase = await txGuard.requireActivePurchase(expectedWorkspaceId);
       const favorite = await txGuard.requireFavorite(value.favoriteId);
       if (favorite.workspaceId !== purchase.workspaceId) throw new DomainError("Favorito de outro espaço.", 403);
       await txGuard.requireWorkspaceMembers(value.participants.map(p => p.personId), purchase.workspaceId);
@@ -86,17 +94,19 @@ export function purchaseServices(db: AppDatabase, userId: string) {
       const now = new Date(), id = crypto.randomUUID();
       const item = await tx.insert(purchaseItems).values({ id, purchaseId: purchase.id, sourceFavoriteId: favorite.id, personId: value.personId, sharingMode: composition.sharingMode, createdBy: userId, name: favorite.name, url: favorite.url, platform: favorite.platform, visualKey: favorite.visualKey, variant: value.variant ?? null, notes: value.notes ?? null, quantity: value.quantity, unitPriceCents: value.unitPriceCents, cartStatus: "pending", createdAt: now, updatedAt: now }).returning().get();
       await persistParticipants(tx, id, composition.stored);
+      await insertEvidence?.(tx, { actorId: userId, workspaceId: purchase.workspaceId, source: "purchase_item" });
       return item;
-    });
+    }, !!insertEvidence);
   }
 
-  async function saveManualItem(input: unknown, id?: string) {
+  async function saveManualItem(input: unknown, id?: string, expectedWorkspaceId?: string) {
     const value = itemInput.parse(input);
     const composition = checkedComposition(value.quantity, value.unitPriceCents, value.sharingMode, value.participants);
     const derived = { platform: detectPlatform(value.url), visualKey: resolveProductCategory(value.name), updatedAt: new Date() };
     return transact(async tx => {
       const txGuard = authorization(tx, userId);
-      const purchase = id ? (await requireEditableItem(tx, id)).purchase : await txGuard.requireActivePurchase();
+      if (expectedWorkspaceId) await txGuard.requireActiveWorkspaceContext(expectedWorkspaceId);
+      const purchase = id ? (await requireEditableItem(tx, id, expectedWorkspaceId)).purchase : await txGuard.requireActivePurchase(expectedWorkspaceId);
       await txGuard.requireWorkspaceMembers(value.participants.map(p => p.personId), purchase.workspaceId);
       const fields = { name: value.name, url: value.url, personId: value.personId, sharingMode: composition.sharingMode, variant: value.variant ?? null, notes: value.notes ?? null, quantity: value.quantity, unitPriceCents: value.unitPriceCents, ...derived };
       if (id) {
@@ -108,46 +118,56 @@ export function purchaseServices(db: AppDatabase, userId: string) {
       const newId = crypto.randomUUID(), now = new Date();
       const item = await tx.insert(purchaseItems).values({ id: newId, purchaseId: purchase.id, sourceFavoriteId: null, ...fields, createdBy: userId, cartStatus: "pending", createdAt: now }).returning().get();
       await persistParticipants(tx, newId, composition.stored);
+      await insertEvidence?.(tx, { actorId: userId, workspaceId: purchase.workspaceId, source: "purchase_item" });
       return item;
-    });
+    }, !id && !!insertEvidence);
   }
 
-  async function removePurchaseItem(id: string) {
+  async function removePurchaseItem(id: string, expectedWorkspaceId?: string) {
     await transact(async tx => {
-      const { item } = await requireEditableItem(tx, id);
+      const { item } = await requireEditableItem(tx, id, expectedWorkspaceId);
       await tx.delete(purchaseItems).where(and(eq(purchaseItems.id, item.id), eq(purchaseItems.purchaseId, item.purchaseId))).run();
     });
   }
 
-  async function setCartStatus(id: string, input: unknown) {
+  async function setCartStatus(id: string, input: unknown, expectedWorkspaceId?: string) {
     const status = z.enum(["pending", "added"]).parse(input);
     await transact(async tx => {
-      const { item } = await requireEditableItem(tx, id);
+      const { item } = await requireEditableItem(tx, id, expectedWorkspaceId);
       await tx.update(purchaseItems).set({ cartStatus: status, updatedAt: new Date() }).where(and(eq(purchaseItems.id, item.id), eq(purchaseItems.purchaseId, item.purchaseId))).run();
     });
   }
 
-  async function setPersonItemsStatus(id: string, input: unknown) {
+  async function setPersonItemsStatus(id: string, input: unknown, expectedWorkspaceId?: string) {
     const value = z.object({ personId: z.string().min(1), status: z.enum(["pending", "added"]) }).strict().parse(input);
     await transact(async tx => {
       const txGuard = authorization(tx, userId), purchase = await txGuard.requireEditablePurchase(id);
-      await txGuard.requireWorkspaceMember(purchase.workspaceId);
-      await authorization(tx, value.personId).requireWorkspaceMember(purchase.workspaceId);
+      if (expectedWorkspaceId) {
+        await txGuard.requireActiveWorkspaceContext(expectedWorkspaceId);
+        if (purchase.workspaceId !== expectedWorkspaceId) throw new DomainError("A compra pertence a outro espaço. Atualize a tela antes de salvar novamente.", 409, "WORKSPACE_CONTEXT_CHANGED");
+      }
+      await txGuard.requireWorkspaceMembers([value.personId], purchase.workspaceId);
       const previousStatus = value.status === "added" ? "pending" : "added";
-      const participantRows = await tx.select({ itemId: purchaseItemParticipants.purchaseItemId }).from(purchaseItemParticipants).where(eq(purchaseItemParticipants.personId, value.personId)).all();
+      const participantRows = await tx.select({ itemId: purchaseItemParticipants.purchaseItemId })
+        .from(purchaseItemParticipants)
+        .innerJoin(purchaseItems, eq(purchaseItems.id, purchaseItemParticipants.purchaseItemId))
+        .where(and(eq(purchaseItems.purchaseId, id), eq(purchaseItemParticipants.personId, value.personId))).all();
       const itemIds = [...new Set(participantRows.map(row => row.itemId))];
       if (!itemIds.length) return;
       await tx.update(purchaseItems).set({ cartStatus: value.status, updatedAt: new Date() }).where(and(eq(purchaseItems.purchaseId, id), eq(purchaseItems.cartStatus, previousStatus), inArray(purchaseItems.id, itemIds))).run();
     });
   }
 
-  async function finalizePurchase(id: string, confirmed: unknown) {
+  async function finalizePurchase(id: string, confirmed: unknown, expectedWorkspaceId?: string) {
     if (confirmed !== true) throw new DomainError("Confirme a finalização da compra.");
     return transact(async tx => {
-      await authorization(tx, userId).requireEditablePurchase(id);
+      const txGuard = authorization(tx, userId);
+      if (expectedWorkspaceId) await txGuard.requireActiveWorkspaceContext(expectedWorkspaceId);
+      const purchase = await txGuard.requireEditablePurchase(id);
+      if (expectedWorkspaceId && purchase.workspaceId !== expectedWorkspaceId) throw new DomainError("A compra pertence a outro espaço. Atualize a tela antes de salvar novamente.", 409, "WORKSPACE_CONTEXT_CHANGED");
       const finalized = await tx.update(purchases).set({ status: "finalized", finalizedAt: new Date() }).where(and(eq(purchases.id, id), eq(purchases.status, "active"))).returning().get();
       if (!finalized) throw new DomainError("Esta compra foi finalizada e não pode ser alterada.", 409);
-      await initializePurchaseCosts(tx, finalized, userId);
+      await initializeCosts(tx, finalized, userId);
       return finalized;
     });
   }

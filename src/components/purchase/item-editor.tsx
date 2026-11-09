@@ -28,11 +28,14 @@ function modeName(mode: SharingMode) {
 }
 
 export function ItemEditor({ favorite, item, onClose, onBack }: { favorite?: Favorite; item?: ClientItem; onClose: () => void; onBack?: () => void }) {
-  const { data, busy, mutate } = useWorkspace();
+  const { data, busy, mutate, registerWorkspaceDraft } = useWorkspace();
+  const personal = data.workspaceKind === "personal";
   const [error, setError] = useState("");
   const savedParticipants = item?.participants ?? [];
-  const defaultPeople = savedParticipants.length ? savedParticipants.map(participant => participant.personId) : [item?.personId ?? favorite?.ownerId ?? data.currentUser.id];
-  const { register, handleSubmit, control, formState: { errors } } = useForm<Fields>({
+  const defaultPeople = personal ? [data.currentUser.id] : savedParticipants.length ? savedParticipants.map(participant => participant.personId) : [item?.personId ?? favorite?.ownerId ?? data.currentUser.id];
+  const [initialPeopleKey] = useState(() => JSON.stringify(defaultPeople));
+  const [initialDraftsKey] = useState(() => JSON.stringify(initialDrafts(item)));
+  const { register, handleSubmit, control, formState: { errors, isDirty } } = useForm<Fields>({
     defaultValues: {
       name: item?.name ?? favorite?.name ?? "",
       url: item?.url ?? favorite?.url ?? "",
@@ -44,9 +47,11 @@ export function ItemEditor({ favorite, item, onClose, onBack }: { favorite?: Fav
   });
   const [price, quantity] = useWatch({ control, name: ["price", "quantity"] });
   const [personIds, setPersonIds] = useState(defaultPeople);
-  const [sharingMode, setSharingMode] = useState<SharingMode>(savedParticipants.length > 1 ? item?.sharingMode ?? "equal" : "equal");
+  const [sharingMode, setSharingMode] = useState<SharingMode>(!personal && savedParticipants.length > 1 ? item?.sharingMode ?? "equal" : "equal");
   const [drafts, setDrafts] = useState<AllocationDrafts>(() => initialDrafts(item));
   const [compositionNeedsReview, setCompositionNeedsReview] = useState(false);
+  const workspaceDraftDirty = isDirty || JSON.stringify(personIds) !== initialPeopleKey || JSON.stringify(drafts) !== initialDraftsKey || (Boolean(favorite) && !item) || compositionNeedsReview;
+  useEffect(() => registerWorkspaceDraft("purchase-item-editor", workspaceDraftDirty), [registerWorkspaceDraft, workspaceDraftDirty]);
   const previousPricing = useRef(`${item?.quantity ?? 1}|${moneyInput(item?.unitPriceCents ?? favorite?.priceCents ?? null)}`);
 
   useEffect(() => {
@@ -125,14 +130,14 @@ export function ItemEditor({ favorite, item, onClose, onBack }: { favorite?: Fav
     if (await mutate(favorite ? "item.favorite" : "item.save", payload, item?.id, item ? "Alterações salvas" : "Adicionado à compra")) onClose();
   }
 
-  return <Surface sheet title={item ? "Editar item" : favorite ? "Adicionar à compra" : "Item manual"} description="A quantidade representa unidades físicas. Dividir o custo não cria produtos extras." open onOpenChange={open => { if (!open && !busy) onClose(); }}>
+  return <Surface sheet title={item ? "Editar item" : favorite ? "Adicionar à compra" : "Item manual"} description={personal ? "Os itens e o status do carrinho ficam neste espaço pessoal." : "A quantidade representa unidades físicas. Dividir o custo não cria produtos extras."} open onOpenChange={open => { if (!open && !busy) onClose(); }}>
     {onBack && <Button variant="ghost" size="sm" onClick={onBack}><ArrowLeft size={16}/>Voltar</Button>}
     <form onSubmit={handleSubmit(save)}>
       {favorite ? <div className="selected-favorite"><ProductCategoryMarker visualKey={favorite.visualKey}/><div><h3>{favorite.name}</h3><p className="muted">Uma cópia independente do favorito.</p></div></div> : <>
         <label>Nome do produto<input autoFocus maxLength={200} {...register("name", { required: "Informe um nome." })}/>{errors.name && <span className="field-error">{errors.name.message}</span>}</label>
         <label>Link do produto<input type="url" {...register("url", { required: "Informe um link." })}/>{errors.url && <span className="field-error">{errors.url.message}</span>}</label>
       </>}
-      <fieldset className="sharing-fieldset">
+      {personal ? <p className="muted personal-participant-note">Você é a única pessoa deste espaço e participa deste item.</p> : <fieldset className="sharing-fieldset">
         <legend>Quem divide o custo?</legend>
         <p className="muted">A seleção inicial continua sendo {favorite ? "a pessoa dona do favorito" : "você"}. Pessoas novas não entram automaticamente.</p>
         <div className="sharing-people-list">{data.members.map(member => {
@@ -143,8 +148,8 @@ export function ItemEditor({ favorite, item, onClose, onBack }: { favorite?: Fav
             {selected && sharingMode === "fixed" && <label className="sharing-person-value">Parte de {member.name} (R$)<input inputMode="decimal" aria-label={`Parte de ${member.name} em reais`} placeholder="0,00" value={drafts.fixed[member.id] ?? ""} onChange={event => updateDraft("fixed", member.id, event.target.value)}/></label>}
           </div>;
         })}</div>
-      </fieldset>
-      {personIds.length > 1 && <label>Como dividir?<select value={sharingMode} onChange={event => changeMode(event.target.value as SharingMode)}>
+      </fieldset>}
+      {!personal && personIds.length > 1 && <label>Como dividir?<select value={sharingMode} onChange={event => changeMode(event.target.value as SharingMode)}>
         <option value="equal">Igualmente</option><option value="percentage">Por percentuais</option><option value="fixed">Por valores em reais</option>
       </select></label>}
       {sharingMode === "percentage" && personIds.length > 1 && <p className={`sharing-composition-total${totalPercentageBps === 10_000 && isPercentageComplete ? " closed" : ""}`}>Percentual informado: {moneyInput(totalPercentageBps)}%{totalPercentageBps !== 10_000 && <span> · deve fechar em 100%</span>}</p>}
@@ -161,10 +166,12 @@ export function ItemEditor({ favorite, item, onClose, onBack }: { favorite?: Fav
 }
 
 export function AddItemFlow({ initialFavorite, onClose }: { initialFavorite?: Favorite; onClose: () => void }) {
-  const { data } = useWorkspace();
+  const { data, registerWorkspaceDraft } = useWorkspace();
   const [mode, setMode] = useState<"favorites" | "manual">("favorites");
   const [selected, setSelected] = useState<Favorite | undefined>(initialFavorite);
   const [search, setSearch] = useState("");
+  const workspaceDraftDirty = Boolean(selected || search || mode === "manual");
+  useEffect(() => registerWorkspaceDraft("purchase-add-item", workspaceDraftDirty), [registerWorkspaceDraft, workspaceDraftDirty]);
   if (selected || mode === "manual") return <ItemEditor favorite={selected} onClose={onClose} onBack={() => { setSelected(undefined); setMode("favorites"); }}/>
   const results = data.favorites.filter(candidate => normalizeText(`${candidate.name} ${candidate.variant ?? ""}`).includes(normalizeText(search)));
   return <Surface sheet title="Adicionar item" description="Escolha um favorito ou crie um item só para esta compra." open onOpenChange={open => { if (!open) onClose(); }}>

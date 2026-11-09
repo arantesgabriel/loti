@@ -1,0 +1,72 @@
+{
+  "project": "Loti",
+  "scope": "Pedidos",
+  "status": "DESIGN_FREEZE",
+  "freezeDate": "2026-10-28",
+  "penpot": {
+    "baseUrl": "https://design.penpot.app/",
+    "fileName": "Loti Design System",
+    "fileId": "64ee36db-f4d2-8047-8008-dbff2f7d7205",
+    "versionLabel": "DESIGN FREEZE · Pedidos Loti · 04A/04B · Desktop + Mobile · 28-10-2026",
+    "pages": {
+      "desktop": "64ee36db-f4d2-8047-8008-dbff2f7d7206",
+      "mobile": "a1bbb7fd-3432-8020-8008-dc06a4172c3f"
+    },
+    "frames": {
+      "desktop": {
+        "listFull": "a1bbb7fd-3432-8020-8008-dc1025ad5d01",
+        "listWarehouseFull": "5ca59f9e-acdb-805d-8008-dc6866fe5212",
+        "listAvailableFull": "5ca59f9e-acdb-805d-8008-dc686749155b",
+        "preparationOpen": "a1bbb7fd-3432-8020-8008-dc0414fc70a0",
+        "itemJBL": "a1bbb7fd-3432-8020-8008-dc043cdce618",
+        "itemAnker": "a1bbb7fd-3432-8020-8008-dc0d2b624202",
+        "itemBaseus": "a1bbb7fd-3432-8020-8008-dc0d2d28483a",
+        "itemUGREEN": "a1bbb7fd-3432-8020-8008-dc0d2c8b2c2d",
+        "itemFender": "a1bbb7fd-3432-8020-8008-dc0d2dadf4ce",
+        "itemDAddario": "a1bbb7fd-3432-8020-8008-dc0d2ed9a286",
+        "qcImport": "a1bbb7fd-3432-8020-8008-dc0d983244ec",
+        "qcPreview": "a1bbb7fd-3432-8020-8008-dc0d99f849de",
+        "qcGallery": "a1bbb7fd-3432-8020-8008-dc0de566dfcd",
+        "editItem": "a1bbb7fd-3432-8020-8008-dc0de671e55e",
+        "refund": "a1bbb7fd-3432-8020-8008-dc0de90b4c2d",
+        "reviewPackage": "a1bbb7fd-3432-8020-8008-dc0db047241b"
+      },
+      "mobile": {
+        "M01_list": "a1bbb7fd-3432-8020-8008-dc06d1144484",
+        "M02_filters": "a1bbb7fd-3432-8020-8008-dc06d64b2cf2",
+        "M03_prepare": "a1bbb7fd-3432-8020-8008-dc06d69dc9f7",
+        "M04_quantity": "a1bbb7fd-3432-8020-8008-dc06d6e9639a",
+        "M05_importQC": "a1bbb7fd-3432-8020-8008-dc06d73aaecd",
+        "M06_reviewPackage": "a1bbb7fd-3432-8020-8008-dc06d78ee689",
+        "M07_itemJBL": "a1bbb7fd-3432-8020-8008-dc086358ee0a",
+        "M08_qcPhotos": "a1bbb7fd-3432-8020-8008-dc086547896c",
+        "M09_itemActions": "a1bbb7fd-3432-8020-8008-dc08652ad98a",
+        "M10_edit": "a1bbb7fd-3432-8020-8008-dc086564f6ad",
+        "M11_refund": "a1bbb7fd-3432-8020-8008-dc0865820d1d",
+        "M12_itemAnker": "a1bbb7fd-3432-8020-8008-dc09daadba75",
+        "M13_itemBaseus": "a1bbb7fd-3432-8020-8008-dc09db842368",
+        "M14_itemDAddario": "a1bbb7fd-3432-8020-8008-dc09dc03b0c0",
+        "M16_available": "a1bbb7fd-3432-8020-8008-dc0ac2aff7b8",
+        "M17_onTheWay": "a1bbb7fd-3432-8020-8008-dc0ac4f85156",
+        "M33_itemUGREEN": "a1bbb7fd-3432-8020-8008-dc10663cb087",
+        "M34_itemFender": "a1bbb7fd-3432-8020-8008-dc10670f2557"
+      }
+    }
+  },
+  "hardConstraints": [
+    "desktop_table_fills_available_width_when_drawer_closed",
+    "desktop_04A_preparation_drawer",
+    "desktop_04B_single_item_detail_drawer",
+    "mobile_no_side_drawer_ever",
+    "mobile_bottom_sheets_for_panels",
+    "quantity_stepper_min_0_max_real_available",
+    "qc_import_trigger_photo_plus_icon_only",
+    "qc_existing_associations_and_cover_preserved",
+    "backend_rules_are_authoritative",
+    "explicit_user_approval_between_phases",
+    "no_auto_merge_or_deploy"
+  ],
+  "phaseCount": 8,
+  "initialAuthorizedPhase": 0,
+  "automaticAdvance": false
+}

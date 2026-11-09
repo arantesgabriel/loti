@@ -158,7 +158,7 @@ function packageChargeTotal(charge: PackageChargeInput, packageUnits: number) {
   return { base: charge.value.amountCents, fee, total: checkedCents(BigInt(charge.value.amountCents) + BigInt(fee)) };
 }
 
-export function calculateCostTracking(input: { items: CostLineInput[]; packages: CostPackageInput[]; productsCharge: ProductChargeInput }) {
+export function calculateCostTracking(input: { items: CostLineInput[]; packages: CostPackageInput[]; productsCharge: ProductChargeInput; requirePackageCoverage?: boolean }) {
   const lines = [...input.items].sort((a, b) => a.itemOrder - b.itemOrder);
   const lineById = new Map(lines.map(line => [line.id, line]));
   if (lineById.size !== lines.length) throw new Error("Produto duplicado no acompanhamento.");
@@ -245,7 +245,7 @@ export function calculateCostTracking(input: { items: CostLineInput[]; packages:
     const cancelledQuantity = cancelledQuantities.get(line.id) ?? 0;
     if (allocatedQuantity > shippingQuantity) throw new Error("A quantidade alocada excede as unidades disponíveis para envio.");
     const pendingComponents = components.get(line.id)!.filter(component => component.pending).map(component => component.name);
-    if (allocatedQuantity < shippingQuantity) pendingComponents.push(`${shippingQuantity - allocatedQuantity} unidades sem pacote`);
+    if (input.requirePackageCoverage !== false && allocatedQuantity < shippingQuantity) pendingComponents.push(`${shippingQuantity - allocatedQuantity} unidades sem pacote`);
     const grossKnownTotal = checkedCents(components.get(line.id)!.reduce((sum, component) => sum + BigInt(component.value), 0n));
     const weightTotal = line.participants.reduce((sum, participant) => sum + BigInt(participant.weight), 0n);
     const compositionReady = line.participants.length > 0 && weightTotal > 0n;

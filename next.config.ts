@@ -4,6 +4,7 @@ const config: NextConfig = {
   agentRules: false,
   devIndicators: false,
   distDir: process.env.LOTI_NEXT_DIR ?? ".next",
+  ...(process.env.LOTI_NEXT_DIR?.startsWith(".next-orders-transition") ? {typescript:{tsconfigPath:"tsconfig.orders-transition.json"}} : {}),
   async headers() {
     return [{ source: "/:path*", headers: [
       { key: "X-Content-Type-Options", value: "nosniff" },

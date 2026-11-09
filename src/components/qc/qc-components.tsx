@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingState } from "@/components/ui/loading-state";
+
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, CircleAlert, CircleHelp, FileText, ImagePlus, Info, MoreVertical, RefreshCw, Star, Trash2 } from "lucide-react";
@@ -76,12 +78,12 @@ function subscribeSummary(key: string, listener: () => void) {
   listeners.add(listener); summaryListeners.set(key, listeners);
   return () => { listeners.delete(listener); if (!listeners.size) summaryListeners.delete(key); };
 }
-function summaryFor(userId: string, purchaseId: string) {
+function summaryFor(userId: string, purchaseId: string, workspaceId: string) {
   const key = summaryKey(userId, purchaseId);
   let cached = summaryCache.get(key);
   if (cached && cached.expiresAt <= Date.now()) { summaryCache.delete(key); cached = undefined; }
   if (!cached) {
-    const promise = fetch(`/api/purchases/${encodeURIComponent(purchaseId)}/qc`, { cache: "no-store", credentials: "same-origin" }).then(async response => {
+    const promise = fetch(`/api/purchases/${encodeURIComponent(purchaseId)}/qc?workspaceId=${encodeURIComponent(workspaceId)}`, { cache: "no-store", credentials: "same-origin" }).then(async response => {
       if (response.status === 401) resetQcClient();
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "Não foi possível carregar o QC.");
@@ -98,6 +100,8 @@ function invalidateSummary(purchaseId: string, clearBytes = true) {
   for (const [key] of summaryCache) if (key.endsWith(`:${purchaseId}`)) summaryCache.delete(key);
   for (const [key, listeners] of summaryListeners) if (key.endsWith(`:${purchaseId}`)) for (const listener of listeners) listener();
 }
+/** Notify existing galleries after the Orders global entry point uses QC commands. */
+export function invalidateQcPurchase(purchaseId: string) { invalidateSummary(purchaseId); }
 function useQcSummary(purchaseId: string, enabled = true) {
   const { data } = useWorkspace();
   const userId = data.currentUser.id, key = summaryKey(userId, purchaseId);
@@ -106,13 +110,15 @@ function useQcSummary(purchaseId: string, enabled = true) {
   useEffect(() => {
     if (!enabled) return;
     let active = true;
-    void summaryFor(userId, purchaseId).then(value => { if (active) setResult({ key, summary: value }); }).catch(() => { if (active) setResult(current => current?.key === key ? null : current); });
+    void summaryFor(userId, purchaseId, data.workspaceId).then(value => { if (active) setResult({ key, summary: value }); }).catch(() => { if (active) setResult(current => current?.key === key ? null : current); });
     return () => { active = false; };
-  }, [enabled, key, purchaseId, userId, version]);
+  }, [enabled, key, purchaseId, userId, version, data.workspaceId]);
   return { summary: result?.key === key ? result.summary : null };
 }
-async function qcRequest<T>(url: string, body?: unknown, method = "POST", signal?: AbortSignal) {
-  const response = await fetch(url, { method, credentials: "same-origin", cache: "no-store", ...(signal ? { signal } : {}), ...(body === undefined ? {} : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }) });
+async function qcRequest<T>(url: string, body?: unknown, method = "POST", signal?: AbortSignal, workspaceId?: string) {
+  const target = workspaceId && method !== "POST" ? (() => { const parsed = new URL(url, window.location.origin); parsed.searchParams.set("workspaceId", workspaceId); return parsed.pathname + parsed.search; })() : url;
+  const contextualBody = body && typeof body === "object" && !Array.isArray(body) && workspaceId ? { ...(body as Record<string, unknown>), workspaceId } : body;
+  const response = await fetch(target, { method, credentials: "same-origin", cache: "no-store", ...(signal ? { signal } : {}), ...(contextualBody === undefined ? {} : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(contextualBody) }) });
   if (response.status === 401) resetQcClient();
   let result: { data?: T; error?: string; code?: string; retryAfterSeconds?: number; upstreamStatus?: number } = {};
   let invalidBody = false;
@@ -158,7 +164,7 @@ export function QcImportPanel({ purchaseId, targets, compact = false }: { purcha
     activeRun.current = null; setBusy(false); setActiveSourceId(null); invalidateSummary(purchaseId);
   }
   async function refreshTransfer(importId: string, run?: QcRun) {
-    const snapshot = await qcRequest<QcTransferSnapshot>(`/api/qc/imports/${encodeURIComponent(importId)}`, undefined, "GET", run?.controller.signal);
+    const snapshot = await qcRequest<QcTransferSnapshot>(`/api/qc/imports/${encodeURIComponent(importId)}`, undefined, "GET", run?.controller.signal, workspace.workspaceId);
     if (!run || isRunCurrent(run)) setTransfer(snapshot);
     return snapshot;
   }
@@ -168,7 +174,7 @@ export function QcImportPanel({ purchaseId, targets, compact = false }: { purcha
     try {
       if (new TextEncoder().encode(raw).byteLength > 1024 * 1024) throw new Error("O JSON excede 1 MiB.");
       const data = JSON.parse(raw);
-      const result = await qcRequest<QcPrepared>(`/api/purchases/${encodeURIComponent(purchaseId)}/qc`, { operation: "prepare", data });
+      const result = await qcRequest<QcPrepared>(`/api/purchases/${encodeURIComponent(purchaseId)}/qc`, { operation: "prepare", data }, "POST", undefined, workspace.workspaceId);
       setPrepared(result); setConfirmed(false); setTransferComplete(false); setSelections(Object.fromEntries(result.rows.map(row => [row.externalKey, row.match.targetItemId ?? ""])));
       setExpandedRows(Object.fromEntries(result.rows.map((row, index) => [row.externalKey, index === 0])));
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Confira o JSON HubBuy."); }
@@ -184,7 +190,7 @@ export function QcImportPanel({ purchaseId, targets, compact = false }: { purcha
         const correction = !!row.existingItemId && row.existingItemId !== targetId;
         return { externalKey: row.externalKey, targetKey: targetId, ...(correction ? { correctExisting: true, expectedTargetKey: row.existingItemId } : {}) };
       });
-      const result = await qcRequest<{ revision: number; linked: number; ignored: number; pendingMatching: number; sources: number; eligibleSources: number }>(`/api/qc/imports/${encodeURIComponent(prepared.importId)}`, { operation: "confirm", expectedRevision: prepared.revision, choices }, "POST", run.controller.signal);
+      const result = await qcRequest<{ revision: number; linked: number; ignored: number; pendingMatching: number; sources: number; eligibleSources: number }>(`/api/qc/imports/${encodeURIComponent(prepared.importId)}`, { operation: "confirm", expectedRevision: prepared.revision, choices }, "POST", run.controller.signal, workspace.workspaceId);
       if (!isRunCurrent(run)) return;
       setRevision(result.revision); setTransferTotal(result.eligibleSources); setConfirmed(true); setPendingMatchingCount(result.pendingMatching); setTransfer(null); setImportedIds(new Set()); invalidateSummary(purchaseId);
       const matchingNote = result.pendingMatching ? ` ${result.pendingMatching} ocorrência(s) aguardam vínculo manual.` : "";
@@ -207,7 +213,7 @@ export function QcImportPanel({ purchaseId, targets, compact = false }: { purcha
         nextRevision = snapshot.revision;
         return snapshot;
       }
-      await qcRequest<QcSummary>(progressUrl, undefined, "GET", run.controller.signal);
+      await qcRequest<QcSummary>(progressUrl, undefined, "GET", run.controller.signal, workspace.workspaceId);
       return null;
     };
     let previousSnapshotFingerprint: string | null = null;
@@ -220,7 +226,7 @@ export function QcImportPanel({ purchaseId, targets, compact = false }: { purcha
       try {
         result = await qcRequest<QcBatchResult>(progressUrl, importId
           ? { operation: "batch", expectedRevision: nextRevision }
-          : { operation: "batch", externalItemId }, "POST", run.controller.signal);
+          : { operation: "batch", externalItemId }, "POST", run.controller.signal, workspace.workspaceId);
       } catch (cause) {
         if (!isRunCurrent(run)) return;
         if (cause instanceof QcRequestError && cause.code === "QC_TRANSFER_ACTIVE") {
@@ -325,7 +331,7 @@ export function QcImportPanel({ purchaseId, targets, compact = false }: { purcha
     const run = beginRun();
     if (!run) return;
     try {
-      const result = await qcRequest<{ externalItemId: string; targetKey: string; revision: number; pendingSources: number }>(`/api/purchases/${encodeURIComponent(purchaseId)}/qc`, { operation: "resolve", externalItemId: row.externalItemId, expectedRevision: row.revision, targetKey }, "POST", run.controller.signal);
+      const result = await qcRequest<{ externalItemId: string; targetKey: string; revision: number; pendingSources: number }>(`/api/purchases/${encodeURIComponent(purchaseId)}/qc`, { operation: "resolve", externalItemId: row.externalItemId, expectedRevision: row.revision, targetKey }, "POST", run.controller.signal, workspace.workspaceId);
       if (!isRunCurrent(run)) return;
       setBatchInfo("Vínculo salvo. Iniciando a transferência das fotos desta ocorrência."); invalidateSummary(purchaseId);
       if (result.pendingSources > 0) await drainBatches(run, { externalItemId: result.externalItemId });
@@ -336,7 +342,7 @@ export function QcImportPanel({ purchaseId, targets, compact = false }: { purcha
   async function reconcile() {
     setError(""); setBusy(true);
     try {
-      await qcRequest<{ processed: number; partial: boolean }>(`/api/purchases/${encodeURIComponent(purchaseId)}/qc`, { operation: "reconcile" });
+      await qcRequest<{ processed: number; partial: boolean }>(`/api/purchases/${encodeURIComponent(purchaseId)}/qc`, { operation: "reconcile" }, "POST", undefined, workspace.workspaceId);
       setBatchInfo("A tentativa de transferência ou remoção foi concluída.");
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível reconciliar QC."); }
     finally { setBusy(false); setConfirmReconcile(false); invalidateSummary(purchaseId); }
@@ -457,24 +463,40 @@ function QcPreviewImage({ image, userId, workspaceId, purchaseId, alt, priority 
     return () => { active = false; request.release(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [cacheKey, image.previewUrl, key, priority, scope]);
   if (!image.previewUrl || current?.failed) return <span className="qc-preview-placeholder" aria-label="Preview QC indisponível">Preview indisponível</span>;
-  if (!current?.src) return <span className="qc-preview-placeholder" aria-label="Carregando preview QC">Carregando preview…</span>;
+  if (!current?.src) return <span className="qc-preview-placeholder"><LoadingState label="Carregando miniatura…" /></span>;
   // Authenticated, bounded private WebP; never send it through Next's optimizer.
   // eslint-disable-next-line @next/next/no-img-element
   return <img src={current.src} referrerPolicy="no-referrer" alt={alt} onError={() => onUnavailableRef.current?.()} />;
 }
 
-export function QcGalleryButton({ purchaseId, itemId, itemName, canManageHere = false, triggerLabel = "Ver QC", triggerAriaLabel, costThumbnails, costIdentity }: { purchaseId: string; itemId: string; itemName: string; canManageHere?: boolean; triggerLabel?: string; triggerAriaLabel?: string; costThumbnails?: "desktop" | "mobile"; costIdentity?: { marker: ReactNode; label: ReactNode } }) {
+export function QcGalleryButton({ purchaseId, itemId, itemName, canManageHere = false, triggerLabel = "Ver QC", triggerAriaLabel, costThumbnails, costIdentity, galleryPreview = false, bottomSheet = false }: { purchaseId: string; itemId: string; itemName: string; canManageHere?: boolean; triggerLabel?: string; triggerAriaLabel?: string; costThumbnails?: "desktop" | "mobile"; costIdentity?: { marker: ReactNode; label: ReactNode }; galleryPreview?: boolean; bottomSheet?: boolean }) {
   const { data } = useWorkspace();
   const userId = data.currentUser.id;
   const [open, setOpen] = useState(false), [images, setImages] = useState<QcImage[]>([]), [loading, setLoading] = useState(false), [pageLoading, setPageLoading] = useState(false), [error, setError] = useState(""), [selectedImageId, setSelectedImageId] = useState<string | null>(null), [pageOffset, setPageOffset] = useState(0), [totalCount, setTotalCount] = useState(0), [primaryImageId, setPrimaryImageId] = useState<string | null>(null), [presentationRevision, setPresentationRevision] = useState(0), [canSetCover, setCanSetCover] = useState(false), [original, setOriginal] = useState<{ imageId: string | null; url: string; stage: "idle" | "loading" | "source" | "fallback-loading" | "fallback" | "failed" }>({ imageId: null, url: "", stage: "idle" }), [confirmDelete, setConfirmDelete] = useState<string | null>(null), [deleting, setDeleting] = useState(false), [savingCover, setSavingCover] = useState(false);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const { summary } = useQcSummary(purchaseId, !costThumbnails || open);
   const { ref: identityRef, visible, near } = useQcVisibility();
-  const presentation = useQcPresentation(qcScope(userId, data.workspaceId), purchaseId, itemId, !!costThumbnails && visible, near);
+  const presentation = useQcPresentation(qcScope(userId, data.workspaceId), purchaseId, itemId, galleryPreview || (!!costThumbnails && visible), galleryPreview || near);
+  const [previewWait, setPreviewWait] = useState(false);
+  const galleryReturnFocus = useRef<HTMLElement | null>(null);
+  const galleryReturnImageId = useRef<string | null>(null);
+  const galleryPreviewRef = useRef<HTMLDivElement>(null);
+  const galleryFallback = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!galleryPreview) return;
+    const buttons = galleryPreviewRef.current?.querySelectorAll<HTMLButtonElement>("button") ?? [];
+    galleryReturnFocus.current = Array.from(buttons).find(button => button.dataset.qcImageId === galleryReturnImageId.current) ?? galleryFallback.current;
+  }, [galleryPreview, presentation]);
+  useEffect(() => {
+    if (!galleryPreview || presentation) return;
+    const timer = window.setTimeout(() => setPreviewWait(true), 5000);
+    return () => window.clearTimeout(timer);
+  }, [galleryPreview, presentation]);
   const countValue = costThumbnails ? presentation?.qcCount ?? 0 : summary ? summary.counts.find(row => row.itemId === itemId)?.count ?? 0 : null;
   const [failedCover, setFailedCover] = useState<QcImage | null>(null);
   const asImage = (image: NonNullable<typeof presentation>["previews"][number]): QcImage => ({ ...image, id: image.imageId });
   const costImages = presentation?.previews.map(asImage) ?? [];
+  const galleryImages = [presentation?.coverPreview, ...(presentation?.previews ?? [])].filter((preview): preview is NonNullable<typeof preview> => !!preview).map(asImage).filter((image, index, images) => images.findIndex(candidate => candidate.id === image.id) === index);
   const candidateCover = presentation?.coverPreview ? asImage(presentation.coverPreview) : null;
   const costCover = candidateCover && !(failedCover?.id === candidateCover.id && failedCover.previewUrl === candidateCover.previewUrl) ? candidateCover : null;
   const unavailableCover = useCallback(() => { setFailedCover(costCover); }, [costCover]);
@@ -485,23 +507,23 @@ export function QcGalleryButton({ purchaseId, itemId, itemName, canManageHere = 
     setLoading(true); setError("");
     try {
       const target = targetImageId ? `&imageId=${encodeURIComponent(targetImageId)}` : "";
-      const page = await qcRequest<GalleryPage>(`/api/purchases/${encodeURIComponent(purchaseId)}/qc?itemId=${encodeURIComponent(itemId)}&offset=${offset}${target}`, undefined, "GET");
+      const page = await qcRequest<GalleryPage>(`/api/purchases/${encodeURIComponent(purchaseId)}/qc?itemId=${encodeURIComponent(itemId)}&offset=${offset}${target}`, undefined, "GET", undefined, data.workspaceId);
       setImages(page.images); setPageOffset(page.pageOffset); setTotalCount(page.totalCount); setPrimaryImageId(page.primaryImageId); setPresentationRevision(page.presentationRevision); setCanSetCover(page.canSetCover);
       setSelectedImageId(current => page.images.some(image => image.id === (targetImageId ?? current)) ? targetImageId ?? current : page.images[0]?.id ?? null);
       return page;
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível carregar a galeria QC."); return null; }
     finally { setLoading(false); }
-  }, [itemId, purchaseId]);
+  }, [data.workspaceId, itemId, purchaseId]);
   useEffect(() => subscribeSummary(summaryKey(userId, purchaseId), () => { if (open) void load(pageOffset); }), [load, open, pageOffset, purchaseId, userId]);
   useEffect(() => {
     if (!open || !selectedImageId) return;
     let active = true;
     const imageId = selectedImageId;
-    void qcRequest<{ sourceUrl: string }>(`/api/qc/images/${encodeURIComponent(imageId)}/source`, undefined, "GET").then(result => {
+    void qcRequest<{ sourceUrl: string }>(`/api/qc/images/${encodeURIComponent(imageId)}/source`, undefined, "GET", undefined, data.workspaceId).then(result => {
       if (active) setOriginal({ imageId, url: result.sourceUrl, stage: "source" });
     }).catch(cause => { if (active) { setOriginal({ imageId, url: "", stage: "failed" }); setError(cause instanceof Error ? cause.message : "Não foi possível abrir a foto QC."); } });
     return () => { active = false; };
-  }, [open, selectedImageId]);
+  }, [data.workspaceId, open, selectedImageId]);
   const openGallery = (imageId?: string) => { setOpen(true); setSelectedImageId(null); void load(0, imageId); };
   const navigate = useCallback(async (direction: -1 | 1) => {
     if (pageLoading || !images.length || selectedIndex < 0) return;
@@ -533,7 +555,7 @@ export function QcGalleryButton({ purchaseId, itemId, itemName, canManageHere = 
     const imageId = selectedImageId;
     setOriginal({ imageId, url: "", stage: "fallback-loading" });
     try {
-      const result = await qcRequest<{ url: string }>(`/api/qc/images/${encodeURIComponent(imageId)}/fallback`);
+      const result = await qcRequest<{ url: string }>(`/api/qc/images/${encodeURIComponent(imageId)}/fallback`, {}, "POST", undefined, data.workspaceId);
       if (selectedImageId === imageId) setOriginal({ imageId, url: result.url, stage: "fallback" });
     } catch { if (selectedImageId === imageId) setOriginal({ imageId, url: "", stage: "failed" }); }
   }
@@ -545,7 +567,7 @@ export function QcGalleryButton({ purchaseId, itemId, itemName, canManageHere = 
     if (!selectedImageId) return;
     setSavingCover(true); setError("");
     try {
-      const result = await qcRequest<{ primaryImageId: string; revision: number }>(`/api/purchases/${encodeURIComponent(purchaseId)}/items/${encodeURIComponent(itemId)}/qc-presentation`, { imageId: selectedImageId, expectedRevision: presentationRevision });
+      const result = await qcRequest<{ primaryImageId: string; revision: number }>(`/api/purchases/${encodeURIComponent(purchaseId)}/items/${encodeURIComponent(itemId)}/qc-presentation`, { imageId: selectedImageId, expectedRevision: presentationRevision }, "POST", undefined, data.workspaceId);
       setPrimaryImageId(result.primaryImageId); setPresentationRevision(result.revision); invalidateSummary(purchaseId, false);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Não foi possível salvar a capa QC."); }
     finally { setSavingCover(false); }
@@ -556,9 +578,9 @@ export function QcGalleryButton({ purchaseId, itemId, itemName, canManageHere = 
     const preferredId = removingCurrent ? images[oldIndex + 1]?.id ?? images[oldIndex - 1]?.id ?? null : selectedImageId;
     setDeleting(true); setError("");
     try {
-      const result = await qcRequest<{ status: string; message?: string }>(`/api/qc/images/${encodeURIComponent(imageId)}`, undefined, "DELETE");
-      let page = await qcRequest<GalleryPage>(`/api/purchases/${encodeURIComponent(purchaseId)}/qc?itemId=${encodeURIComponent(itemId)}&offset=${pageOffset}`, undefined, "GET");
-      if (!page.images.length && page.pageOffset > 0) page = await qcRequest<GalleryPage>(`/api/purchases/${encodeURIComponent(purchaseId)}/qc?itemId=${encodeURIComponent(itemId)}&offset=${Math.max(0, page.pageOffset - 12)}`, undefined, "GET");
+      const result = await qcRequest<{ status: string; message?: string }>(`/api/qc/images/${encodeURIComponent(imageId)}`, undefined, "DELETE", undefined, data.workspaceId);
+      let page = await qcRequest<GalleryPage>(`/api/purchases/${encodeURIComponent(purchaseId)}/qc?itemId=${encodeURIComponent(itemId)}&offset=${pageOffset}`, undefined, "GET", undefined, data.workspaceId);
+      if (!page.images.length && page.pageOffset > 0) page = await qcRequest<GalleryPage>(`/api/purchases/${encodeURIComponent(purchaseId)}/qc?itemId=${encodeURIComponent(itemId)}&offset=${Math.max(0, page.pageOffset - 12)}`, undefined, "GET", undefined, data.workspaceId);
       setImages(page.images); setPageOffset(page.pageOffset); setTotalCount(page.totalCount); setPrimaryImageId(page.primaryImageId); setPresentationRevision(page.presentationRevision); setCanSetCover(page.canSetCover);
       if (removingCurrent) setSelectedImageId(page.images.some(image => image.id === preferredId) ? preferredId : page.images[0]?.id ?? null);
       if (result.status === "pending") setError(result.message ?? "A remoção privada ficou pendente de reconciliação.");
@@ -569,6 +591,12 @@ export function QcGalleryButton({ purchaseId, itemId, itemName, canManageHere = 
   const currentPosition = selectedIndex < 0 ? 0 : pageOffset + selectedIndex + 1;
   const originalView = open && selectedImageId && original.imageId === selectedImageId ? original : { imageId: selectedImageId, url: "", stage: open && selectedImageId ? "loading" as const : "idle" as const };
   return <>
+    {galleryPreview && <div ref={galleryPreviewRef} className="qc-gallery-preview" aria-label={`Previews QC de ${itemName}`} onClickCapture={event => {
+      const trigger = (event.target as Element).closest<HTMLButtonElement>("button[data-qc-image-id]");
+      if (trigger) { galleryReturnImageId.current = trigger.dataset.qcImageId ?? null; galleryReturnFocus.current = trigger; }
+    }}>
+      {!presentation ? previewWait ? <span role="status">Use Ver fotos para tentar novamente.</span> : <LoadingState label="Carregando miniaturas…" /> : presentation.qcCount === 0 ? <span>Nenhuma foto QC disponível para este produto.</span> : galleryImages.map((image, index) => <button type="button" key={image.id} data-qc-image-id={image.id} aria-label={`Abrir foto QC ${index + 1} de ${itemName}`} onClick={() => openGallery(image.id)}><QcPreviewImage image={image} userId={userId} workspaceId={data.workspaceId} purchaseId={purchaseId} alt={`Preview QC ${index + 1} de ${itemName}`} /></button>)}
+    </div>}
     {costThumbnails ? <div className="cost-compact-identity" ref={identityRef}>
       {costCover ? <button type="button" className={`qc-product-photo qc-product-cover${costThumbnails === "mobile" ? " qc-product-photo-count" : ""}`} data-qc-image-id={costCover.id} aria-label={`Abrir capa QC de ${itemName}${costThumbnails === "mobile" ? ` · ${countValue} fotos` : ""}`} onClick={() => openGallery(costCover.id)}><QcPreviewImage image={costCover} priority={0} userId={userId} workspaceId={data.workspaceId} purchaseId={purchaseId} alt={`Capa QC de ${itemName}`} onUnavailable={unavailableCover}/>{costThumbnails === "mobile" && <span className="qc-product-photo-badge" aria-hidden="true">{countValue}</span>}</button> : costIdentity?.marker}
       {costIdentity?.label}
@@ -579,9 +607,9 @@ export function QcGalleryButton({ purchaseId, itemId, itemName, canManageHere = 
         {costImages.map((image, index) => <button type="button" className="qc-product-photo" key={image.id} data-qc-image-id={image.id} aria-label={`Abrir foto QC ${index + 1} de ${itemName}`} onClick={() => openGallery(image.id)}><QcPreviewImage image={image} userId={userId} workspaceId={data.workspaceId} purchaseId={purchaseId} alt=""/></button>)}
         <button type="button" className="qc-product-photos-more" aria-label={`Ver ${countValue} fotos QC de ${itemName}`} onClick={() => openGallery()}>Ver mais</button>
       </>}
-    </div>}</div> : <Button type="button" variant="ghost" size="sm" onClick={() => openGallery()} aria-label={triggerAriaLabel ?? `Ver QC de ${itemName}`}>{triggerLabel}{countValue === null ? "" : ` (${countValue})`}</Button>}
-    <Surface open={open} onOpenChange={value => { setOpen(value); if (!value) { setSelectedImageId(null); setError(""); } }} title={`QC · ${itemName}`} className="qc-viewer-surface">
-      {loading && <p className="muted" role="status">Carregando fotos QC…</p>}
+    </div>}</div> : <Button ref={galleryFallback} type="button" variant="ghost" size="sm" onClick={event => { if (galleryPreview) { galleryReturnImageId.current = null; galleryReturnFocus.current = event.currentTarget; } openGallery(); }} aria-label={triggerAriaLabel ?? `Ver QC de ${itemName}`}>{triggerLabel}{countValue === null ? "" : ` (${countValue})`}</Button>}
+    <Surface open={open} onOpenChange={value => { setOpen(value); if (!value) { setSelectedImageId(null); setError(""); } }} title={`QC · ${itemName}`} sheet={bottomSheet} returnFocusTo={galleryPreview ? galleryReturnFocus : undefined} className={`qc-viewer-surface${bottomSheet ? " orders-foundation orders-bottom-sheet" : ""}`}>
+      {loading && <LoadingState label="Carregando fotos QC…" />}
       {error && <p className="error" role="alert">{error}</p>}
       {!selectedImageId && !loading && !images.length && !error && <p className="muted">Nenhuma foto QC disponível para este produto.</p>}
       {selectedImage && <div className="qc-viewer-content">
@@ -589,7 +617,7 @@ export function QcGalleryButton({ purchaseId, itemId, itemName, canManageHere = 
         <div className="qc-viewer-main" onTouchStart={event => { touchStart.current = { x: event.touches[0]!.clientX, y: event.touches[0]!.clientY }; }} onTouchEnd={event => { const start = touchStart.current; if (!start) return; const dx = event.changedTouches[0]!.clientX - start.x, dy = event.changedTouches[0]!.clientY - start.y; touchStart.current = null; if (Math.abs(dx) > 44 && Math.abs(dy) < 90) void navigate(dx < 0 ? 1 : -1); }}>
           <Button className="qc-viewer-prev" variant="ghost" size="icon" aria-label="Foto anterior" disabled={pageLoading || currentPosition <= 1} onClick={() => void navigate(-1)}><ChevronLeft size={22}/></Button>
           <div className="qc-viewer-photo" aria-label={`Foto QC ${currentPosition} de ${totalCount}`}>
-            {originalView.stage === "loading" && <p className="muted" role="status">Carregando foto original…</p>}
+            {originalView.stage === "loading" && <LoadingState label="Carregando foto original…" />}
             {originalView.stage === "fallback-loading" && <p className="muted" role="status">Renovando backup privado…</p>}
             {originalView.stage === "failed" && <div className="qc-image-unavailable" role="status"><span>Foto indisponível</span><Button variant="outline" size="sm" onClick={() => void requestFallback()}>Renovar backup</Button></div>}
             {originalView.url && (originalView.stage === "source" || originalView.stage === "fallback") && <>
@@ -601,7 +629,7 @@ export function QcGalleryButton({ purchaseId, itemId, itemName, canManageHere = 
           <Button className="qc-viewer-next" variant="ghost" size="icon" aria-label="Próxima foto" disabled={pageLoading || currentPosition >= totalCount} onClick={() => void navigate(1)}><ChevronRight size={22}/></Button>
         </div>
         <p className="qc-viewer-occurrence">{selectedImage.occurrence || "Ocorrência HubBuy"}</p>
-        {pageLoading && <p className="muted" role="status">Carregando próxima página…</p>}
+        {pageLoading && <LoadingState label="Carregando próxima página…" />}
         <div className="qc-viewer-thumbnails" aria-label="Navegação por previews">{images.map((image, index) => <button type="button" className={`qc-viewer-thumb${selectedImage.id === image.id ? " is-selected" : ""}`} key={image.id} aria-label={`Selecionar foto ${pageOffset + index + 1}`} aria-current={selectedImage.id === image.id ? "true" : undefined} onClick={() => setSelectedImageId(image.id)}><QcPreviewImage image={image} userId={userId} workspaceId={data.workspaceId} purchaseId={purchaseId} alt="" /></button>)}</div>
         <div className="qc-viewer-actions">
           {canManageHere && manage && canSetCover && <Button type="button" variant="ghost" size="sm" disabled={savingCover || primaryImageId === selectedImage.id} onClick={() => void saveCover()}><Star size={16} fill={primaryImageId === selectedImage.id ? "currentColor" : "none"}/>{savingCover ? "Salvando capa…" : primaryImageId === selectedImage.id ? "Capa atual" : "Usar como capa QC"}</Button>}

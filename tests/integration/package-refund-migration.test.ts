@@ -4,7 +4,8 @@ import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import { openDatabase } from "@/lib/db/connection";
-import { purchaseCostCharges, purchaseCostOrders, purchaseCostPackageEvents, purchaseCostParticipants, purchaseCostTrackings, purchaseItemCosts, purchaseItems, purchasePackages, purchases, user, workspaceMembers, workspaces } from "@/lib/db/schema";
+import { insertSharedWorkspaces } from "./helpers";
+import { purchaseCostCharges, purchaseCostOrders, purchaseCostPackageEvents, purchaseCostParticipants, purchaseCostTrackings, purchaseItemCosts, purchaseItems, purchasePackages, purchases, user, workspaceMembers } from "@/lib/db/schema";
 
 describe("package refund additive migration", () => {
   it("upgrades from migration 0004, preserves an existing paid snapshot and repeats without creating refunds", async () => {
@@ -20,7 +21,7 @@ describe("package refund additive migration", () => {
       await migrate(db, { migrationsFolder: previousMigrations });
       const now = new Date("2026-10-14T12:00:00Z");
       await db.insert(user).values({ id: "alice", name: "Alice", email: "alice@refund.test", emailVerified: true, createdAt: now, updatedAt: now }).run();
-      await db.insert(workspaces).values({ id: "workspace", name: "Loti", createdAt: now }).run();
+      await insertSharedWorkspaces({ db, client }, [{ id: "workspace", name: "Loti", createdAt: now }]);
       await db.insert(workspaceMembers).values({ workspaceId: "workspace", userId: "alice", createdAt: now }).run();
       await db.insert(purchases).values({ id: "history", workspaceId: "workspace", name: "History", status: "finalized", createdBy: "alice", createdAt: now, finalizedAt: now }).run();
       await db.insert(purchaseItems).values({ id: "item", purchaseId: "history", sourceFavoriteId: null, personId: "alice", createdBy: "alice", name: "SSD", url: "https://example.test", platform: "other", visualKey: "ssd_nvme", variant: "1TB", notes: null, quantity: 2, unitPriceCents: 5000, cartStatus: "added", createdAt: now, updatedAt: now, sharingMode: "equal" }).run();
@@ -60,7 +61,7 @@ describe("package refund additive migration", () => {
 
       const now = new Date("2026-10-14T12:00:00Z");
       await db.insert(user).values({ id: "alice", name: "Alice", email: "alice@package-migration.test", emailVerified: true, createdAt: now, updatedAt: now }).run();
-      await db.insert(workspaces).values({ id: "workspace", name: "Loti", createdAt: now }).run();
+      await insertSharedWorkspaces({ db, client }, [{ id: "workspace", name: "Loti", createdAt: now }]);
       await db.insert(workspaceMembers).values({ workspaceId: "workspace", userId: "alice", createdAt: now }).run();
       await db.insert(purchases).values({ id: "history", workspaceId: "workspace", name: "History", status: "finalized", createdBy: "alice", createdAt: now, finalizedAt: now }).run();
       await db.insert(purchaseCostTrackings).values({ id: "tracking", purchaseId: "history", workspaceId: "workspace", status: "open", revision: 0, createdBy: "alice", createdAt: now, updatedBy: "alice", updatedAt: now, closedAt: null, closedBy: null }).run();

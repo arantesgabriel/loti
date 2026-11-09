@@ -1,5 +1,7 @@
 "use client";
 
+import { LoadingState } from "@/components/ui/loading-state";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { Archive, ArrowDown, ArrowUp, ChevronDown, ChevronRight, Coins, Info, Plus, Search, Trash2 } from "lucide-react";
@@ -13,6 +15,7 @@ import type { IndividualRight } from "@/lib/domain/hubbuy-rights-presentation";
 import { HubBuyIndividualRights } from "./hubbuy-individual-rights";
 import type { PersonBalanceHistory } from "@/lib/domain/hubbuy-balance-traceability";
 import { HubBuyBalanceAdjustmentSurface } from "./hubbuy-balance-adjustment-surface";
+import { useWorkspace } from "@/components/workspace-provider";
 import type { hubbuyBalanceServices } from "@/lib/domain/hubbuy-balance-services";
 import "./hubbuy-accounts.css";
 
@@ -23,7 +26,8 @@ type Statement = Awaited<ReturnType<ReturnType<typeof hubbuyBalanceServices>["re
 const localDateTime = () => { const date = new Date(Date.now() - new Date().getTimezoneOffset() * 60_000); return date.toISOString().slice(0, 16); };
 const formatBrlCents = formatBrlMinor;
 
-export function HubBuyAccountsPanel({ workspaceId, actorId, members, initialAccounts }: { workspaceId: string; actorId: string; members: { id: string; name: string }[]; initialAccounts: Account[] }) {
+export function HubBuyAccountsPanel({ workspaceId, actorId, members, initialAccounts, personal = false }: { workspaceId: string; actorId: string; members: { id: string; name: string }[]; initialAccounts: Account[]; personal?: boolean }) {
+  const { registerWorkspaceDraft } = useWorkspace();
   const [adjustmentDraft, setAdjustmentDraft] = useState<{ accountId: string; reversal?: { id: string; reason: string | null } } | null>(null);
   const [statementDetail, setStatementDetail] = useState<Statement["entries"][number] | null>(null);
   const [accounts, setAccounts] = useState<Account[]>(initialAccounts);
@@ -61,6 +65,8 @@ export function HubBuyAccountsPanel({ workspaceId, actorId, members, initialAcco
   const actionsTrigger = useRef<HTMLButtonElement>(null);
   const menuAction = useRef<(() => void) | null>(null);
 
+  useEffect(() => registerWorkspaceDraft("hubbuy-account-editor", createOpen || !!reconcilingId || !!zeroActivation || !!archiveDraft || !!deleteDraft || !!adjustmentDraft), [registerWorkspaceDraft, createOpen, reconcilingId, zeroActivation, archiveDraft, deleteDraft, adjustmentDraft]);
+
   async function refreshAccounts() {
     const result = await costRequest<Account[]>(`/api/hubbuy/accounts?workspaceId=${encodeURIComponent(workspaceId)}`);
     if (result.ok && result.data) setAccounts(result.data);
@@ -69,23 +75,23 @@ export function HubBuyAccountsPanel({ workspaceId, actorId, members, initialAcco
   const loadBalance = useCallback(async (accountId: string) => {
     setBalanceLoading(current => ({ ...current, [accountId]: true }));
     setBalanceErrors(current => ({ ...current, [accountId]: null }));
-    const result = await costRequest<AccountBalance>(`/api/hubbuy/accounts/${encodeURIComponent(accountId)}`);
+    const result = await costRequest<AccountBalance>(`/api/hubbuy/accounts/${encodeURIComponent(accountId)}`, undefined, workspaceId);
     if (result.ok && result.data) setBalances(current => ({ ...current, [accountId]: result.data! }));
     else setBalanceErrors(current => ({ ...current, [accountId]: result.error ?? "Não foi possível carregar os direitos da conta." }));
     setBalanceLoading(current => ({ ...current, [accountId]: false }));
     return result.data ?? null;
-  }, []);
+  }, [workspaceId]);
 
   const loadStatement = useCallback(async (accountId: string, afterSequence?: number) => {
     setStatementLoading(current => ({ ...current, [accountId]: true }));
     setStatementErrors(current => ({ ...current, [accountId]: null }));
     const query = new URLSearchParams({ limit: "10", order: statementOrder, ...(afterSequence === undefined ? {} : { afterSequence: String(afterSequence) }) });
-    const result = await costRequest<Statement>(`/api/hubbuy/accounts/${encodeURIComponent(accountId)}/statement?${query}`);
+    const result = await costRequest<Statement>(`/api/hubbuy/accounts/${encodeURIComponent(accountId)}/statement?${query}`, undefined, workspaceId);
     if (result.ok && result.data) setStatements(current => ({ ...current, [accountId]: { accountId, entries: [...(afterSequence === undefined ? [] : current[accountId]?.entries ?? []), ...result.data!.entries], nextAfterSequence: result.data!.nextAfterSequence } }));
     else setStatementErrors(current => ({ ...current, [accountId]: result.error ?? "Não foi possível carregar o extrato." }));
     setStatementLoading(current => ({ ...current, [accountId]: false }));
     return result.data ?? null;
-  }, [statementOrder]);
+  }, [statementOrder, workspaceId]);
 
   const selectedAccount = accounts.find(account => account.id === selectedAccountId) ?? accounts[0];
   const selectedId = selectedAccount?.id;
@@ -109,7 +115,7 @@ export function HubBuyAccountsPanel({ workspaceId, actorId, members, initialAcco
     setSaving(true);
     const result = await costRequest<{ accountId: string }>("/api/hubbuy/accounts", {
       operation: "createAccount", workspaceId, idempotencyKey: crypto.randomUUID(), label: label.trim(), confirmZeroBalance: true,
-    });
+    }, workspaceId);
     setSaving(false);
     if (!result.ok) { toast.error(result.error ?? "Não foi possível cadastrar a conta."); return; }
     setCreateOpen(false);
@@ -125,7 +131,7 @@ export function HubBuyAccountsPanel({ workspaceId, actorId, members, initialAcco
     setSaving(true);
     const result = await costRequest(`/api/hubbuy/accounts/${encodeURIComponent(account.id)}`, {
       operation: "activate.zero", expectedRevision: account.revision, idempotencyKey: crypto.randomUUID(), confirmedNoPriorBalance: true,
-    });
+    }, workspaceId);
     setSaving(false);
     if (!result.ok) { toast.error(result.error ?? "Não foi possível ativar esta conta com saldo zero."); return; }
     setZeroActivation(null);
@@ -139,7 +145,7 @@ export function HubBuyAccountsPanel({ workspaceId, actorId, members, initialAcco
     setSaving(true);
     const result = await costRequest(`/api/hubbuy/accounts/${encodeURIComponent(account.id)}`, {
       operation: "archive", expectedRevision: account.revision, idempotencyKey: crypto.randomUUID(), reason: archiveReason.trim(),
-    });
+    }, workspaceId);
     setSaving(false);
     if (!result.ok) { toast.error(result.error ?? "Não foi possível arquivar esta conta."); return; }
     setArchiveDraft(null); setArchiveReason("");
@@ -154,7 +160,7 @@ export function HubBuyAccountsPanel({ workspaceId, actorId, members, initialAcco
     const result = await costRequest(`/api/hubbuy/accounts/${encodeURIComponent(account.id)}`, {
       operation: deleteDraft.discard ? "discard.incorrect" : "delete", expectedRevision: account.revision, idempotencyKey, reason: reason.trim(),
       ...(deleteDraft.discard ? { confirmedIncorrectRegistration: true } : {}),
-    });
+    }, workspaceId);
     setSaving(false);
     if (!result.ok) {
       setDeleteError(result.error ?? "Não foi possível excluir este cadastro.");
@@ -202,7 +208,7 @@ export function HubBuyAccountsPanel({ workspaceId, actorId, members, initialAcco
         mode, priorActivityDescription: mode === "remainder" ? reason.trim() : null,
         priorActivityOccurredAt: mode === "remainder" && priorDate ? new Date(`${priorDate}T12:00:00-03:00`).toISOString() : null,
         observedBalanceCnyMinor: observedCny, reason: reason.trim(), shares: normalizedShares,
-      });
+      }, workspaceId);
       setSaving(false);
       if (!result.ok) { toast.error(result.error ?? "Não foi possível concluir a conciliação."); return; }
       setReconcilingId(null); setObserved(""); setReason("");
@@ -217,7 +223,7 @@ export function HubBuyAccountsPanel({ workspaceId, actorId, members, initialAcco
   async function beginChronological(account: Account) {
     if (saving) return;
     setSaving(true);
-    const result = await costRequest(`/api/hubbuy/accounts/${encodeURIComponent(account.id)}`, { operation: "reconcile.start", mode: "chronological", expectedRevision: balances[account.id]?.account.revision ?? account.revision, idempotencyKey: crypto.randomUUID() });
+    const result = await costRequest(`/api/hubbuy/accounts/${encodeURIComponent(account.id)}`, { operation: "reconcile.start", mode: "chronological", expectedRevision: balances[account.id]?.account.revision ?? account.revision, idempotencyKey: crypto.randomUUID() }, workspaceId);
     setSaving(false);
     if (!result.ok) { toast.error(result.error ?? "Não foi possível iniciar a reconstrução."); return; }
     setReconciliationModes(current => ({ ...current, [account.id]: "chronological" }));
@@ -246,7 +252,7 @@ export function HubBuyAccountsPanel({ workspaceId, actorId, members, initialAcco
         operation: "reconcile.event", expectedRevision: balances[account.id]?.account.revision ?? account.revision, idempotencyKey: crypto.randomUUID(),
         eventType, description: eventDescription.trim(), sourceReference: eventReference.trim() || null,
         occurredAt: new Date(eventOccurredAt).toISOString(), amountCnyMinor: amountCny, shares: eventShares,
-      });
+      }, workspaceId);
       setSaving(false);
       if (!result.ok) { toast.error(result.error ?? "Não foi possível registrar o evento."); return; }
       setEventDescription(""); setEventReference(""); setEventAmount("");
@@ -263,7 +269,7 @@ export function HubBuyAccountsPanel({ workspaceId, actorId, members, initialAcco
 
   return <section className="hubbuy-workspace" aria-labelledby="hubbuy-accounts-title">
     <aside className="hubbuy-account-picker" aria-labelledby="hubbuy-accounts-title">
-      <h2 id="hubbuy-accounts-title">Minhas contas</h2>
+    <h2 id="hubbuy-accounts-title">{personal ? "Minhas contas" : "Contas do grupo"}</h2>
       <Button variant="soft" onClick={focusCreateAccount}><Plus size={17} aria-hidden="true"/>Adicionar conta</Button>
       <label className="hubbuy-account-search"><Search size={18} aria-hidden="true"/><span className="sr-only">Buscar conta</span><input type="search" placeholder="Buscar conta…" value={query} onChange={event => setQuery(event.target.value)}/></label>
       <label className="hubbuy-account-select">Conta selecionada<select value={selectedId ?? ""} disabled={saving || !accounts.length} onChange={event => setSelectedAccountId(event.target.value)}>{!accounts.length && <option value="">Nenhuma conta cadastrada</option>}{accounts.map(account => <option key={account.id} value={account.id}>{account.label} · {formatCnyMinor(account.balanceCnyMinor)}</option>)}</select></label>
@@ -356,7 +362,7 @@ export function HubBuyAccountsPanel({ workspaceId, actorId, members, initialAcco
                   <td className="hubbuy-entry-amount">{entry.direction === "credit" ? "+" : "−"} {formatCnyMinor(entry.amountCnyMinor)}</td>
                   <td>{entry.historicalBrlCents === null ? "Não informada" : formatBrlCents(entry.historicalBrlCents)}</td><td className="hubbuy-entry-amount">{formatCnyMinor(entry.balanceAfterCnyMinor)}</td>
                 </tr>)}
-                {!statement?.entries.length && <tr><td colSpan={6} className="hubbuy-statement-empty">{statementLoading[account.id] || !statement && !statementErrors[account.id] ? "Carregando movimentações…" : statementErrors[account.id] ? "Extrato indisponível." : "Nenhuma movimentação registrada nesta conta."}</td></tr>}
+                {!statement?.entries.length && <tr><td colSpan={6} className="hubbuy-statement-empty">{statementLoading[account.id] || !statement && !statementErrors[account.id] ? <LoadingState label="Carregando movimentações…" /> : statementErrors[account.id] ? "Extrato indisponível." : "Nenhuma movimentação registrada nesta conta."}</td></tr>}
               </tbody></table>
             </div>
             <p className="hubbuy-statement-mobile-hint muted">Deslize a tabela para ver os valores e o saldo após.</p>
@@ -364,8 +370,8 @@ export function HubBuyAccountsPanel({ workspaceId, actorId, members, initialAcco
             {statement?.nextAfterSequence !== null && statement?.nextAfterSequence !== undefined && !statementErrors[account.id] && <Button size="sm" variant="outline" disabled={statementLoading[account.id]} onClick={() => void loadStatement(account.id, statement.nextAfterSequence!)}>{statementLoading[account.id] ? "Carregando…" : "Carregar mais"}</Button>}
           </section>
         </div>;
-      })() : <div className="hubbuy-no-accounts"><Coins size={28} aria-hidden="true"/><h2>Nenhuma conta HubBuy cadastrada.</h2><p className="muted">Adicione a conta usada pelo grupo para acompanhar saldo e movimentações.</p><Button variant="soft" onClick={focusCreateAccount}><Plus size={17} aria-hidden="true"/>Adicionar primeira conta</Button></div>}
-      {createOpen && <Surface open title="Adicionar conta HubBuy" subtitle="A conta começa com saldo conhecido em ¥0. O primeiro crédito pode ser um reembolso recebido ou um crédito manual documentado." onOpenChange={open => { if (!saving) setCreateOpen(open); }}><form className="hubbuy-create-form" onSubmit={event => void createAccount(event)}><label><span className="sr-only">Adicionar conta HubBuy</span><input autoFocus ref={createInput} required maxLength={100} value={label} onChange={event => setLabel(event.target.value)} placeholder="Ex.: Conta principal do grupo"/></label><Button type="submit" variant="soft" disabled={saving || !label.trim()}><Plus size={16} aria-hidden="true"/>{saving ? "Salvando…" : "Criar conta · saldo ¥0"}</Button></form></Surface>}
+      })() : <div className="hubbuy-no-accounts"><Coins size={28} aria-hidden="true"/><h2>Nenhuma conta HubBuy cadastrada.</h2><p className="muted">{personal ? "Adicione sua conta para acompanhar saldo e movimentações." : "Adicione a conta usada pelo grupo para acompanhar saldo e movimentações."}</p><Button variant="soft" onClick={focusCreateAccount}><Plus size={17} aria-hidden="true"/>Adicionar primeira conta</Button></div>}
+      {createOpen && <Surface open title="Adicionar conta HubBuy" subtitle="A conta começa com saldo conhecido em ¥0. O primeiro crédito pode ser um reembolso recebido ou um crédito manual documentado." onOpenChange={open => { if (!saving) setCreateOpen(open); }}><form className="hubbuy-create-form" onSubmit={event => void createAccount(event)}><label><span className="sr-only">Adicionar conta HubBuy</span><input autoFocus ref={createInput} required maxLength={100} value={label} onChange={event => setLabel(event.target.value)} placeholder={personal ? "Ex.: Conta principal" : "Ex.: Conta principal do grupo"}/></label><Button type="submit" variant="soft" disabled={saving || !label.trim()}><Plus size={16} aria-hidden="true"/>{saving ? "Salvando…" : "Criar conta · saldo ¥0"}</Button></form></Surface>}
     </div>
     {adjustmentDraft && accounts.find(row => row.id === adjustmentDraft.accountId) && <HubBuyBalanceAdjustmentSurface key={adjustmentDraft.accountId + (adjustmentDraft.reversal?.id ?? "")} account={accounts.find(row => row.id === adjustmentDraft.accountId)!} actorId={actorId} workspaceId={workspaceId} members={members} reversal={adjustmentDraft.reversal} onClose={() => setAdjustmentDraft(null)} onRefresh={async () => { await refreshAccounts(); await loadBalance(adjustmentDraft.accountId); await loadStatement(adjustmentDraft.accountId); }}/>}
     {statementDetail && <Surface open title="Detalhes do ajuste" onOpenChange={open => { if (!open) setStatementDetail(null); }}><div className="hubbuy-adjustment-form"><p>{statementDetail.reason}</p><p>Registrado por {statementDetail.actorName ?? "Membro"} · {statementDetail.operationRecordedAt ? new Date(statementDetail.operationRecordedAt).toLocaleString("pt-BR") : "Data não informada"}</p><p>Ocorrência: {statementDetail.occurredAt ? new Date(statementDetail.occurredAt).toLocaleString("pt-BR") : "Não informada"}</p><p>{statementDetail.direction === "credit" ? "Entrada" : "Saída"}: {formatCnyMinor(statementDetail.amountCnyMinor)} · Base: {statementDetail.historicalBrlCents === null ? "Não informada" : formatBrlCents(statementDetail.historicalBrlCents)}</p>{statementDetail.adjustment?.externalReference && <p>Referência: {statementDetail.adjustment.externalReference}</p>}<ul>{statementDetail.adjustment?.shares.map(row => <li key={row.personId}>{members.find(member => member.id === row.personId)?.name ?? "Membro"}: {formatCnyMinor(row.amountCnyMinor)} · {formatBrlCents(row.historicalBrlCents)}</li>)}</ul>{statementDetail.adjustment?.reversedById && <p>Anulado pelo ajuste {statementDetail.adjustment.reversedById}.</p>}{statementDetail.adjustment?.reversesAdjustmentId && <p>Anulação do ajuste {statementDetail.adjustment.reversesAdjustmentId}.</p>}{statementDetail.adjustment?.canReverse ? <Button variant="outline" onClick={() => { setStatementDetail(null); setTimeout(() => setAdjustmentDraft({ accountId: selectedAccount!.id, reversal: { id: statementDetail.adjustment!.id, reason: statementDetail.reason } }), 0); }}>Anular ajuste</Button> : statementDetail.adjustment?.kind !== "reversal" && !statementDetail.adjustment?.reversedById && <p className="muted">Anulação indisponível. Créditos já consumidos e contas inativas preservam seu histórico.</p>}</div></Surface>}

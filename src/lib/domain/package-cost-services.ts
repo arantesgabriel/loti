@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { AppDatabase } from "../db/connection";
 import { financialOperations, hubbuyAccounts, hubbuyBalanceConsumptions, hubbuyBalanceCreditShares, hubbuyBalanceEntries, memberBalanceFinancingEntries, purchaseAdditionalOrderItems, purchaseCostCharges, purchaseCostOrders, purchaseOrderCorrections, purchaseCostPackageEvents, purchaseCostParticipants, purchaseCostRefundEvents, purchaseCostRefundParticipants, purchaseCostRefunds, purchaseCostReopenings, purchaseCostTrackings, purchaseItemCosts, purchaseItems, purchasePackageItems, purchasePackages, purchasePaymentAllocations, purchasePaymentComponents, purchaseRefundPaymentAllocations, workspaceCostSettings } from "../db/schema";
@@ -15,6 +15,9 @@ import { activateEmptyHubbuyAccountAtZeroInTransaction, calculateHubBuyBalanceSt
 import { allocateRefundCredit } from "./package-refund-calculations";
 import { refundUnitRangeCapacityCents } from "./refund-unit-capacity";
 import { purchaseOrderCorrectionServices } from "./purchase-order-corrections";
+import { usesOrdersWorkflow } from "./orders-workflow";
+import { logisticsEvents, logisticsPackages, logisticsReservations, orderWarehousePositions } from "../db/schema";
+import { isNull } from "drizzle-orm";
 
 const maxCost = 1_000_000_000_000;
 const revisionSchema = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
@@ -179,9 +182,9 @@ function isDatabaseBusy(error: unknown, seen = new Set<unknown>()): boolean {
   return candidate.code === "SQLITE_BUSY" || /SQLITE_BUSY|database is locked/i.test(candidate.message ?? "") || isDatabaseBusy(candidate.cause, seen);
 }
 
-export function packageCostServices(db: AppDatabase, userId: string) {
-  const orders = purchaseCostOrderServices(db, userId);
-  const correctAdditionalOrder = purchaseOrderCorrectionServices(db, userId).correct;
+export function packageCostServices(db: AppDatabase, userId: string, initializeCosts = initializePurchaseCosts, expectedWorkspaceId?: string) {
+  const orders = purchaseCostOrderServices(db, userId, expectedWorkspaceId);
+  const correctAdditionalOrder = purchaseOrderCorrectionServices(db, userId, expectedWorkspaceId).correct;
   const transact = <T>(operation: (tx: CostTransaction) => Promise<T>) => serializeDomainTransaction(async () => {
     for (let attempt = 0; ; attempt++) {
       try { return await db.transaction(operation); }
@@ -199,7 +202,10 @@ export function packageCostServices(db: AppDatabase, userId: string) {
     return transact(async tx => {
       const tracking = await tx.select().from(purchaseCostTrackings).where(eq(purchaseCostTrackings.id, trackingId)).get();
       if (!tracking) throw new DomainError("Acompanhamento de custos não encontrado.", 404);
-      await authorization(tx, userId).requireWorkspaceMember(tracking.workspaceId);
+      const access = authorization(tx, userId);
+      await access.requireWorkspaceAccess(tracking.workspaceId);
+      if (expectedWorkspaceId && expectedWorkspaceId !== tracking.workspaceId) throw new DomainError("O recurso pertence a outro espaço. Atualize a página antes de salvar.", 409, "WORKSPACE_CONTEXT_CHANGED");
+      await access.requireActiveWorkspaceContext(tracking.workspaceId);
       if (options.replayIf && await options.replayIf(tx, tracking)) return readCostTracking(tx, userId, trackingId);
       const requiredStatus = options.requiredStatus ?? "open";
       if (tracking.status !== requiredStatus) throw new DomainError(requiredStatus === "open" ? "Os custos estão encerrados. Reabra o acompanhamento para editar." : "Este acompanhamento ainda está aberto.", 409);
@@ -375,15 +381,17 @@ export function packageCostServices(db: AppDatabase, userId: string) {
 
   async function startTracking(purchaseId: string) {
     return transact(async tx => {
-      const purchase = await authorization(tx, userId).requirePurchase(purchaseId);
+      const purchase = await authorization(tx, userId).requirePurchaseAccess(purchaseId);
+      if (expectedWorkspaceId && expectedWorkspaceId !== purchase.workspaceId) throw new DomainError("A compra pertence a outro espaço. Atualize a tela antes de continuar.", 409, "WORKSPACE_CONTEXT_CHANGED");
+      await authorization(tx, userId).requireActiveWorkspaceContext(purchase.workspaceId);
       if (purchase.status !== "finalized") throw new DomainError("Finalize a compra antes de iniciar os custos.", 409);
-      try { return await initializePurchaseCosts(tx, purchase, userId); }
+      try { return await initializeCosts(tx, purchase, userId); }
       catch (error) { if (isUniqueConstraint(error)) { const existing = await tx.select().from(purchaseCostTrackings).where(eq(purchaseCostTrackings.purchaseId, purchaseId)).get(); if (existing) return existing; } throw error; }
     });
   }
 
   async function getTracking(id: string) { return readCostTracking(db, userId, id); }
-  async function list() { return listCostTrackings(db, userId); }
+  async function list(workspaceId?: string) { return listCostTrackings(db, userId, workspaceId); }
 
   async function getAdditionalRefundContext(tx: CostTransaction, trackingId: string, costItem: typeof purchaseItemCosts.$inferSelect) {
     if (await tx.select().from(purchaseOrderCorrections).where(eq(purchaseOrderCorrections.previousOrderId, costItem.orderId)).get()) throw new DomainError("Este pedido foi substituído por uma correção. Atualize a tela.", 409);
@@ -640,7 +648,15 @@ export function packageCostServices(db: AppDatabase, userId: string) {
       const alreadyCancelled = activeRefunds.reduce((sum, refund) => sum + refund.quantity, 0);
       const shippingQuantity = quantity - alreadyCancelled;
       if (value.quantity > shippingQuantity) throw new DomainError("A quantidade solicitada excede as unidades ainda enviáveis.", 409, "REFUND_INELIGIBLE_UNITS");
-      const unitStart = firstAvailableRefundUnit(activeRefunds.map(refund => ({ unitStart: refund.unitStart, quantity: refund.quantity })), quantity, value.quantity);
+      const ordersWorkflow = await usesOrdersWorkflow(tx);
+      const reservations = ordersWorkflow ? await tx.select().from(logisticsReservations).where(and(eq(logisticsReservations.costItemId,item.id),isNull(logisticsReservations.releasedAt))).all() : [];
+      if (ordersWorkflow) {
+        const position = await tx.select().from(orderWarehousePositions).where(eq(orderWarehousePositions.costItemId,item.id)).get();
+        if (!position || position.reviewState !== "confirmed") throw new DomainError("Confira a posição legada antes de solicitar um reembolso.",409);
+        if (value.packageRemovals.length || value.unassignedQuantity !== value.quantity) throw new DomainError("Retire as unidades do pacote explicitamente antes de solicitar o reembolso.",409);
+        packages.length = 0; assignments.length = 0;
+      }
+      const unitStart = firstAvailableRefundUnit([...activeRefunds.map(refund => ({ unitStart: refund.unitStart, quantity: refund.quantity })),...reservations.map(row=>({unitStart:row.unitIndex,quantity:1}))], quantity, value.quantity);
       const productTotalCents = additional ? additional.productBrlCents : (item.effectivePriceState === "no_charge" ? 0 : item.effectivePriceUnitCents!) * quantity;
       const chinaTotalCents = additional ? additional.chinaBrlCents : (item.chinaFreightState === "no_charge" ? 0 : item.chinaFreightUnitCents!) * quantity;
       const productCapacity = refundQuantityCapacity(productTotalCents, quantity, unitStart, value.quantity);
@@ -963,6 +979,8 @@ export function packageCostServices(db: AppDatabase, userId: string) {
       const tracking = await tx.select().from(purchaseCostTrackings).where(eq(purchaseCostTrackings.id, trackingId)).get();
       if (!tracking) throw new DomainError("Acompanhamento de custos não encontrado.", 404);
       await authorization(tx, userId).requireWorkspaceMember(tracking.workspaceId);
+      if (expectedWorkspaceId && expectedWorkspaceId !== tracking.workspaceId) throw new DomainError("O recurso pertence a outro espaço. Atualize a página antes de salvar.", 409, "WORKSPACE_CONTEXT_CHANGED");
+      await authorization(tx, userId).requireActiveWorkspaceContext(tracking.workspaceId);
       const prior = await tx.select().from(financialOperations).where(and(eq(financialOperations.workspaceId, tracking.workspaceId), eq(financialOperations.idempotencyKey, value.idempotencyKey))).get();
       if (prior) {
         if (prior.operationType !== "member_advance_settlement" || prior.payloadHash !== payloadHash) throw new DomainError("Esta chave de operação já foi usada com outros dados.", 409, "IDEMPOTENCY_CONFLICT");
@@ -1013,19 +1031,22 @@ export function packageCostServices(db: AppDatabase, userId: string) {
     });
   }
 
-  async function getSettings() {
-    const membership = await authorization(db, userId).requireWorkspaceMember();
-    const value = await db.select().from(workspaceCostSettings).where(eq(workspaceCostSettings.workspaceId, membership.workspaceId)).get();
-    return { workspaceId: membership.workspaceId, pixBps: value?.pixBps ?? 100, cardBps: value?.cardBps ?? 500, updatedAt: value?.updatedAt ?? null, updatedBy: value?.updatedBy ?? null };
+  async function getSettings(requestedWorkspaceId?: string) {
+    const auth = authorization(db, userId), active = await auth.resolveActiveWorkspace();
+    const { workspaceId } = await auth.requireActiveWorkspaceContext(requestedWorkspaceId ?? expectedWorkspaceId ?? active.id);
+    const value = await db.select().from(workspaceCostSettings).where(eq(workspaceCostSettings.workspaceId, workspaceId)).get();
+    return { workspaceId, pixBps: value?.pixBps ?? 100, cardBps: value?.cardBps ?? 500, updatedAt: value?.updatedAt ?? null, updatedBy: value?.updatedBy ?? null };
   }
 
   async function saveSettings(input: unknown) {
-    const value = z.object({ pixBps: z.number().int().min(0).max(10_000), cardBps: z.number().int().min(0).max(10_000) }).strict().parse(input);
+    const value = z.object({ workspaceId: z.string().min(1), pixBps: z.number().int().min(0).max(10_000), cardBps: z.number().int().min(0).max(10_000) }).strict().parse(input);
     return transact(async tx => {
-      const { workspaceId } = await authorization(tx, userId).requireWorkspaceMember();
+      if (expectedWorkspaceId && expectedWorkspaceId !== value.workspaceId) throw new DomainError("O espaço ativo mudou. Atualize a tela antes de salvar novamente.", 409, "WORKSPACE_CONTEXT_CHANGED");
+      const { workspaceId } = await authorization(tx, userId).requireActiveWorkspaceContext(value.workspaceId);
       const now = new Date();
-      await tx.insert(workspaceCostSettings).values({ workspaceId, ...value, updatedBy: userId, updatedAt: now }).onConflictDoUpdate({ target: workspaceCostSettings.workspaceId, set: { ...value, updatedBy: userId, updatedAt: now } }).run();
-      return { workspaceId, ...value, updatedBy: userId, updatedAt: now };
+      const settings = { pixBps: value.pixBps, cardBps: value.cardBps };
+      await tx.insert(workspaceCostSettings).values({ workspaceId, ...settings, updatedBy: userId, updatedAt: now }).onConflictDoUpdate({ target: workspaceCostSettings.workspaceId, set: { ...settings, updatedBy: userId, updatedAt: now } }).run();
+      return { workspaceId, ...settings, updatedBy: userId, updatedAt: now };
     });
   }
 
@@ -1033,7 +1054,7 @@ export function packageCostServices(db: AppDatabase, userId: string) {
     const value = itemCostSchema.parse(input);
     assertValueState(value.effectivePriceState, value.effectivePriceUnitCents, "o preço efetivo");
     assertValueState(value.chinaFreightState, value.chinaFreightUnitCents, "o frete China");
-    return mutate(trackingId, value.expectedRevision, async tx => {
+    return mutate(trackingId, value.expectedRevision, async (tx, tracking) => {
       const costItem = await tx.select().from(purchaseItemCosts).where(and(eq(purchaseItemCosts.id, value.itemId), eq(purchaseItemCosts.trackingId, trackingId))).get();
       if (!costItem) throw new DomainError("Produto não encontrado neste acompanhamento.", 404);
       if (costItem.additionalOrderItemId) {
@@ -1061,6 +1082,27 @@ export function packageCostServices(db: AppDatabase, userId: string) {
         const nextRows = value.composition.participants.map((person, allocationOrder) => ({ costItemId: costItem.id, personId: person.personId, allocationOrder, weightMode: value.composition!.mode, weight: weights[allocationOrder] }));
         await tx.delete(purchaseCostParticipants).where(eq(purchaseCostParticipants.costItemId, costItem.id)).run();
         await tx.insert(purchaseCostParticipants).values(nextRows).run();
+      }
+      if (changed || compositionChanged) {
+        const now = new Date();
+        const legacyAssignments = await tx.select({ packageId: purchasePackageItems.packageId }).from(purchasePackageItems).where(eq(purchasePackageItems.costItemId, costItem.id)).all();
+        const legacyPackageIds = [...new Set(legacyAssignments.map(row => row.packageId))];
+        const logisticsSchemaReady = await tx.select({ name: sql<string>`name` }).from(sql`sqlite_master`).where(sql`type='table' AND name='logistics_reservations'`).get();
+        if (logisticsSchemaReady) {
+          const activeReservations = await tx.select().from(logisticsReservations).where(and(eq(logisticsReservations.costItemId, costItem.id), isNull(logisticsReservations.releasedAt))).all();
+          const reservedPackageIds = [...new Set(activeReservations.map(row => row.packageId))];
+          if (reservedPackageIds.length) {
+            const packages = await tx.select().from(logisticsPackages).where(inArray(logisticsPackages.id, reservedPackageIds)).all();
+            const affected = packages.filter(pkg => pkg.workspaceId === tracking.workspaceId && pkg.contentClosedAt === null);
+            if (affected.length) await tx.insert(logisticsEvents).values(affected.map(pkg => ({
+              id: crypto.randomUUID(), workspaceId: pkg.workspaceId, resourceId: pkg.id, action: "cost_item_updated",
+              reason: "Custos ou divisão de um produto do pacote foram atualizados.",
+              before: { costItemId: costItem.id, effectivePriceState: costItem.effectivePriceState, effectivePriceUnitCents: costItem.effectivePriceUnitCents, chinaFreightState: costItem.chinaFreightState, chinaFreightUnitCents: costItem.chinaFreightUnitCents },
+              after: { costItemId: costItem.id, effectivePriceState: value.effectivePriceState, effectivePriceUnitCents: value.effectivePriceUnitCents, chinaFreightState: value.chinaFreightState, chinaFreightUnitCents: value.chinaFreightUnitCents },
+              actorId: userId, createdAt: now,
+            }))).run();
+          }
+        } else if (legacyPackageIds.length) await tx.update(purchasePackages).set({ updatedAt: now }).where(inArray(purchasePackages.id, legacyPackageIds)).run();
       }
       return undefined;
     });
@@ -1276,7 +1318,7 @@ export function packageCostServices(db: AppDatabase, userId: string) {
     return mutate(trackingId, value.expectedRevision, async tx => {
       const detail = await readCostTracking(tx, userId, trackingId);
       const blockers: string[] = [];
-      if (detail.calculation.summary.assignedUnits !== detail.calculation.summary.shippingUnits) blockers.push("Atribua todas as unidades enviáveis a pacotes.");
+      if (!await usesOrdersWorkflow(tx) && detail.calculation.summary.assignedUnits !== detail.calculation.summary.shippingUnits) blockers.push("Atribua todas as unidades enviáveis a pacotes.");
       if (detail.refundsSummary.requestedCount > 0) blockers.push("Registre o recebimento ou anule as solicitações de reembolso pendentes.");
       if (detail.items.some(item => item.effectivePriceState === "pending" || item.chinaFreightState === "pending")) blockers.push("Informe o preço efetivo e o frete China ou marque sem cobrança.");
       if (detail.items.some(item => item.participants.reduce((sum, participant) => sum + participant.weight, 0) <= 0)) blockers.push("Defina uma composição positiva para cada produto e pessoa.");

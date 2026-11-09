@@ -27,6 +27,10 @@ Before writing code, read the files in this order:
 
 For approved post-MVP extensions that are in scope for the current task, also read their full handoff after the canonical list. In particular, refunds use `docs/23_PRODUCT_REFUNDS_PLAN.md` and HubBuy QC uses `docs/24_HUBBUY_QC_IMPORT_PLAN.md`.
 
+The approved Pedidos → Armazém → Pacotes extension is documented in `docs/39_ORDERS_WAREHOUSE_AND_PACKAGES_PLAN.md`; read its full handoff when it is in scope for the current task.
+
+The approved personal-workspace foundation is documented in `docs/40_PERSONAL_WORKSPACES_PLAN.md`; read its full handoff when workspace ownership, active-context resolution or authorization is in scope.
+
 The execution prompt is `PROMPT_ONE_SHOT.md`.
 
 ## Source of truth priority
@@ -39,7 +43,7 @@ If anything appears ambiguous, resolve it in this order:
 4. design inspiration links in `docs/design/REFERENCES.md`
 5. existing repository README
 
-Do **not** revive discarded architecture decisions such as Supabase, Neon, PostgreSQL, RLS, real-time subscriptions, or public signup.
+Do **not** revive discarded architecture decisions such as Supabase, Neon, PostgreSQL, RLS, or real-time subscriptions. Frente 5 now authorizes a custom public signup route; it does not enable Better Auth's direct signup endpoint or allow self-joining a group.
 
 ## Non-negotiables
 
@@ -52,7 +56,8 @@ Do **not** revive discarded architecture decisions such as Supabase, Neon, Postg
 - Migrations are applied explicitly to the target database; never run them inside a request lifecycle or automatically per request.
 - Browser code must never access SQLite directly.
 - Authorization is enforced server-side with centralized helpers.
-- No public signup UI. Token-gated private invitations are approved: Profile → Meu grupo → email → generated link → acceptance → Favorites. See `docs/18_WORKSPACE_INVITATIONS_PLAN.md`.
+- Personal workspaces are owner-only with no `workspace_members` rows; shared workspaces require membership. Use `requireWorkspaceAccess()` for either kind and retain `requireWorkspaceMember()` for shared-only actions. See `docs/40_PERSONAL_WORKSPACES_PLAN.md`.
+- Public registration is approved in Frente 5: `/signup` creates an email-activation-pending personal account only; it never grants shared-workspace membership. Keep Better Auth's direct public signup endpoint disabled and use the custom validated, rate-limited route. Group entry stays token-gated through Profile → Meu grupo → email → generated link → verified acceptance → Favorites. See `docs/43_PUBLIC_SIGNUP_AND_ACTIVATION_HANDOFF.md` and `docs/18_WORKSPACE_INVITATIONS_PLAN.md`.
 - Only one active purchase per workspace.
 - Favorites are personal but visible to the workspace.
 - Active purchases are collaborative.

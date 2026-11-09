@@ -18,7 +18,8 @@ import { DomainError } from "./errors";
 import type { CostTransaction } from "./purchase-cost-initialization";
 import { serializeDomainTransaction } from "./transaction-lock";
 import { previewFifoConsumption } from "./hubbuy-balance-calculations";
-import { accountDeletionBlockCode, accountDeletionBlockMessage, accountDiscardEligible } from "./hubbuy-account-lifecycle";
+import { accountDeletionBlockMessage, accountLifecycleExpressions } from "./hubbuy-account-lifecycle";
+import {usesOrdersWorkflow} from "./orders-workflow";
 import { presentIndividualRights, type AvailableCreditShare } from "./hubbuy-rights-presentation";
 import { readRefundProductOrigins } from "./hubbuy-rights-reading";
 import { presentBalanceTraceability } from "./hubbuy-balance-traceability";
@@ -106,10 +107,11 @@ async function findIdempotentOperation(db: Pick<AppDatabase, "select">, workspac
   )).get();
 }
 
-async function requireAccount(tx: Transaction, userId: string, accountId: string, includeDeleted = false) {
+async function requireAccount(tx: Transaction, userId: string, accountId: string, includeDeleted = false, expectedWorkspaceId?: string) {
   const account = await tx.select().from(hubbuyAccounts).where(eq(hubbuyAccounts.id, accountId)).get();
   if (!account) throw new DomainError("Conta HubBuy não encontrada.", 404);
-  await authorization(tx, userId).requireWorkspaceMember(account.workspaceId);
+  if (expectedWorkspaceId && expectedWorkspaceId !== account.workspaceId) throw new DomainError("A conta pertence a outro espaço. Atualize a página antes de salvar.", 409, "WORKSPACE_CONTEXT_CHANGED");
+  await authorization(tx, userId).requireActiveWorkspaceContext(account.workspaceId);
   if (account.deletedAt && !includeDeleted) throw new DomainError("Conta HubBuy não encontrada.", 404);
   return account;
 }
@@ -186,7 +188,7 @@ export async function createHubbuyZeroBalanceAccountInTransaction(tx: Transactio
   const value = createAccountSchema.parse(input);
   const normalized = { ...value, label: value.label.trim(), email: value.email?.trim().toLowerCase() ?? null };
   const payloadHash = hashPayload(normalized);
-  await authorization(tx, userId).requireWorkspaceMember(value.workspaceId);
+  await authorization(tx, userId).requireActiveWorkspaceContext(value.workspaceId);
   const existing = await findIdempotentOperation(tx, value.workspaceId, value.idempotencyKey);
   if (existing) {
     const operation = assertIdempotent(existing, "account_created", payloadHash);
@@ -208,9 +210,9 @@ export async function createHubbuyZeroBalanceAccountInTransaction(tx: Transactio
   return { accountId, operationId, replayed: false };
 }
 
-export async function activateEmptyHubbuyAccountAtZeroInTransaction(tx: Transaction, userId: string, accountId: string, input: unknown) {
+export async function activateEmptyHubbuyAccountAtZeroInTransaction(tx: Transaction, userId: string, accountId: string, input: unknown, expectedWorkspaceId?: string) {
   const value = activateZeroSchema.parse(input);
-  const account = await requireAccount(tx, userId, accountId);
+  const account = await requireAccount(tx, userId, accountId, false, expectedWorkspaceId);
   const payloadHash = hashPayload({ accountId, ...value });
   const existing = await findIdempotentOperation(tx, account.workspaceId, value.idempotencyKey);
   if (existing) {
@@ -242,7 +244,7 @@ export async function activateEmptyHubbuyAccountAtZeroInTransaction(tx: Transact
   return { accountId, operationId, account: updated, replayed: false };
 }
 
-export function hubbuyBalanceServices(db: AppDatabase, userId: string) {
+export function hubbuyBalanceServices(db: AppDatabase, userId: string, expectedWorkspaceId?: string) {
   const transact = <T>(operation: (tx: Transaction) => Promise<T>) => serializeDomainTransaction(async () => {
     for (let attempt = 0; ; attempt++) {
       try { return await db.transaction(operation); }
@@ -256,11 +258,12 @@ export function hubbuyBalanceServices(db: AppDatabase, userId: string) {
   async function createAccount(input: unknown) {
     const value = createAccountSchema.parse(input);
     const payloadHash = hashPayload({ ...value, label: value.label.trim(), email: value.email?.trim().toLowerCase() ?? null });
+    if (expectedWorkspaceId && expectedWorkspaceId !== value.workspaceId) throw new DomainError("O espaço ativo mudou. Atualize a tela antes de salvar novamente.", 409, "WORKSPACE_CONTEXT_CHANGED");
     return transact(async tx => createHubbuyZeroBalanceAccountInTransaction(tx, userId, value)).catch(async error => {
       if (!isUniqueConstraint(error)) throw error;
       const existing = await findIdempotentOperation(db, value.workspaceId, value.idempotencyKey);
       if (!existing) throw error;
-      await authorization(db, userId).requireWorkspaceMember(value.workspaceId);
+      await authorization(db, userId).requireActiveWorkspaceContext(value.workspaceId);
       const retained = await db.select().from(hubbuyAccounts).where(eq(hubbuyAccounts.id, readAccountIdFromOperation(existing))).get();
       if (!retained || retained.deletedAt) throw new DomainError("Conta HubBuy não encontrada.", 404);
       return { accountId: readAccountIdFromOperation(assertIdempotent(existing, "account_created", payloadHash)), operationId: existing.id, replayed: true };
@@ -269,7 +272,7 @@ export function hubbuyBalanceServices(db: AppDatabase, userId: string) {
 
   async function activateEmptyAccountAtZero(accountId: string, input: unknown) {
     const value = activateZeroSchema.parse(input);
-    const result = await transact(tx => activateEmptyHubbuyAccountAtZeroInTransaction(tx, userId, accountId, value));
+    const result = await transact(tx => activateEmptyHubbuyAccountAtZeroInTransaction(tx, userId, accountId, value, expectedWorkspaceId));
     return { ...result, rights: [], ledgerBalanceCnyMinor: 0, reconciled: true };
   }
 
@@ -277,7 +280,7 @@ export function hubbuyBalanceServices(db: AppDatabase, userId: string) {
     const value = startReconciliationSchema.parse(input);
     const payloadHash = hashPayload({ accountId, ...value });
     return transact(async tx => {
-      const account = await requireAccount(tx, userId, accountId);
+      const account = await requireAccount(tx, userId, accountId, false, expectedWorkspaceId);
       const existing = await findIdempotentOperation(tx, account.workspaceId, value.idempotencyKey);
       if (existing) { assertIdempotent(existing, "account_reconciliation_started", payloadHash); return { accountId, operationId: existing.id, replayed: true, accountRevision: account.revision }; }
       if (account.status !== "reconciling") throw new DomainError("A reconstrução só pode começar em uma conta aguardando conciliação.", 409);
@@ -310,7 +313,7 @@ export function hubbuyBalanceServices(db: AppDatabase, userId: string) {
     const normalized = { ...value, description: value.description.trim(), sourceReference: value.sourceReference?.trim() || null, shares: [...value.shares].sort((a, b) => a.personId.localeCompare(b.personId)) };
     const payloadHash = hashPayload({ accountId, ...normalized });
     return transact(async tx => {
-      const account = await requireAccount(tx, userId, accountId);
+      const account = await requireAccount(tx, userId, accountId, false, expectedWorkspaceId);
       const existing = await findIdempotentOperation(tx, account.workspaceId, value.idempotencyKey);
       if (existing) {
         assertIdempotent(existing, "account_reconciliation_event", payloadHash);
@@ -384,7 +387,7 @@ export function hubbuyBalanceServices(db: AppDatabase, userId: string) {
     const normalized = { accountId, ...value, shares: [...value.shares].sort((a, b) => a.personId.localeCompare(b.personId)) };
     const payloadHash = hashPayload(normalized);
     return transact(async tx => {
-      const account = await requireAccount(tx, userId, accountId);
+      const account = await requireAccount(tx, userId, accountId, false, expectedWorkspaceId);
       const existing = await findIdempotentOperation(tx, account.workspaceId, value.idempotencyKey);
       if (existing) return { accountId: readAccountIdFromOperation(assertIdempotent(existing, "account_reconciled", payloadHash)), operationId: existing.id, replayed: true };
       if (account.status !== "reconciling") throw new DomainError("Só é possível concluir a conciliação de uma conta em conferência.", 409);
@@ -446,7 +449,7 @@ export function hubbuyBalanceServices(db: AppDatabase, userId: string) {
     const value = archiveSchema.parse(input);
     const payloadHash = hashPayload({ accountId, ...value });
     return transact(async tx => {
-      const account = await requireAccount(tx, userId, accountId);
+      const account = await requireAccount(tx, userId, accountId, false, expectedWorkspaceId);
       const existing = await findIdempotentOperation(tx, account.workspaceId, value.idempotencyKey);
       if (existing) {
         assertIdempotent(existing, "account_archived", payloadHash);
@@ -475,7 +478,7 @@ export function hubbuyBalanceServices(db: AppDatabase, userId: string) {
     const operationType = discardIncorrectRegistration ? "account_registration_discarded" : "account_deleted";
     const payloadHash = hashPayload({ accountId, ...value });
     return transact(async tx => {
-      const account = await requireAccount(tx, userId, accountId, true);
+      const account = await requireAccount(tx, userId, accountId, true, expectedWorkspaceId);
       const existing = await findIdempotentOperation(tx, account.workspaceId, value.idempotencyKey);
       if (existing) {
         assertIdempotent(existing, operationType, payloadHash);
@@ -483,7 +486,8 @@ export function hubbuyBalanceServices(db: AppDatabase, userId: string) {
       }
       if (account.deletedAt) throw new DomainError("Este cadastro já foi excluído do Loti.", 409, "ACCOUNT_DELETED");
       if (account.revision !== value.expectedRevision) throw new DomainError("A conta mudou em outra sessão. Atualize a tela e tente novamente.", 409, "ACCOUNT_REVISION_CONFLICT");
-      const eligibility = await tx.select({ code: accountDeletionBlockCode, canDiscard: accountDiscardEligible }).from(hubbuyAccounts).where(eq(hubbuyAccounts.id, accountId)).get();
+      const lifecycle=accountLifecycleExpressions(await usesOrdersWorkflow(tx));
+      const eligibility = await tx.select({ code: lifecycle.deletion, canDiscard: lifecycle.discard }).from(hubbuyAccounts).where(eq(hubbuyAccounts.id, accountId)).get();
       if (!eligibility || (discardIncorrectRegistration ? !eligibility.canDiscard : eligibility.code)) throw new DomainError(discardIncorrectRegistration ? "Esta conta tem uso, vínculo ou histórico que impede anular o cadastro. Não é possível apagar dinheiro ou movimentações reais por este caminho." : accountDeletionBlockMessage(eligibility?.code ?? "ACCOUNT_HAS_HISTORY")!, 409, discardIncorrectRegistration ? "ACCOUNT_DISCARD_INELIGIBLE" : eligibility?.code ?? "ACCOUNT_HAS_HISTORY");
       const state = await calculateLedgerState(tx, account);
       if (!state.reconciled || (!discardIncorrectRegistration && (state.ledgerBalanceCnyMinor !== 0 || state.rights.length)) || (account.status !== "reconciling" && state.ledgerBalanceCnyMinor !== account.balanceCnyMinor)) throw new DomainError("O saldo e os direitos precisam ser conferidos antes de excluir.", 409, "BALANCE_RECONCILIATION_REQUIRED");
@@ -517,7 +521,8 @@ export function hubbuyBalanceServices(db: AppDatabase, userId: string) {
       if (!isDatabaseBusy(error) && !isUniqueConstraint(error)) throw error;
       const retained = await db.select().from(hubbuyAccounts).where(eq(hubbuyAccounts.id, accountId)).get();
       if (!retained) throw error;
-      await authorization(db, userId).requireWorkspaceMember(retained.workspaceId);
+      if (expectedWorkspaceId && expectedWorkspaceId !== retained.workspaceId) throw new DomainError("A conta pertence a outro espaço. Atualize a página antes de salvar.", 409, "WORKSPACE_CONTEXT_CHANGED");
+      await authorization(db, userId).requireActiveWorkspaceContext(retained.workspaceId);
       const existing = await findIdempotentOperation(db, retained.workspaceId, value.idempotencyKey);
       if (!existing) throw error;
       assertIdempotent(existing, operationType, payloadHash);
@@ -528,8 +533,10 @@ export function hubbuyBalanceServices(db: AppDatabase, userId: string) {
 
   async function listAccounts(workspaceId?: string) {
     return db.transaction(async tx => {
-      const membership = await authorization(tx, userId).requireWorkspaceMember(workspaceId);
-      const rows = await tx.select({ account: hubbuyAccounts, deletionBlockCode: accountDeletionBlockCode, canDiscard: accountDiscardEligible }).from(hubbuyAccounts).where(and(eq(hubbuyAccounts.workspaceId, membership.workspaceId), isNull(hubbuyAccounts.deletedAt))).orderBy(asc(hubbuyAccounts.createdAt)).all();
+      const access = await authorization(tx, userId).requireWorkspaceAccess(workspaceId ?? expectedWorkspaceId);
+      await authorization(tx, userId).requireActiveWorkspaceContext(access.workspaceId);
+      const lifecycle=accountLifecycleExpressions(await usesOrdersWorkflow(tx));
+      const rows = await tx.select({ account: hubbuyAccounts, deletionBlockCode: lifecycle.deletion, canDiscard: lifecycle.discard }).from(hubbuyAccounts).where(and(eq(hubbuyAccounts.workspaceId, access.workspaceId), isNull(hubbuyAccounts.deletedAt))).orderBy(asc(hubbuyAccounts.createdAt)).all();
       const accounts = rows.map(({ account, deletionBlockCode, canDiscard }) => ({ ...account, canDelete: deletionBlockCode === null, canDiscardIncorrectRegistration: !!canDiscard, deletionBlockCode, deletionBlockReason: accountDeletionBlockMessage(deletionBlockCode) }));
       const accountIds = accounts.map(account => account.id);
       if (!accountIds.length) return [];
@@ -545,7 +552,7 @@ export function hubbuyBalanceServices(db: AppDatabase, userId: string) {
 
   async function getAccountBalance(accountId: string) {
     return db.transaction(async tx => {
-      const account = await requireAccount(tx, userId, accountId);
+      const account = await requireAccount(tx, userId, accountId, false, expectedWorkspaceId);
       const state = await calculateLedgerState(tx, account);
       const products = await readRefundProductOrigins(tx, account, state.entries.filter(entry => entry.sourceType === "refund_received").map(entry => entry.sourceId));
       const adjustments = await tx.select({ entryId: hubbuyBalanceAdjustments.balanceEntryId, kind: hubbuyBalanceAdjustments.kind, reason: financialOperations.reason }).from(hubbuyBalanceAdjustments).innerJoin(financialOperations, eq(financialOperations.id, hubbuyBalanceAdjustments.operationId)).where(eq(hubbuyBalanceAdjustments.accountId, accountId)).all();
@@ -570,7 +577,7 @@ export function hubbuyBalanceServices(db: AppDatabase, userId: string) {
     if (!Number.isSafeInteger(afterSequence) || afterSequence < -1) throw new DomainError("Cursor de extrato inválido.", 400);
     if (!Number.isInteger(limit) || limit < 1 || limit > 100) throw new DomainError("O limite do extrato deve ficar entre 1 e 100 linhas.", 400);
     return db.transaction(async tx => {
-      const account = await requireAccount(tx, userId, accountId);
+      const account = await requireAccount(tx, userId, accountId, false, expectedWorkspaceId);
       const selected = await tx.select({ entry: hubbuyBalanceEntries, operation: financialOperations })
         .from(hubbuyBalanceEntries).leftJoin(financialOperations, eq(hubbuyBalanceEntries.operationId, financialOperations.id))
         .where(afterSequence < 0
@@ -602,5 +609,5 @@ export function hubbuyBalanceServices(db: AppDatabase, userId: string) {
   }
 
   const discardIncorrectAccount = (accountId: string, input: unknown) => deleteAccount(accountId, input, true);
-  return { createAccount, activateEmptyAccountAtZero, startReconciliation, recordReconciliationEvent, reconcileAccount, archiveAccount, deleteAccount, discardIncorrectAccount, listAccounts, getAccountBalance, readStatement, ...manualBalanceAdjustmentServices(db, userId, transact, calculateHubBuyBalanceState) };
+  return { createAccount, activateEmptyAccountAtZero, startReconciliation, recordReconciliationEvent, reconcileAccount, archiveAccount, deleteAccount, discardIncorrectAccount, listAccounts, getAccountBalance, readStatement, ...manualBalanceAdjustmentServices(db, userId, transact, calculateHubBuyBalanceState, expectedWorkspaceId) };
 }

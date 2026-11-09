@@ -34,7 +34,7 @@ Browser code never receives a database connection or Turso credentials. Applicat
 All sensitive reads and mutations go through server-side application code that:
 
 1. resolves the current Better Auth session;
-2. verifies workspace membership;
+2. verifies owner access for personal workspaces or membership for shared workspaces;
 3. applies ownership and purchase-state rules;
 4. validates input using Zod;
 5. executes Drizzle queries against Turso.
@@ -46,7 +46,8 @@ No RLS is required because the database is not exposed as a browser data API.
 Implement and reuse helpers conceptually equivalent to:
 
 - `requireUser()`
-- `requireWorkspaceMember()`
+- `requireWorkspaceAccess()` for owner-only personal or membership-based shared access;
+- `requireWorkspaceMember()` for shared-workspace actions only;
 - `requireFavoriteOwner()`
 - `requireCollectionOwner()`
 - `requireActivePurchase()`
@@ -54,17 +55,21 @@ Implement and reuse helpers conceptually equivalent to:
 
 Do not duplicate authorization conditionals across random UI/actions.
 
+`ensurePersonalWorkspace(userId)` creates one personal workspace under a database-enforced partial unique index and initializes `user_preferences.active_workspace_id` in the same transaction when needed. It preserves a valid active selection; otherwise one shared membership remains active, while accounts with no group or ambiguous multiple groups use the personal space. `scripts/provision-personal-workspaces.ts` is an explicit idempotent operator command.
+
+Frente 5 adds a separate custom `/api/activation/signup` flow. Account, credential, `account_activation_requirements` row and personal workspace are created in one Drizzle transaction; native Better Auth email verification gates app data. `/api/auth/sign-up/email` remains disabled. Persistent email/IP limits and generic duplicate responses protect the custom flow; resend uses the existing transactional email service. Invitation-created accounts receive the same activation record and personal workspace before a shared membership is granted. Legacy/operator accounts have no activation row and are not auto-verified or changed.
+
 ## Better Auth
 
 Email extension, 20 October 2026: the detailed contract in `31_AUTH_EMAIL_SECURITY_PLAN.md` supersedes memory-only limiting and immediate invitation membership for unverified accounts. Native recovery and verification use the central Resend service with atomic persistent quotas; HTTP token finalization is wrapped in an external Drizzle transaction. Reset delivery uses Next `after`/Vercel `waitUntil`; internal calls await delivery. Existing memberships are preserved without enabling global verification enforcement.
 
 - email + password only in MVP;
-- public signup UI and endpoint are disabled;
+- `/signup` is the approved public entry for personal accounts; direct Better Auth signup stays disabled and signup never creates shared membership;
 - sessions use the same Turso database;
 - operator tooling creates users;
 - production passwords/emails are human input, never hardcoded;
 - the Drizzle adapter remains configured with `provider: "sqlite"`.
-- profile edits reuse Better Auth's `/update-user` and `/change-password` endpoints, with path-scoped server hooks that validate trusted origin, authoritative session, workspace membership and strict payloads;
+- profile edits reuse Better Auth's `/update-user` and `/change-password` endpoints, with path-scoped server hooks that validate trusted origin, authoritative session, authorized workspace access and strict payloads;
 - password hooks enforce 12–128 characters, reject immediate reuse and force `revokeOtherSessions: true`; Better Auth owns verification, hashing, persistence and cookie rotation.
 
 `BETTER_AUTH_URL` must equal the deployed HTTPS origin. Keep `BETTER_AUTH_SECRET` server-only. Vercel preview environments should use the development database and matching preview URL configuration where sign-in is needed.
@@ -172,7 +177,7 @@ Realtime is not part of the MVP. After mutations, revalidate/refetch appropriate
 
 ## Invitation boundary
 
-`src/lib/domain/invitations.ts` centralizes issuance, inspection, acceptance, regeneration and revocation. `/api/group` requires session/membership; `/api/invitations/[token]` permits token-validated public inspection/acceptance. Mutations check configured auth origin. Public signup stays disabled. Account creation uses a server-only operator-configured Better Auth instance bound to the Drizzle transaction with auto sign-in disabled. The transaction includes account/credential, membership, active workspace selection and invitation consumption. After commit, the browser establishes its session through the normal Better Auth login endpoint.
+`src/lib/domain/invitations.ts` centralizes issuance, inspection, acceptance, regeneration and revocation. `/api/group` requires session/membership; `/api/invitations/[token]` permits token-validated public inspection/acceptance. Mutations check configured auth origin. The custom `/signup` flow is personal-only; direct Better Auth signup stays disabled. Invitation account creation uses a server-only operator-configured Better Auth instance bound to the Drizzle transaction with auto sign-in disabled. Account/credential, activation requirement and personal workspace are committed before verification; after confirmation, authenticated acceptance adds membership, selects the invited workspace and consumes the invitation atomically. The browser establishes its session through the normal Better Auth login endpoint.
 
 Tokens contain 32 random bytes; only SHA-256 hashes persist. No token/body logging is added by application code. Responses use no-store; the invitation page uses no-referrer and noindex. Infrastructure access-log retention/redaction must account for token-bearing paths. Persistent fixed-window minute limits are shared across instances: 15 management mutations per user, 240 public inspections globally, 60 accepts globally, 10 attempts per valid token. Limiter entries older than one hour are removed during requests.
 

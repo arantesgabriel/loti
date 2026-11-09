@@ -20,6 +20,8 @@ Use one consistent Drizzle/SQLite timestamp representation for app tables, prefe
 
 The email-security extension adds only `auth_limits` and `auth_email_deliveries` in migration `0021_fine_puppet_master.sql`. They hold hashed limiter scopes, bounded counters, hashed delivery/token identifiers, expiry and delivery/consumption state. Native reset identifiers are hashed by Better Auth. No existing identity or membership is backfilled/verified. See `31_AUTH_EMAIL_SECURITY_PLAN.md` for atomic reservation and verification semantics.
 
+Frente 5 adds `account_activation_requirements` in migration `0030_public_signup_activation.sql`. One row per newly registered or invitation-created account stores the source (`public_signup` or `invitation`) and creation time. A row plus `user.email_verified = false` means activation is pending; absence of a row preserves the legacy/operator account behavior. The migration does not backfill users or rewrite verification flags.
+
 Generated/managed according to the official Better Auth Drizzle/SQLite integration, typically including concepts such as:
 
 - `user`
@@ -35,7 +37,11 @@ Do not hand-roll password/session storage.
 |---|---|---|
 | id | text PK | generated |
 | name | text | required |
+| kind | text | `personal` or `shared`; legacy rows migrate as `shared` |
+| owner_user_id | text FK Better Auth user | required for personal; null for shared |
 | created_at | integer timestamp | required |
+
+The partial unique index `workspace_personal_owner_idx` permits at most one personal workspace per owner. SQLite triggers enforce the kind/owner pair, keep that identity immutable, and prevent `workspace_members` rows for personal workspaces. Personal access uses `owner_user_id`; shared access continues to use `workspace_members`.
 
 ## `workspace_members`
 
@@ -191,9 +197,11 @@ The application service/action layer must reject mutations targeting a finalized
 
 `invitation_limits`: key primary key, integer window and count; persistent shared request limits.
 
-`user_preferences.active_workspace_id`: nullable workspace FK selected by successful invitation acceptance. Central authorization still verifies membership before using it; existing rows use their prior membership context until selection occurs. Favorites view mode remains unchanged.
+`user_preferences.active_workspace_id`: nullable workspace FK selected by successful invitation acceptance or personal-space provisioning. Central authorization validates personal ownership or shared membership before using it. An invalid selection is discarded; without a valid selection, one shared membership is retained for legacy compatibility, otherwise the personal space is selected when available. Favorites view mode remains unchanged.
 
 Migrations: `0001_bouncy_inertia.sql` adds invitation/limiter tables; `0002_loose_shocker.sql` adds active workspace preference. Apply both before deploying invitation code.
+
+Migration `0029_massive_owl.sql` adds workspace kind/owner, the personal-owner unique index and SQLite guards. Existing IDs and references are preserved and existing workspaces become shared through the default. Apply this migration explicitly before deploying the personal-workspace authorization code; then run the idempotent provisioning command for existing accounts. Never run either operation in a request or against production without separate authorization. See [40 — personal workspaces](40_PERSONAL_WORKSPACES_PLAN.md).
 
 ## Packages and costs extension
 

@@ -33,7 +33,8 @@ async function flush() {
   for (const group of groups.values()) for (let offset = 0; offset < group.length; offset += 20) {
     const batch = group.slice(offset, offset + 20), controller = new AbortController(), token = generation;
     controllers.add(controller);
-    void fetch(`/api/purchases/${encodeURIComponent(batch[0].purchaseId)}/qc?itemIds=${encodeURIComponent(batch.map(row => row.itemId).join(","))}`, { credentials: "same-origin", cache: "no-store", signal: controller.signal }).then(async response => {
+    const workspaceId = (JSON.parse(batch[0].scope) as string[])[1]!;
+    void fetch(`/api/purchases/${encodeURIComponent(batch[0].purchaseId)}/qc?itemIds=${encodeURIComponent(batch.map(row => row.itemId).join(","))}&workspaceId=${encodeURIComponent(workspaceId)}`, { credentials: "same-origin", cache: "no-store", signal: controller.signal }).then(async response => {
       if (!response.ok) { if (response.status === 401) resetQcClient(); throw Object.assign(new Error("Apresentação QC indisponível"), { status: response.status }); }
       const body = await response.json() as { data: { items: QcPresentation[] } };
       if (token !== generation) throw new DOMException("Aborted", "AbortError");

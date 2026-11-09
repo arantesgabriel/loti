@@ -1,4 +1,6 @@
 "use client";
+import { LoadingState } from "@/components/ui/loading-state";
+
 import { resetQcClient } from "@/components/qc/qc-client-state";
 import Link from "next/link";
 import { useEffect, useState } from "react";
@@ -74,7 +76,7 @@ export function InviteScreen({ token }: { token: string }) {
   return <main className="invite-page"><div className="invite-container">
     <Link href="/login" className="brand"><Bookmark size={28} aria-hidden="true"/>Loti</Link>
     <section className="invite-panel" aria-busy={loading || busy}>
-      {loading ? <p role="status">Carregando convite…</p> : loadError ? <><h1>Não foi possível abrir o convite</h1><p role="alert">{loadError}</p><p className="muted">Peça ajuda a quem compartilhou o link.</p><Button asChild variant="outline"><Link href="/login">Ir para o login</Link></Button></> : data && <>
+      {loading ? <LoadingState label="Carregando convite…" /> : loadError ? <><h1>Não foi possível abrir o convite</h1><p role="alert">{loadError}</p><p className="muted">Peça ajuda a quem compartilhou o link.</p><Button asChild variant="outline"><Link href="/login">Ir para o login</Link></Button></> : data && <>
         <h1>{accepted ? "Você já faz parte do grupo" : `Entre no grupo ${data.groupName}`}</h1>
         <p className="muted">Organize seus favoritos e participe das compras com o grupo. Você terá acesso aos favoritos e compras compartilhados.</p>
         <div className="invite-address"><span className="muted">Convite para</span><strong>{data.email}</strong></div>

@@ -33,7 +33,7 @@ export function AuthEmailScreen({ mode, token, invalid, returnTo }: { mode: "for
     <section className="invite-panel" aria-busy={busy}>
       <h1>{title}</h1>
       {mode === "verified" ? <>
-        <p role={invalid ? "alert" : "status"}>{invalid ? "O link é inválido, expirou ou já foi utilizado. Volte ao convite para solicitar outro email. Se você já confirmou, entre para continuar." : "Seu endereço foi confirmado. Entre na sua conta para continuar e concluir o aceite do convite."}</p>
+        <p role={invalid ? "alert" : "status"}>{invalid ? destination.startsWith("/invite/") ? "O link é inválido, expirou ou já foi utilizado. Volte ao convite para solicitar outro email. Se você já confirmou, entre para continuar." : "O link é inválido, expirou ou já foi utilizado. Entre na sua conta e solicite uma nova confirmação." : destination.startsWith("/invite/") ? "Seu endereço foi confirmado. Entre na sua conta para concluir o aceite do convite." : "Seu endereço foi confirmado. Entre na sua conta para acessar seu espaço pessoal."}</p>
         <Button asChild><Link href={destination.startsWith("/invite/") ? destination : "/login"}>{destination.startsWith("/invite/") ? "Continuar no convite" : "Ir para o login"}</Link></Button>
       </> : success ? <>
         <p role="status">{mode === "forgot" ? "Se existir uma conta associada a este email, você receberá as instruções de recuperação." : "Sua senha foi alterada e as sessões anteriores foram encerradas. Entre novamente com a nova senha."}</p>

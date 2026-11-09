@@ -9,12 +9,14 @@ import { hubbuyBalanceServices } from "@/lib/domain/hubbuy-balance-services";
 import { packageCostServices } from "@/lib/domain/package-cost-services";
 import { qcServices } from "@/lib/domain/qc-services";
 import { fixture, type Fixture } from "./helpers";
+import {warehouseServices} from "@/lib/domain/warehouse-services";
+import {logisticsPackageServices} from "@/lib/domain/logistics-package-services";
 
 let f: Fixture;
 beforeEach(async () => { f = await fixture(); });
 afterEach(() => f.client.close());
 
-async function setup(source: "balance" | "pix" = "balance", beneficiary = "alice") {
+async function setup(source: "balance" | "pix" = "balance", beneficiary = "alice", ordersWorkflow=false) {
   const purchase = await f.alice.savePurchase({ name: "Correção sintética" });
   await f.alice.saveManualItem({ name: "Camisa", url: "https://shop.test/shirt", unitPriceCents: 3_058, personId: "alice", quantity: 1 });
   await f.alice.finalizePurchase(purchase!.id, true);
@@ -33,13 +35,31 @@ async function setup(source: "balance" | "pix" = "balance", beneficiary = "alice
   await service.recordAdditionalOrderMixedPayment(tracking.id, created.orderId, { expectedRevision: detail.tracking.revision, idempotencyKey: "correct-original-payment", useOwnBalance: source === "balance", ...(beneficiary !== "alice" && source === "balance" ? { balanceFunding: [{ costItemId: detail.productOrders.find(order => order.id === created.orderId)!.items[0].cost.id, costComponent: "product", beneficiaryId: beneficiary, lenderId: "alice", cnyMinor: 2_500 }] } : {}), external: source === "pix" ? { paymentMethod: "pix", principalBrlCents: 2_000, conversionCnyMinor: 2_500, conversionBrlCents: 2_000 } : null });
   detail = await service.getTracking(tracking.id);
   const row = detail.productOrders.find(order => order.id === created.orderId)!.items[0];
-  detail = await service.saveAllocations(tracking.id, { expectedRevision: detail.tracking.revision, packageId: detail.packages[0].id, allocations: [{ costItemId: detail.items[0].id, quantity: 1 }, { costItemId: row.cost.id, quantity: 1 }] });
+  if(!ordersWorkflow)detail = await service.saveAllocations(tracking.id, { expectedRevision: detail.tracking.revision, packageId: detail.packages[0].id, allocations: [{ costItemId: detail.items[0].id, quantity: 1 }, { costItemId: row.cost.id, quantity: 1 }] });
   const balance = await accounts.getAccountBalance(account.accountId);
   const input = { expectedRevision: detail.tracking.revision, expectedAccountRevision: balance.account.revision, idempotencyKey: "correct-paid-item", reason: "Valor registrado incorretamente", confirmedIncorrectRegistration: true as const, itemId: row.cost.id, name: "Elixir corrigida", url: "https://shop.test/elixir-correct", variant: "Modelo corrigido", notes: "Observação corrigida", quantity: 1, nativeProductCnyMinor: 2_000, nativeChinaCnyMinor: 0, composition: { mode: "equal" as const, participants: [{ personId: beneficiary, weight: 1 }] }, useOwnBalance: source === "balance", external: source === "pix" ? { paymentMethod: "pix" as const, principalBrlCents: 1_600, conversionCnyMinor: 2_000, conversionBrlCents: 1_600, feeBps: 100 } : null };
   return { service, trackingId: tracking.id, orderId: created.orderId, accounts, accountId: account.accountId, detail, row, input, originalCharge };
 }
 
 describe("paid additional order corrections", () => {
+  it("transfers confirmed arrival and an open reservation to the replacement, preserving QC and blocking a sealed replacement",async()=>{
+    f.client.close();f=await fixture(":memory:","orders");
+    const s=await setup("balance","alice",true),warehouse=warehouseServices(f.db,"alice");
+    let row=(await warehouse.list()).rows.find(r=>r.costItemId===s.row.cost.id)!;
+    await warehouse.execute("workspace","correction-arrival",{operation:"receive",costItemId:row.costItemId,expectedRevision:row.revision,accountId:s.accountId,units:[0],reason:"Chegada conferida antes da correção"});
+    row=(await warehouse.list()).rows.find(r=>r.costItemId===s.row.cost.id)!;
+    const {id:packageId}=await warehouse.execute("workspace","correction-reservation",{operation:"reserve",accountId:s.accountId,name:"Reserva a corrigir",selection:[{costItemId:row.costItemId,expectedRevision:row.revision,units:[0]}],reason:"Montagem antes da correção"});
+    await f.db.insert(hubbuyExternalItems).values({id:"qc-new-correction",workspaceId:"workspace",purchaseId:s.detail.purchase.id,additionalOrderItemId:s.row.item!.id,revision:0,createdAt:new Date(),updatedAt:new Date()}).run();
+    const result=await s.service.correctAdditionalOrder(s.trackingId,s.orderId,s.input);
+    const after=await warehouse.list(),replacement=after.rows.find(r=>r.order.id===result.replacementOrderId)!;
+    expect(after.rows.some(r=>r.order.id===s.orderId)).toBe(false);
+    expect(replacement.receivedUnits).toEqual([0]);expect(replacement.reservations).toHaveLength(1);expect(replacement.reservations[0].packageId).toBe(packageId);
+    expect((await f.db.select().from(hubbuyExternalItems).where(eq(hubbuyExternalItems.id,"qc-new-correction")).get())?.additionalOrderItemId).toBe(replacement.cost.additionalOrderItemId);
+    const packages=logisticsPackageServices(f.db,"alice"),pkg=await packages.get(packageId);
+    await packages.execute(packageId,"seal-corrected",{operation:"close_content",expectedRevision:pkg.pkg.revision,reason:"Manifesto após correção",confirmed:true});
+    const detail=await s.service.getTracking(s.trackingId),balance=await s.accounts.getAccountBalance(s.accountId);
+    await expect(s.service.correctAdditionalOrder(s.trackingId,result.replacementOrderId,{...s.input,idempotencyKey:"sealed-correction",itemId:replacement.costItemId,expectedRevision:detail.tracking.revision,expectedAccountRevision:balance.account.revision})).rejects.toMatchObject({code:"CORRECTION_PACKAGE_DEPENDENCY"});
+  });
   it("previews without writes, compensates exact rights, preserves snapshots, packages and original Pix, and replays", async () => {
     const s = await setup();
     const oldComponents = await f.db.select().from(purchasePaymentComponents).where(eq(purchasePaymentComponents.orderId, s.orderId)).all();
@@ -192,9 +212,9 @@ describe("paid additional order corrections", () => {
     expect((await s.accounts.getAccountBalance(s.accountId)).rights).toMatchObject([{ personId: "alice", availableCnyMinor: 500 }]);
   });
 
-  it("retries contention while reading the authorized receipt before the write transaction", async () => {
+  it("retries contention before opening the transaction and recovers the authorized receipt", async () => {
     const s = await setup();
-    const read = vi.spyOn(f.db, "select").mockImplementationOnce(() => { throw Object.assign(new Error("database is locked"), { code: "SQLITE_BUSY" }); });
+    const read = vi.spyOn(f.db, "transaction").mockImplementationOnce(() => { throw Object.assign(new Error("database is locked"), { code: "SQLITE_BUSY" }); });
     try {
       expect(await s.service.correctAdditionalOrder(s.trackingId, s.orderId, s.input)).toMatchObject({ replayed: false, balanceAfterCnyMinor: 500 });
       expect(await s.service.correctAdditionalOrder(s.trackingId, s.orderId, s.input)).toMatchObject({ replayed: true, balanceAfterCnyMinor: 500 });

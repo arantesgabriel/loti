@@ -1,0 +1,133 @@
+{
+  "date": "2026-10-23",
+  "phase": "L3",
+  "status": "candidate_for_human_review",
+  "captures": [
+    {
+      "file": "public/landing/journey-favorites-desktop.webp",
+      "width": 880,
+      "height": 590,
+      "bytes": 38346,
+      "sha256": "a9e9b84c3815bd15038beadf998060c6999ee1d514bb8df5b7a5d5c5e3c7231c",
+      "source": "artifacts/qa/landing-l3/favorites-desktop.png",
+      "crop": {
+        "left": 280,
+        "top": 190,
+        "width": 880,
+        "height": 590
+      },
+      "theme": "light",
+      "technicalReview": "inspected",
+      "humanReview": "pending"
+    },
+    {
+      "file": "public/landing/journey-favorites-mobile.webp",
+      "width": 390,
+      "height": 610,
+      "bytes": 19496,
+      "sha256": "a39fa4f87ea6e4cd14623af2670ae96f0820adaec6072119a1d036fb140ef8b1",
+      "source": "artifacts/qa/landing-l3/favorites-mobile.png",
+      "crop": {
+        "left": 0,
+        "top": 240,
+        "width": 390,
+        "height": 610
+      },
+      "theme": "light",
+      "technicalReview": "inspected",
+      "humanReview": "pending"
+    },
+    {
+      "file": "public/landing/journey-purchase-desktop.webp",
+      "width": 880,
+      "height": 710,
+      "bytes": 41310,
+      "sha256": "e8812b2c2868e160bc8392c4a85e43e33231890af16a78ca8602661556f822aa",
+      "source": "artifacts/qa/landing-l3/purchase-desktop.png",
+      "crop": {
+        "left": 280,
+        "top": 32,
+        "width": 880,
+        "height": 710
+      },
+      "theme": "light",
+      "technicalReview": "inspected",
+      "humanReview": "pending"
+    },
+    {
+      "file": "public/landing/journey-purchase-mobile.webp",
+      "width": 350,
+      "height": 810,
+      "bytes": 34134,
+      "sha256": "7eeb66bb55834ae965fdbc29531a9517c032e683d0ba9de39bf454977f9b1969",
+      "source": "artifacts/qa/landing-l3/purchase-mobile.png",
+      "crop": {
+        "left": 20,
+        "top": 99,
+        "width": 350,
+        "height": 810
+      },
+      "theme": "light",
+      "technicalReview": "inspected",
+      "humanReview": "pending"
+    },
+    {
+      "file": "public/landing/journey-costs-desktop.webp",
+      "width": 880,
+      "height": 815,
+      "bytes": 47076,
+      "sha256": "00a05066a432ae6ca0a5126fae78792d6737aab0518fed9e3a24057a1a88a8c8",
+      "source": "artifacts/qa/landing-l3/costs-desktop.png",
+      "crop": {
+        "left": 280,
+        "top": 110,
+        "width": 880,
+        "height": 815
+      },
+      "theme": "light",
+      "technicalReview": "inspected",
+      "humanReview": "pending"
+    },
+    {
+      "file": "public/landing/journey-costs-mobile.webp",
+      "width": 350,
+      "height": 740,
+      "bytes": 26410,
+      "sha256": "8e3ea5e498e617abcc605765f5170cf46038e3e56706b33211825c1f24385f63",
+      "source": "artifacts/qa/landing-l3/costs-mobile.png",
+      "crop": {
+        "left": 20,
+        "top": 171,
+        "width": 350,
+        "height": 740
+      },
+      "theme": "light",
+      "technicalReview": "inspected",
+      "humanReview": "pending"
+    },
+    {
+      "file": "public/landing/journey-packages-desktop.webp",
+      "width": 880,
+      "height": 198,
+      "bytes": 10150,
+      "sha256": "0ccbb272e310c15296196b03d9bb47ab0ba5ac5da4855b3025b770b273da1770",
+      "source": "artifacts/qa/landing-l3/packages-desktop.png",
+      "crop": null,
+      "theme": "light",
+      "technicalReview": "inspected",
+      "humanReview": "pending"
+    },
+    {
+      "file": "public/landing/journey-packages-mobile.webp",
+      "width": 350,
+      "height": 285,
+      "bytes": 7918,
+      "sha256": "b7300d2f650426fe2d3573a4b9a745ac267c62a38f4d2a1cc33fe226da4a4a59",
+      "source": "artifacts/qa/landing-l3/packages-mobile.png",
+      "crop": null,
+      "theme": "light",
+      "technicalReview": "inspected",
+      "humanReview": "pending"
+    }
+  ]
+}

@@ -46,11 +46,12 @@ function bounded(value: bigint) {
 }
 const fail = (message: string, code: string) => new DomainError(message, 409, code);
 
-export function manualBalanceAdjustmentServices(db: AppDatabase, actorId: string, transact: Transact, readState: typeof calculateHubBuyBalanceState) {
+export function manualBalanceAdjustmentServices(db: AppDatabase, actorId: string, transact: Transact, readState: typeof calculateHubBuyBalanceState, expectedWorkspaceId?: string) {
   async function accountState(tx: CostTransaction, accountId: string) {
     const account = await tx.select().from(hubbuyAccounts).where(eq(hubbuyAccounts.id, accountId)).get();
     if (!account || account.deletedAt) throw new DomainError("Conta HubBuy não encontrada.", 404);
-    await authorization(tx, actorId).requireWorkspaceMember(account.workspaceId);
+    if (expectedWorkspaceId && expectedWorkspaceId !== account.workspaceId) throw new DomainError("A conta pertence a outro espaço. Atualize a página antes de salvar.", 409, "WORKSPACE_CONTEXT_CHANGED");
+    await authorization(tx, actorId).requireActiveWorkspaceContext(account.workspaceId);
     return readState(tx, accountId);
   }
   function editable(state: State, revision: number) {
@@ -160,7 +161,8 @@ export function manualBalanceAdjustmentServices(db: AppDatabase, actorId: string
       if (previewOnly || error instanceof DomainError || error instanceof z.ZodError) throw error;
       const account = await db.select().from(hubbuyAccounts).where(eq(hubbuyAccounts.id, accountId)).get();
       if (!account || account.deletedAt) throw error;
-      await authorization(db, actorId).requireWorkspaceMember(account.workspaceId);
+      if (expectedWorkspaceId && expectedWorkspaceId !== account.workspaceId) throw new DomainError("A conta pertence a outro espaço. Atualize a página antes de salvar.", 409, "WORKSPACE_CONTEXT_CHANGED");
+      await authorization(db, actorId).requireActiveWorkspaceContext(account.workspaceId);
       const prior = await replay(db, account.workspaceId);
       if (prior) return prior;
       if (String(error).includes("adjustment reference already recorded") || String((error as { cause?: unknown }).cause).includes("adjustment reference already recorded")) throw fail("Esta referência já foi registrada nesta conta.", "ADJUSTMENT_REFERENCE_DUPLICATE");

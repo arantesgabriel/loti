@@ -53,7 +53,8 @@ export default function Login() {
             {error && <p className="error" role="alert">{error}</p>}
             <Button type="submit" disabled={isSubmitting}>{isSubmitting ? "Entrando…" : "Entrar"}</Button>
           </form>
-          <p className="login-note muted"><LockKeyhole size={14} aria-hidden="true"/><span>Acesso privado para membros do grupo.</span></p>
+          <p className="login-note muted"><LockKeyhole size={14} aria-hidden="true"/><span>Crie seu espaço pessoal ou entre com o convite do grupo.</span></p>
+          <p className="signup-switch muted">Ainda não tem uma conta? <Link href="/signup">Criar conta</Link></p>
         </div>
       </section>
       <LoginStoriesCarousel submitting={isSubmitting} />

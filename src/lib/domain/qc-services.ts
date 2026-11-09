@@ -17,6 +17,7 @@ import { generateQcPreview, QC_PREVIEW, type GeneratedQcPreview } from "../qc/pr
 import { measureQcStage, noopQcMetrics, withQcMetricContext, type QcMetricCollector } from "../qc/metrics";
 import { FifoSemaphore, SerialQueue, withQcDatabaseQueueContext } from "../qc/concurrency";
 import { matchesQcEtag, qcPreviewEtag, qcPreviewVersion } from "../qc/preview-http";
+import { ordersTransitionQcStorage } from "../qc/orders-transition-storage";
 
 type ManagerConfig = { managerId?: string | null; storage?: QcStorage; download?: typeof downloadHubbuyImage; validate?: typeof validateQcImage; makePreview?: typeof generateQcPreview; now?: () => number; metrics?: QcMetricCollector; pipelineConcurrency?: number; sleep?: (ms: number) => Promise<void>; random?: () => number; signal?: AbortSignal };
 type QcRestoreSnapshot = { imageId: string; revision: number; r2Key: string; sourceUrlHash: string; contentSha256: string | null; preview: { revision: number; r2Key: string } | null };
@@ -66,7 +67,7 @@ const nowDate = (fn: () => number) => new Date(fn());
 const internalError = (error: unknown) => error instanceof DomainError ? error : error instanceof DOMException && error.name === "AbortError" ? new DomainError("A solicitação QC foi cancelada.", 503, "QC_REQUEST_ABORTED") : new DomainError("Não foi possível concluir a operação QC.", 500, "QC_INTERNAL");
 const uniqueError = (error: unknown) => /UNIQUE constraint failed|SQLITE_CONSTRAINT_UNIQUE/i.test(error instanceof Error ? error.message : String(error));
 
-export function qcServices(db: AppDatabase, userId: string, config: ManagerConfig = {}) {
+export function qcServices(db: AppDatabase, userId: string, config: ManagerConfig = {}, expectedWorkspaceId?: string) {
   const now = config.now ?? Date.now;
   const metrics = config.metrics ?? noopQcMetrics;
   const configuredConcurrency = config.pipelineConcurrency ?? (process.env.LOTI_QC_PIPELINE_CONCURRENCY ? Number(process.env.LOTI_QC_PIPELINE_CONCURRENCY) : 3);
@@ -78,7 +79,8 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
   const pipelineSlots = new FifoSemaphore(configuredConcurrency);
   const imageSemaphore = new SerialQueue();
   const databaseQueue = new SerialQueue();
-  const rawStorage = config.storage ?? r2QcStorage;
+  const localQaStorage = config.storage ? null : ordersTransitionQcStorage();
+  const rawStorage = config.storage ?? localQaStorage ?? r2QcStorage;
   const storage: QcStorage = {
     async put(object, signal) { metrics.increment("putCalls"); metrics.increment("bytesObserved", object.bytes.byteLength); return measureQcStage(metrics, "storage", () => rawStorage.put(object, signal ?? config.signal)); },
     async head(key, signal) { metrics.increment("headCalls"); return measureQcStage(metrics, "storage", () => rawStorage.head(key, signal ?? config.signal)); },
@@ -86,7 +88,7 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
     async delete(key, signal) { metrics.increment("deleteCalls"); return measureQcStage(metrics, "storage", () => rawStorage.delete(key, signal ?? config.signal)); },
     signRead(key) { return rawStorage.signRead(key); },
   };
-  const download = config.download ?? downloadHubbuyImage;
+  const download = config.download ?? (localQaStorage ? async () => { throw new DomainError("A carga QA não acessa imagens externas.", 403, "QC_QA_NETWORK_DISABLED"); } : downloadHubbuyImage);
   const validate = config.validate ?? validateQcImage;
   const makePreview = config.makePreview ?? generateQcPreview;
   const sleep = config.sleep ?? ((milliseconds: number) => new Promise<void>(resolve => setTimeout(resolve, milliseconds)));
@@ -104,10 +106,22 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
     return config.signal ? AbortSignal.any([config.signal, timeout]) : timeout;
   }
 
-  async function authorizedPurchase(purchaseId: string, manage = false) {
-    const purchase = await authorization(db, userId).requirePurchase(purchaseId);
+  async function authorizedPurchaseContext(purchaseId: string) {
+    const guard = authorization(db, userId);
+    const purchase = await guard.requirePurchaseAccess(purchaseId);
+    if (expectedWorkspaceId && expectedWorkspaceId !== purchase.workspaceId) throw new DomainError("A compra pertence a outro espaço. Atualize a página antes de continuar.", 409, "WORKSPACE_CONTEXT_CHANGED");
+    const access = await guard.requireActiveWorkspaceContext(purchase.workspaceId);
     if (purchase.status !== "finalized") throw new DomainError("O QC só pode ser gerenciado em compras finalizadas.", 409, "QC_PURCHASE_NOT_FINALIZED");
-    if (manage && (!managerId || userId !== managerId)) throw new DomainError("Você não pode administrar QC.", 403, "QC_FORBIDDEN");
+    return { purchase, access };
+  }
+
+  function canManageWorkspaceQc(access: { kind: "personal" | "shared"; ownerUserId: string | null }) {
+    return managerId === userId || access.kind === "personal" && access.ownerUserId === userId;
+  }
+
+  async function authorizedPurchase(purchaseId: string, manage = false) {
+    const { purchase, access } = await authorizedPurchaseContext(purchaseId);
+    if (manage && !canManageWorkspaceQc(access)) throw new DomainError("Você não pode administrar QC.", 403, "QC_FORBIDDEN");
     return purchase;
   }
 
@@ -265,8 +279,8 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
   }
 
   async function getQcSummary(purchaseId: string) {
-    await authorizedPurchase(purchaseId);
-    const manage = !!managerId && managerId === userId;
+    const { access } = await authorizedPurchaseContext(purchaseId);
+    const manage = canManageWorkspaceQc(access);
     const [external, images, sources, pendingDeletes, previewWork] = await Promise.all([
       db.select().from(hubbuyExternalItems).where(eq(hubbuyExternalItems.purchaseId, purchaseId)).all(),
       db.select({ externalItemId: qcImages.externalItemId, status: qcImages.status, deleteState: qcImages.deleteState }).from(qcImages).innerJoin(hubbuyExternalItems, eq(qcImages.externalItemId, hubbuyExternalItems.id)).where(eq(hubbuyExternalItems.purchaseId, purchaseId)).all(),
@@ -303,7 +317,7 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
   }
 
   async function getGallery(purchaseId: string, itemId: string, limit = 12, requestedOffset = 0, targetImageId?: string) {
-    await authorizedPurchase(purchaseId);
+    const { access } = await authorizedPurchaseContext(purchaseId);
     const target = parseTargetKey(itemId);
     const item = await resolveTarget(db, purchaseId, target.key);
     if (!item) throw new DomainError("Produto não encontrado nesta compra.", 404, "QC_ITEM_NOT_FOUND");
@@ -325,12 +339,12 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
     const imageIds = rows.map(row => row.image.id);
     const previews = imageIds.length ? await db.select().from(qcImagePreviews).where(and(inArray(qcImagePreviews.imageId, imageIds), eq(qcImagePreviews.status, "ready"), eq(qcImagePreviews.deleteState, "none"))).all() : [];
     const previewVersions = new Map(previews.map(row => [row.imageId, qcPreviewVersion(row)]));
-    const manage = !!managerId && managerId === userId;
+    const manage = canManageWorkspaceQc(access);
     return { itemId: target.key, pageOffset: offset, totalCount, presentationRevision: presentation?.revision ?? 0, primaryImageId: presentation?.imageId ?? null, canSetCover: manage, images: rows.map(row => ({ id: row.image.id, previewVersion: previewVersions.get(row.image.id) ?? null, previewUrl: previewVersions.has(row.image.id) ? `/api/qc/images/${encodeURIComponent(row.image.id)}/preview?v=${previewVersions.get(row.image.id)}` : null, width: row.image.width, height: row.image.height, occurrence: row.occurrence })), nextOffset: offset + rows.length < totalCount ? offset + rows.length : null };
   }
 
   async function getQcPresentations(purchaseId: string, itemIds: string[]) {
-    await authorizedPurchase(purchaseId);
+    const { access } = await authorizedPurchaseContext(purchaseId);
     if (!Array.isArray(itemIds) || itemIds.length > 20 || itemIds.some(id => typeof id !== "string" || !id || id.length > 220)) throw new DomainError("A solicitação de capas QC deve conter até 20 produtos distintos.", 400, "QC_PRESENTATION_BATCH_INVALID");
     const targets = itemIds.map(parseTargetKey);
     if (targets.some(target => !target.id || target.id.length > 200) || new Set(targets.map(target => target.key)).size !== targets.length) throw new DomainError("Destinos QC inválidos ou repetidos.", 400, "QC_PRESENTATION_BATCH_INVALID");
@@ -381,7 +395,7 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
       });
       const coverPreview = previews.find(row => row.imageId === presentation?.image_id) ?? null;
       const thumbnails = previews.filter(row => row.imageId !== presentation?.image_id).slice(0, 3);
-      return { itemId: target.key, purchaseItemId: target.id, qcCount: total, primaryImageId: presentation?.image_id ?? null, presentationRevision: presentation?.revision ?? 0, coverPreview, canSetCover: !!managerId && managerId === userId, previews: thumbnails, remainingCount: Math.max(0, total - thumbnails.length - (coverPreview ? 1 : 0)) };
+      return { itemId: target.key, purchaseItemId: target.id, qcCount: total, primaryImageId: presentation?.image_id ?? null, presentationRevision: presentation?.revision ?? 0, coverPreview, canSetCover: canManageWorkspaceQc(access), previews: thumbnails, remainingCount: Math.max(0, total - thumbnails.length - (coverPreview ? 1 : 0)) };
     }) };
   }
 
@@ -391,7 +405,7 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
     if (!image || !external || !targetKeyForExternal(external) || !await resolveTarget(db, external.purchaseId, targetKeyForExternal(external)!)) throw new DomainError("Imagem QC não encontrada.", 404, "QC_IMAGE_NOT_FOUND");
     await rate(external.purchaseId, "preview");
     const sources = await db.select({ sourceUrl: qcImageSources.sourceUrl }).from(qcImageSources).where(and(eq(qcImageSources.imageId, imageId), eq(qcImageSources.state, "ready"))).orderBy(asc(qcImageSources.createdAt)).limit(1).get();
-    return { sourceUrl: validateHubbuySourceUrl(sources?.sourceUrl ?? image.sourceUrl).toString() };
+    return { sourceUrl: localQaStorage ? `/api/orders-transition/qc/${encodeURIComponent(imageId)}` : validateHubbuySourceUrl(sources?.sourceUrl ?? image.sourceUrl).toString() };
   }
 
   async function readPreview(imageId: string, ifNoneMatch: string | null = null) {
@@ -420,7 +434,8 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
     if (!validImage) throw new DomainError("Escolha uma foto QC disponível deste produto.", 422, "QC_COVER_IMAGE_INVALID");
     const stamp = nowDate(now);
     await db.transaction(async tx => {
-      await authorization(tx, userId).requirePurchase(purchaseId);
+      if (expectedWorkspaceId && expectedWorkspaceId !== purchase.workspaceId) throw new DomainError("A compra pertence a outro espaço. Atualize a página antes de continuar.", 409, "WORKSPACE_CONTEXT_CHANGED");
+      await authorization(tx, userId).requireActiveWorkspaceContext(purchase.workspaceId);
       const item = await resolveTarget(tx, purchaseId, target.key);
       if (!item) throw new DomainError("Produto não encontrado nesta compra.", 404, "QC_ITEM_NOT_FOUND");
       const current = target.origin === "purchase"
@@ -592,7 +607,8 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
       if (activeLock?.ownerId !== lock.ownerId || activeLock.version !== lock.version || activeLock.leaseUntil <= now()) throw new DomainError("A operação QC perdeu sua concessão antes de confirmar os vínculos.", 409, "QC_TRANSFER_LEASE_LOST");
       const fresh = await tx.select().from(qcImports).where(eq(qcImports.id, importId)).get();
       if (!fresh || fresh.revision !== expectedRevision || fresh.status !== "prepared") throw new DomainError("A prévia foi alterada em outra solicitação.", 409, "QC_REVISION_CONFLICT");
-      await authorization(tx, userId).requirePurchase(row.purchaseId);
+      if (expectedWorkspaceId && expectedWorkspaceId !== purchase.workspaceId) throw new DomainError("A compra pertence a outro espaço. Atualize a página antes de continuar.", 409, "WORKSPACE_CONTEXT_CHANGED");
+      await authorization(tx, userId).requireActiveWorkspaceContext(purchase.workspaceId);
       const requestedTargetKeys = manifest.rows.flatMap(entry => {
         const choice = choicesByKey.get(entry.occurrence.externalKey);
         const raw = choice ? choice.targetKey : normalizeQcMatch(entry.match).targetItemId;
@@ -765,7 +781,8 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
       return await db.transaction(async tx => {
         const activeLock = await tx.select().from(qcTransferLocks).where(eq(qcTransferLocks.scope, lock.scope)).get();
         if (activeLock?.ownerId !== lock.ownerId || activeLock.version !== lock.version || activeLock.leaseUntil <= now()) throw new DomainError("A operação QC perdeu sua concessão antes de confirmar o vínculo.", 409, "QC_TRANSFER_LEASE_LOST");
-        await authorization(tx, userId).requirePurchase(purchaseId);
+        if (expectedWorkspaceId && expectedWorkspaceId !== purchase.workspaceId) throw new DomainError("A compra pertence a outro espaço. Atualize a página antes de continuar.", 409, "WORKSPACE_CONTEXT_CHANGED");
+        await authorization(tx, userId).requireActiveWorkspaceContext(purchase.workspaceId);
         const external = await tx.select().from(hubbuyExternalItems).where(and(eq(hubbuyExternalItems.id, externalItemId), eq(hubbuyExternalItems.purchaseId, purchaseId))).get();
         if (!external) throw new DomainError("Ocorrência HubBuy não encontrada nesta compra.", 404, "QC_EXTERNAL_NOT_FOUND");
         if (external.revision !== expectedRevision || targetKeyForExternal(external) !== null) throw new DomainError("A ocorrência mudou desde que as pendências foram carregadas.", 409, "QC_REVISION_CONFLICT");
@@ -1311,7 +1328,6 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
     const startedAt = performance.now();
     const budget = { deadline: now() + QC_LIMITS.requestMs };
     const purchase = await rate(purchaseId, "batch");
-    if (!managerId || managerId !== userId) throw new DomainError("Você não pode administrar QC.", 403, "QC_FORBIDDEN");
     if (externalItemId) {
       const external = await db.select({ id: hubbuyExternalItems.id }).from(hubbuyExternalItems).where(and(eq(hubbuyExternalItems.id, externalItemId), eq(hubbuyExternalItems.purchaseId, purchaseId), or(sql`${hubbuyExternalItems.purchaseItemId} IS NOT NULL`, sql`${hubbuyExternalItems.additionalOrderItemId} IS NOT NULL`))).get();
       if (!external) throw new DomainError("Ocorrência QC não encontrada ou ainda não associada.", 404, "QC_EXTERNAL_NOT_FOUND");
@@ -1337,7 +1353,7 @@ export function qcServices(db: AppDatabase, userId: string, config: ManagerConfi
       const selectedDelete = deleteAt <= sourceAt && deleteAt <= previewAt ? pendingDeletes[0] : undefined;
       const selectedImage = !selectedDelete && sourceAt <= previewAt ? eligible[0] : undefined;
       const selectedPreview = !selectedDelete && !selectedImage ? previewWork[0] : undefined;
-      if ((selectedImage || selectedDelete || selectedPreview) && !config.storage) assertQcStorageConfigured();
+      if ((selectedImage || selectedDelete || selectedPreview) && !config.storage && !localQaStorage) assertQcStorageConfigured();
       const results: { sourceId?: string; imageId?: string; status: string; code?: string; message?: string; retryAfterSeconds?: number; upstreamStatus?: number }[] = [];
       let stopReason: "deadline" | "quota" | "recovery" | "failure" | undefined;
       if (selectedDelete) {

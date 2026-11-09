@@ -1,0 +1,49 @@
+# Aderência e lacunas da landing
+
+A direção criativa é compatível com o stack. A maior dependência não é uma biblioteca de animação: é tornar verdadeiros os destinos e as condições de aquisição. A presença do gerenciador não resolve cadastro aberto, ferramentas sem login ou oferta comercial.
+
+IDs AU referem-se às evidências detalhadas e vinculadas na [auditoria](CURRENT_STATE_AUDIT.md); LT/CF, ao [registro de decisões](DECISIONS_AND_TRACEABILITY.md). Estados descrevem o checkout local, não o deploy.
+
+## Matriz por seção
+
+| Requisito e fonte | Evidência atual | Gap | Impacto / risco | Proposta para revisão |
+| --- | --- | --- | --- | --- |
+| Header: Produto/Como funciona/Entrar/Criar conta (C §2) | AU03/17/18; [`page.tsx`](../../src/app/page.tsx), [`auth/config.ts`](../../src/lib/auth/config.ts) | Navegação editorial e signup abertos ausentes; só login real | Alto: CTA sem destino válido quebra a conversão | Criar navegação isolada na fase L2; Entrar → `/login`; bloquear cadastro até dependência externa de produto ou revisão de CTA aprovada. |
+| 01 Hero: H1, janela frontal ampla de Favorites Cards (B ACE-01/02, C §3/01) | AU24; [`favorites-screen.tsx`](../../src/components/favorites/favorites-screen.tsx) | UI existe; layout de marketing e captura demo final ausentes | Médio visual / alto de privacidade | Reutilizar fonte/tokens/botão; capturar app real somente com autorização demo; nunca montar `FavoritesScreen` público. |
+| Hero mobile: grade real (B ACE-12) | AU25; [`globals.css`](../../src/app/globals.css) usa Cards de uma coluna | Ambiguidade de “grade” versus composição esperada | Médio: fake UI ou regressão se alterarmos o app | Confirmar captura do modo Cards real de uma coluna; recortar sem fabricar colunas. |
+| 02 Transformação S0–S3 reversível (B ACE-03, D §2) | AU15/37; [`login-stories.tsx`](../../src/components/login/login-stories.tsx) usa timers e previews desenhados | Coreografia scroll não existe; não é reaproveitamento direto | Alto: acessibilidade, performance e alegação implícita de automação | Ilha client própria em L4, progresso pela posição do scroll, UI real visível; estático S3 como base e em reduced motion. |
+| 03A Favoritos: organização/coleções (B ACE-04, C §3/03A) | AU24; [`services.ts`](../../src/lib/domain/services.ts), `FavoritesScreen` | Prova de produto existe; assets e realces editoriais faltam | Médio: captura ilegível ou coleção de pessoa real | Captura real demo com coleções genéricas e texto curto; não inventar comparação automática de produtos. |
+| 03B Compras: primeiro fundo #1C0113 com UI clara (B ACE-05, D §3/03B) | AU26/27; [`purchase-screen.tsx`](../../src/components/purchase/purchase-screen.tsx), [`purchase-services.ts`](../../src/lib/domain/purchase-services.ts) | Composição editorial e mídia não existem; `--brand` muda no dark | Médio visual / alto factual se simular compra automática | Faixa escura local estável aprovada, screenshot claro; destacar preparação manual e status reais. |
+| 03C Pacotes e custos (B ACE-04, C §3/03C) | AU30/31; [`package-cost-detail-screen.tsx`](../../src/components/packages/package-cost-detail-screen.tsx), [`product-costs-list.tsx`](../../src/components/packages/product-costs-list.tsx) | Recurso existe; prova demo coerente ausente | Alto: expor saldos/pedidos ou vender estimativas automáticas | Mostrar detalhe de compra finalizada demo, recorte de valores manuais, sem extrapolar para ferramenta fiscal/câmbio/tracking. |
+| Continuidade da jornada (M §5, F4 D-4.13/18) | AU27; `finalizePurchase()` inicializa custos separados | Capturas simultâneas exigem estados distintos coerentes | Médio: narrativa pode sugerir custos antes da finalização | Um ciclo demo finalizado para custos e uma compra ativa separada para Compras; favoritos comuns com origem rastreável. |
+| 04 Individual/grupo (B ACE-06, C §3/04) | AU22/28; [`authorization.ts`](../../src/lib/domain/authorization.ts), [`cost-sharing.ts`](../../src/lib/domain/cost-sharing.ts) | Item pessoal existe; onboarding/workspace independente não | Alto: visitantes individuais não entram e dados do workspace não são privados por pessoa | Manter simetria visual, validar texto e política de acesso; abertura do produto é frente separada. |
+| 05 Ferramentas gratuitas (B ACE-07, C §3/05) | AU07 e §5 da auditoria; planejamento local de expansão | Sem catálogo/rotas públicas implementadas | Bloqueante estratégico F2: vitrine sem produto | Aguardar disponibilidade; ou aprovar versão reduzida retirando faixa, navegação, CTA secundário e FAQ 4 em conjunto. Nenhum placeholder “em breve” automático. |
+| 06 FAQ (B ACE-08, C §3/06) | AU18/22 e §5 da auditoria | FAQ não existe; respostas 1, 3 e 4 têm condições não atendidas | Alto: afirmações de acesso falsas | Manter Anexo C integral; produzir revisão factual separada e aprovada para renderização futura. FAQ funcional sem animação essencial. |
+| 07 CTA final (B ACE-09, C §3/07) | AU18 | Signup público/gratuidade não comprovados | Bloqueante de publicação da versão aprovada | Mesmo gate de CTA do header/hero; não redirecionar cadastro para login e considerar aceite cumprido. |
+| Pro e preços (C §1/2/5) | Auditoria §5: nenhum billing/oferta encontrado | Oferta pública desconhecida | Alto comercial | Omitir planos/preços; não há fase de implementação de billing nesta proposta. |
+
+## Lacunas transversais
+
+| Requisito | Evidência no código | Gap → impacto → risco | Proposta / dependência |
+| --- | --- | --- | --- |
+| Identidade e contraste (B ACE-11/13) | AU08–10, `theme.css`, `theme.ts` | Fonte existe; divergências de hover/secundário e tema global → risco médio de incoerência/contraste | Aprovar mapa semântico e boundary claro local antes de L2, sem editar preferências ou temas operacionais. |
+| 2D/soft 3D (D §4) | AU16, `public/login-stories/` | Direção existe, mídia final não → risco médio de peso/estética | Inventário, prova de origem/licença e produção de poucos assets só com autorização; sem nova engine. |
+| Privacidade das demonstrações (B ACE-14) | AU24–32, todas as telas privadas | Nenhuma captura final/demo autorizada → risco alto de vazamento | Ambiente descartável, dataset sintético e revisão asset por asset; não copiar banco de produção, cache QC ou URLs assinadas. |
+| SEO público (C §4) | AU33/34, `layout.tsx`, `next.config.ts` | Root noindex, sem sitemap/OG/canonical → divulgação invisível ou indexação privada se corrigida globalmente | Metadata local e sitemap allowlist na L5; previews noindex; publicação indexável só L7. |
+| Performance (B ACE-15) | AU35–38, root global CSS/font/provider | Sem baseline de landing → risco médio/alto de mídia/motion pesado | Medir SSR/head, recursos, LCP/CLS/INP e consumo durante scroll em ambiente autorizado; metas aprovadas depois do baseline. |
+| Teclado/reduced motion (B ACE-13, D §6) | AU12/37 e auditoria §7 | Padrões existentes não garantem cena nova → risco alto de conteúdo inacessível | Semantics server-side, controller reduzido/estático, nenhum live announcement por frame, cleanup e scroll nativo. |
+| Isolamento do app (B ACE-16) | AU04–06/14, `WorkspaceProvider` e serviços | Reaproveitar telas traria sessão/dados/mutações → risco alto | Reutilizar primitivas visuais puras; demos como imagens públicas auditadas. Sem refactor financeiro/QC/auth. |
+| Preview/release (P Etapas 2/4) | AU42–45, workflow e `vercel.json` | Push dev/main migra/publica; branch preview externo desconhecido → risco alto operacional | Nenhum push automático. Antes de qualquer preview hospedado confirmar gatilhos, alvo e credenciais; deploy tem gate próprio. |
+| Evidência de não regressão (P Etapa 4) | AU39–41, testes existentes | Sem execução nesta auditoria → não há baseline verde | L1 inventaria baseline em ambiente autorizado; L6 executa regressão apropriada. Não disparar migration pelo harness sem autorização. |
+
+## Alternativas de arquitetura e impacto
+
+| Alternativa | Necessidade / efeito | Vercel, Turso, R2, auth e build | Parecer |
+| --- | --- | --- | --- |
+| Mesma aplicação, rota editorial irmã e componentes locais | Atende briefing sem tocar domínio; aproveitar fonte/tokens | Mesmo Vercel/build. Landing sem consulta Turso/R2/sessão; nenhuma migration ou segredo novo. Root já compartilha CSS/ThemeProvider, custo medido depois. | **Recomendada.** Rota `/landing` durante construção; `/` só após gate de comportamento. |
+| Transformar `/` imediatamente em landing | URL final simples, mas muda o redirect atual | Mesmo deploy, mudança de navegação de membros; se personalizar por sessão, torna root dinâmico e adiciona auth/banco à visita | Adiar para L7; recomendar landing pública estática em `/`, mantendo `/favorites` direto e Entrar explícito, se aprovado. Não inferir redirect pós-login novo. |
+| Segundo projeto, subdomínio ou app de marketing | Isolaria build, mas não resolve CTA/ferramentas e exige configuração | Novo pipeline/domínio/configuração; risco de origem/cookies, manutenção duplicada e oferta sem fluxo | Sem necessidade demonstrada. Não propor como baseline nem configurar infraestrutura. |
+| Refatorar global CSS ou extrair telas para demo interativa | Benefício não medido; expõe acoplamentos privados | Maior superfície de regressão, build/auth/QC atingidos; autorização/dados precisariam novo contrato | Fora do escopo. Primeiro medir, usar capturas. |
+| Implantar signup, ferramentas e Free/Pro junto com landing | Resolveria dependências comerciais alterando produto | Auth, modelos, abuso, isolamento, cálculos, possivelmente migrações e serviços novos | **Não incluída.** Depende da frente de expansão e de autorização própria, com QA independente. |
+
+O caminho recomendado preserva o stack e a infraestrutura existentes. Se o build revelar uma limitação real que impeça o isolamento, documentar a evidência e pedir revisão de escopo; não iniciar migração de tecnologia ou alteração global por preferência.

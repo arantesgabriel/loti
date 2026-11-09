@@ -2,10 +2,12 @@ import { createHash, randomBytes } from "node:crypto";
 import { and, eq, gt, isNull, lt, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { AppDatabase } from "../db/connection";
-import { invitationLimits, workspaceInvitations as invites, workspaceMembers, workspaces, user, userPreferences } from "../db/schema";
+import { accountActivationRequirements, invitationLimits, workspaceInvitations as invites, workspaceMembers, workspaces, user, userPreferences } from "../db/schema";
 import { createAuth } from "../auth/config";
 import { authorization } from "./authorization";
 import { DomainError } from "./errors";
+import { serializeDomainTransaction } from "./transaction-lock";
+import { ensurePersonalWorkspaceInTransaction } from "./personal-workspaces";
 
 const emailInput = z.string().trim().email().transform(v => v.toLowerCase());
 const accountInput = z.object({ name: z.string().trim().min(1).max(200), password: z.string().min(12).max(128) });
@@ -39,20 +41,23 @@ export async function limitInvitations(db: AppDatabase, key: string, max: number
 }
 
 export function invitationService(db: AppDatabase) {
-  async function group(userId: string) {
-    const { workspaceId } = await authorization(db, userId).requireWorkspaceMember();
+  async function group(userId: string, requestedWorkspaceId?: string) {
+    const { workspaceId } = await authorization(db, userId).requireWorkspaceMember(requestedWorkspaceId);
     const workspace = await db.select().from(workspaces).where(eq(workspaces.id, workspaceId)).get();
+    if (!workspace) throw new DomainError("Espaço compartilhado não encontrado.", 404);
     const members = await db.select({ id: user.id, name: user.name, email: user.email }).from(user).innerJoin(workspaceMembers, eq(user.id, workspaceMembers.userId)).where(eq(workspaceMembers.workspaceId, workspaceId)).orderBy(user.name).all();
     const rows = await db.select().from(invites).where(eq(invites.workspaceId, workspaceId)).orderBy(invites.createdAt).all();
     return { workspace, members, invitations: rows.map(i => ({ id: i.id, email: i.email, createdBy: i.createdBy, expiresAt: i.expiresAt.toISOString(), state: state(i) })) };
   }
-  async function issue(userId: string, emailValue: unknown, previousId?: string) {
-    const { workspaceId } = await authorization(db, userId).requireWorkspaceMember();
+  async function issue(userId: string, emailValue: unknown, expectedWorkspaceId: string, previousId?: string) {
     const email = emailInput.parse(emailValue);
     const token = randomBytes(32).toString("base64url"), now = new Date();
     const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-    await db.transaction(async tx => {
-      // A write first obtains the SQLite writer lock before reading membership or invitations.
+    await serializeDomainTransaction(() => db.transaction(async tx => {
+      const guard = authorization(tx, userId);
+      const context = await guard.requireActiveWorkspaceContext(expectedWorkspaceId);
+      const { workspaceId } = await guard.requireWorkspaceMember(context.workspaceId);
+      // The first invitation write obtains SQLite's writer lock before the recipient and pending-invitation checks below.
       if (previousId) {
         const previous = await tx.update(invites).set({ revokedAt: now, revokedBy: userId }).where(and(eq(invites.id, previousId), eq(invites.workspaceId, workspaceId), eq(invites.email, email), isNull(invites.acceptedAt), isNull(invites.revokedAt))).returning().get();
         if (!previous) throw new DomainError("Este convite não pode ser substituído. Atualize a página.", 409);
@@ -64,17 +69,22 @@ export function invitationService(db: AppDatabase) {
       const open = await tx.select().from(invites).where(and(eq(invites.workspaceId, workspaceId), eq(invites.email, email), isNull(invites.acceptedAt), isNull(invites.revokedAt))).get();
       if (open) throw new DomainError("Já existe um convite pendente para este email. Use Gerar novo link.", 409);
       await tx.insert(invites).values({ id: crypto.randomUUID(), workspaceId, email, tokenHash: hashInviteToken(token), createdBy: userId, createdAt: now, expiresAt }).run();
-    });
+    }));
     return { token, expiresAt: expiresAt.toISOString() };
   }
-  async function revoke(userId: string, id: string) {
-    const { workspaceId } = await authorization(db, userId).requireWorkspaceMember();
-    const result = await db.update(invites).set({ revokedAt: new Date(), revokedBy: userId }).where(and(eq(invites.id, id), eq(invites.workspaceId, workspaceId), isNull(invites.acceptedAt), isNull(invites.revokedAt))).returning().get();
-    if (!result) throw new DomainError("Este convite não pode ser revogado. Atualize a página.", 409);
+  async function revoke(userId: string, id: string, expectedWorkspaceId: string) {
+    await serializeDomainTransaction(() => db.transaction(async tx => {
+      const guard = authorization(tx, userId);
+      const context = await guard.requireActiveWorkspaceContext(expectedWorkspaceId);
+      const { workspaceId } = await guard.requireWorkspaceMember(context.workspaceId);
+      const result = await tx.update(invites).set({ revokedAt: new Date(), revokedBy: userId }).where(and(eq(invites.id, id), eq(invites.workspaceId, workspaceId), isNull(invites.acceptedAt), isNull(invites.revokedAt))).returning().get();
+      if (!result) throw new DomainError("Este convite não pode ser revogado. Atualize a página.", 409);
+    }));
   }
   async function inspect(token: string, sessionUser?: { id: string; email: string } | null) {
     const invite = requirePending(await db.select().from(invites).where(eq(invites.tokenHash, tokenHash(token))).get());
     const workspace = await db.select().from(workspaces).where(eq(workspaces.id, invite.workspaceId)).get();
+    if (!workspace || workspace.kind !== "shared") throw new DomainError("Este convite não pertence a um espaço compartilhado.", 409);
     const existing = await db.select({ id: user.id, emailVerified: user.emailVerified }).from(user).where(eq(user.email, invite.email)).get();
     const member = sessionUser ? await db.select().from(workspaceMembers).where(and(eq(workspaceMembers.workspaceId, invite.workspaceId), eq(workspaceMembers.userId, sessionUser.id))).get() : undefined;
     return { email: invite.email, groupName: workspace!.name, expiresAt: invite.expiresAt.toISOString(), existingAccount: !!existing, sessionEmail: sessionUser?.email ?? null, alreadyMember: !!member && sessionUser?.email.toLowerCase() === invite.email, verificationRequired: !!existing && !existing.emailVerified };
@@ -93,10 +103,18 @@ export function invitationService(db: AppDatabase) {
         }
         requirePending(prior); throw new DomainError("Não foi possível aceitar o convite.", 409);
       }
+      const destination = await tx.select({ kind: workspaces.kind }).from(workspaces).where(eq(workspaces.id, invite.workspaceId)).get();
+      if (!destination || destination.kind !== "shared") throw new DomainError("Este convite não pertence a um espaço compartilhado.", 409);
       if (sessionUser && sessionUser.email.toLowerCase() !== invite.email) throw new DomainError("Entre com o email deste convite para continuar.", 403);
       const existing = await tx.select().from(user).where(eq(user.email, invite.email)).get();
       if (existing && (!sessionUser || existing.id !== sessionUser.id)) throw new DomainError("Esta conta já existe. Entre para aceitar o convite.", 401);
       const member = existing ?? (await createAuth(tx, true).api.signUpEmail({ body: { ...accountInput.parse(input), email: invite.email } })).user;
+      if (!existing) {
+        await tx.insert(accountActivationRequirements).values({ userId: member.id, source: "invitation", createdAt: now }).run();
+      }
+      // Every account has a private space before an invitation can be activated.
+      // For new, unverified members it is the only workspace they can access.
+      await ensurePersonalWorkspaceInTransaction(tx, member.id);
       // Registration is durable so verification can be retried, but grants no group data.
       // Read authoritative user state in this transaction, never session/client claims.
       if (!member.emailVerified) return { email: invite.email, created: !existing, verificationRequired: true };

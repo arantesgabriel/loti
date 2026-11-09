@@ -1,0 +1,912 @@
+npm notice run loti@0.1.0 test
+npm notice run vitest run
+
+ RUN  v5.0.3 C:/Fontes/loti
+
+ ❯ tests/integration/logistics-transition-races.test.ts (0 test)
+ ❯ tests/integration/auth-email.test.ts (0 test)
+ ❯ tests/integration/logistics-finalization.test.ts (0 test)
+ ❯ tests/integration/package-refund-hubbuy.test.ts (0 test)
+ ❯ tests/integration/qc-services.test.ts (0 test)
+ ❯ tests/integration/purchases.test.ts (0 test)
+ ❯ tests/integration/hubbuy-balance-adjustments-concurrency.test.ts (0 test)
+ ❯ tests/integration/auth-email-concurrency.test.ts (0 test)
+ ❯ tests/integration/favorites.test.ts (0 test)
+ ❯ tests/integration/package-refunds.test.ts (0 test)
+ ❯ tests/integration/hubbuy-account-deletion-concurrency.test.ts (0 test)
+ ❯ tests/integration/purchase-order-corrections.test.ts (0 test)
+ ❯ tests/integration/hubbuy-account-deletion.test.ts (0 test)
+ ❯ tests/integration/package-refund-concurrency.test.ts (0 test)
+ ❯ tests/integration/orders-transition-comparison.test.ts (0 test)
+ ❯ tests/integration/password-reset.test.ts (0 test)
+ ❯ tests/integration/orders-transition-baseline.test.ts (0 test)
+ ❯ tests/integration/development-seed.test.ts (0 test)
+ ❯ tests/integration/profile.test.ts (0 test)
+ ❯ tests/integration/package-costs.test.ts (0 test)
+ ❯ tests/integration/hubbuy-account-discard.test.ts (0 test)
+ ❯ tests/integration/auth-email-limits.test.ts (0 test)
+ ❯ tests/integration/warehouse-concurrency.test.ts (0 test)
+ ❯ tests/integration/hubbuy-balance-services.test.ts (0 test)
+ ❯ tests/integration/invitations.test.ts (0 test)
+ ❯ tests/integration/hubbuy-rights-origins.test.ts (0 test)
+ ❯ tests/integration/hubbuy-credit-traceability-audit.test.ts (0 test)
+ ❯ tests/integration/auth.test.ts (0 test)
+ ❯ tests/integration/warehouse-workflow.test.ts (0 test)
+ ❯ tests/integration/logistics-legacy-financials.test.ts (0 test)
+ ❯ tests/integration/purchase-additional-orders.test.ts (0 test)
+ ❯ tests/integration/hubbuy-balance-adjustments.test.ts (0 test)
+ ❯ tests/integration/qc-migration.test.ts (0 test)
+ ❯ tests/integration/hubbuy-balance-adjustments-migration.test.ts (0 test)
+ ❯ tests/integration/package-refund-migration.test.ts (0 test)
+ ❯ tests/integration/development-seed-sql.test.ts (0 test)
+ ❯ tests/integration/hubbuy-account-deletion-migration.test.ts (0 test)
+ ❯ tests/integration/invitation-concurrency.test.ts (0 test)
+ ❯ tests/unit/warehouse-calculations.test.ts (3 tests | 1 failed) 5041ms
+   × rounds every unit/person cell by at most one cent while preserving both margins 5032ms
+ ❯ tests/integration/purchase-order-correction-migration.test.ts (0 test)
+ ❯ tests/integration/password-reset-cli.test.ts (1 test | 1 failed) 20358ms
+   × executes the reset CLI against a disposable file and fails without exposing secrets 20336ms
+ ❯ tests/integration/purchase-sharing-migration.test.ts (0 test)
+ ❯ tests/unit/development-seed-target.test.ts (14 tests | 1 failed) 9181ms
+   ❯ development seed destination (14)
+     × CLI plan stays offline even with production app credentials present 8589ms
+ ❯ tests/integration/hubbuy-account-discard-migration.test.ts (0 test)
+ ❯ tests/unit/qc-validation.test.ts (0 test)
+ ❯ tests/integration/hubbuy-balance-migration.test.ts (0 test)
+ ❯ tests/integration/invitation-migration.test.ts (0 test)
+ ❯ tests/unit/qc-client-state.test.ts (0 test)
+ ❯ tests/integration/purchase-sharing-concurrency.test.ts (0 test)
+ ❯ tests/unit/domain.test.ts (0 test)
+ ❯ tests/unit/additional-product-pricing.test.ts (0 test)
+ ❯ tests/unit/financial-money.test.ts (0 test)
+ ❯ tests/unit/hubbuy-rights-presentation.test.ts (0 test)
+ ❯ tests/unit/package-cost-calculations.test.ts (0 test)
+ ❯ tests/unit/qc-download.test.ts (0 test)
+ ❯ tests/unit/hubbuy-balance-calculations.test.ts (0 test)
+ ❯ tests/unit/qc-image-validation.test.ts (0 test)
+ ❯ tests/unit/package-refund-calculations.test.ts (0 test)
+ ❯ tests/unit/hubbuy-balance-traceability.test.ts (0 test)
+ ❯ tests/unit/cost-sharing.test.ts (0 test)
+ ❯ tests/unit/qc-storage-fixture.test.ts (8 tests | 8 failed) 2902ms
+   ❯ local S3 fixture boundary (8)
+     × rejects the fixture when VERCEL violates isolation 2805ms
+     × rejects the fixture when LOTI_E2E_QC_VIEWER violates isolation 11ms
+     × rejects the fixture when TURSO_DATABASE_URL violates isolation 10ms
+     × rejects the fixture when TURSO_DATABASE_URL violates isolation 4ms
+     × rejects the fixture when BETTER_AUTH_URL violates isolation 10ms
+     × rejects the fixture when LOTI_QC_TEST_S3_ENDPOINT violates isolation 8ms
+     × rejects the fixture when R2_BUCKET_NAME violates isolation 23ms
+     × permits only the exact disposable localhost fixture 15ms
+ ❯ tests/unit/qc-concurrency.test.ts (0 test)
+ ❯ tests/unit/qc-matching.test.ts (0 test)
+ ❯ tests/unit/auth-session.test.ts (0 test)
+ ❯ tests/unit/orders-transition-storage.test.ts (0 test)
+ ❯ tests/unit/qc-metrics.test.ts (0 test)
+ ❯ tests/unit/qc-preview-route.test.ts (0 test)
+ ❯ tests/unit/qc-http.test.ts (0 test)
+ ❯ tests/integration/auth-domain.test.ts (0 test)
+ ❯ tests/integration/legacy.test.ts (0 test)
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 66 ⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/auth-domain.test.ts [ tests/integration/auth-domain.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\3e8bd9c57c5c0e677313186141ee207d6f3ae8c8'
+ ❯ src/lib/auth/config.ts:5:1
+      3| import { APIError, getAuthoritativeSessionFromCtx, createAuthMiddlewar…
+      4| import type { AppDatabase } from "../db/connection";
+      5| import { account, authEmailDeliveries, user as users } from "../db/sch…
+       | ^
+      6| import { authorization } from "../domain/authorization";
+      7| import { and, eq, gt, isNull } from "drizzle-orm";
+ ❯ tests/integration/auth-domain.test.ts:2:1
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/77]⎯
+
+ FAIL  tests/integration/auth-email-concurrency.test.ts [ tests/integration/auth-email-concurrency.test.ts ]
+ FAIL  tests/integration/hubbuy-balance-adjustments-concurrency.test.ts [ tests/integration/hubbuy-balance-adjustments-concurrency.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\3e8bd9c57c5c0e677313186141ee207d6f3ae8c8'
+ ❯ src/lib/db/connection.ts:8:1
+      6| import { recordQcDatabaseCall } from "../qc/metrics";
+      7| import { getQcDatabaseQueueContext } from "../qc/concurrency";
+      8| import * as schema from "./schema";
+       | ^
+      9|
+     10| export type AppDatabase = LibSQLDatabase<typeof schema>;
+ ❯ tests/integration/helpers.ts:2:1
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/77]⎯
+
+ FAIL  tests/integration/auth-email-limits.test.ts [ tests/integration/auth-email-limits.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\9141b02e4e977fcc6458c4e0abb438268dd7bd78'
+ ❯ tests/integration/auth-email-limits.test.ts:3:1
+      1| import { afterEach, beforeEach, describe, expect, it, vi } from "vites…
+      2| import { eq, like } from "drizzle-orm";
+      3| import { fixture, type Fixture } from "./helpers";
+       | ^
+      4| import { authEmailDeliveries, authLimits } from "@/lib/db/schema";
+      5| import { consumeLimit, persistentAuthStorage, privateKey, trustedClien…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/77]⎯
+
+ FAIL  tests/integration/auth-email.test.ts [ tests/integration/auth-email.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\9141b02e4e977fcc6458c4e0abb438268dd7bd78'
+ ❯ tests/integration/auth-email.test.ts:3:1
+      1| import { afterEach, beforeEach, describe, expect, it, vi } from "vites…
+      2| import { eq } from "drizzle-orm";
+      3| import { fixture, type Fixture } from "./helpers";
+       | ^
+      4| import { createAuth } from "@/lib/auth/config";
+      5| import { handleAuthRequest } from "@/lib/auth/handler";
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/77]⎯
+
+ FAIL  tests/integration/auth.test.ts [ tests/integration/auth.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\21fecd6c87583da1c6bb78e1c974221f8588b9a1'
+ ❯ tests/integration/auth.test.ts:2:1
+      1| import { afterEach, beforeEach, describe, expect, it } from "vitest";
+      2| import { createAuth } from "@/lib/auth/config";
+       | ^
+      3| import { fixture, type Fixture } from "./helpers";
+      4|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/77]⎯
+
+ FAIL  tests/integration/development-seed-sql.test.ts [ tests/integration/development-seed-sql.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\3e8bd9c57c5c0e677313186141ee207d6f3ae8c8'
+ ❯ scripts/development-seed/sql.ts:7:1
+      5| import { drizzle } from "drizzle-orm/libsql";
+      6| import { migrate } from "drizzle-orm/libsql/migrator";
+      7| import * as schema from "../../src/lib/db/schema";
+       | ^
+      8| import journal from "../../drizzle/meta/_journal.json";
+      9| import { verifyDatabase } from "../database-verification";
+ ❯ tests/integration/development-seed-sql.test.ts:6:1
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/77]⎯
+
+ FAIL  tests/integration/development-seed.test.ts [ tests/integration/development-seed.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\9134b50b8f1c347d67c9486bc77740ab44fa82b5'
+ ❯ tests/integration/development-seed.test.ts:4:1
+      2| import { migrate } from "drizzle-orm/libsql/migrator";
+      3| import { eq, sql } from "drizzle-orm";
+      4| import { openDatabase } from "@/lib/db/connection";
+       | ^
+      5| import * as s from "@/lib/db/schema";
+      6| import { createServices } from "@/lib/domain/services";
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/77]⎯
+
+ FAIL  tests/integration/favorites.test.ts [ tests/integration/favorites.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\3e8bd9c57c5c0e677313186141ee207d6f3ae8c8'
+ ❯ tests/integration/favorites.test.ts:3:1
+      1| import { beforeEach, afterEach, describe, it, expect } from "vitest";
+      2| import { eq } from "drizzle-orm";
+      3| import { favorites } from "@/lib/db/schema";
+       | ^
+      4| import { fixture, favorite, type Fixture } from "./helpers";
+      5|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/77]⎯
+
+ FAIL  tests/integration/hubbuy-account-deletion-concurrency.test.ts [ tests/integration/hubbuy-account-deletion-concurrency.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\5dda0955cd5b424b020c048f4a21b5f62539141f'
+ ❯ tests/integration/hubbuy-account-deletion-concurrency.test.ts:9:1
+      7| import { hubbuyAccounts } from "@/lib/db/schema";
+      8| import { hubbuyBalanceServices } from "@/lib/domain/hubbuy-balance-ser…
+      9| import { packageCostServices } from "@/lib/domain/package-cost-service…
+       | ^
+     10| import { fixture, type Fixture } from "./helpers";
+     11|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/77]⎯
+
+ FAIL  tests/integration/hubbuy-account-deletion-migration.test.ts [ tests/integration/hubbuy-account-deletion-migration.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\9134b50b8f1c347d67c9486bc77740ab44fa82b5'
+ ❯ tests/integration/hubbuy-account-deletion-migration.test.ts:6:1
+      4| import { describe, expect, it } from "vitest";
+      5| import { migrate } from "drizzle-orm/libsql/migrator";
+      6| import { openDatabase } from "@/lib/db/connection";
+       | ^
+      7| import { hubbuyBalanceServices } from "@/lib/domain/hubbuy-balance-ser…
+      8|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/77]⎯
+
+ FAIL  tests/integration/hubbuy-account-deletion.test.ts [ tests/integration/hubbuy-account-deletion.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\3e8bd9c57c5c0e677313186141ee207d6f3ae8c8'
+ ❯ tests/integration/hubbuy-account-deletion.test.ts:3:1
+      1| import { afterEach, beforeEach, describe, expect, it } from "vitest";
+      2| import { eq } from "drizzle-orm";
+      3| import { financialOperations, hubbuyAccounts, purchaseCostOrders, purc…
+       | ^
+      4| import { hubbuyBalanceServices } from "@/lib/domain/hubbuy-balance-ser…
+      5| import { packageCostServices } from "@/lib/domain/package-cost-service…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/77]⎯
+
+ FAIL  tests/integration/hubbuy-account-discard-migration.test.ts [ tests/integration/hubbuy-account-discard-migration.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\9134b50b8f1c347d67c9486bc77740ab44fa82b5'
+ ❯ tests/integration/hubbuy-account-discard-migration.test.ts:7:1
+      5| import { migrate } from "drizzle-orm/libsql/migrator";
+      6| import { eq } from "drizzle-orm";
+      7| import { openDatabase } from "@/lib/db/connection";
+       | ^
+      8| import { hubbuyAccounts, user, workspaceMembers, workspaces } from "@/…
+      9| import { hubbuyBalanceServices } from "@/lib/domain/hubbuy-balance-ser…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/77]⎯
+
+ FAIL  tests/integration/hubbuy-account-discard.test.ts [ tests/integration/hubbuy-account-discard.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\3e8bd9c57c5c0e677313186141ee207d6f3ae8c8'
+ ❯ tests/integration/hubbuy-account-discard.test.ts:3:1
+      1| import { afterEach, beforeEach, describe, expect, it } from "vitest";
+      2| import { eq } from "drizzle-orm";
+      3| import { financialOperations, hubbuyAccounts, hubbuyBalanceEntries, hu…
+       | ^
+      4| import { hubbuyBalanceServices } from "@/lib/domain/hubbuy-balance-ser…
+      5| import { packageCostServices } from "@/lib/domain/package-cost-service…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/77]⎯
+
+ FAIL  tests/integration/hubbuy-balance-adjustments-migration.test.ts [ tests/integration/hubbuy-balance-adjustments-migration.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\9134b50b8f1c347d67c9486bc77740ab44fa82b5'
+ ❯ tests/integration/hubbuy-balance-adjustments-migration.test.ts:6:1
+      4| import { describe, expect, it } from "vitest";
+      5| import { migrate } from "drizzle-orm/libsql/migrator";
+      6| import { openDatabase } from "@/lib/db/connection";
+       | ^
+      7| import { hubbuyBalanceServices } from "@/lib/domain/hubbuy-balance-ser…
+      8| import { packageCostServices } from "@/lib/domain/package-cost-service…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/77]⎯
+
+ FAIL  tests/integration/hubbuy-balance-adjustments.test.ts [ tests/integration/hubbuy-balance-adjustments.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\3e8bd9c57c5c0e677313186141ee207d6f3ae8c8'
+ ❯ tests/integration/hubbuy-balance-adjustments.test.ts:3:1
+      1| import { afterEach, beforeEach, describe, expect, it } from "vitest";
+      2| import { eq } from "drizzle-orm";
+      3| import { financialOperations, hubbuyAccounts, hubbuyBalanceAdjustments…
+       | ^
+      4| import { hubbuyBalanceServices } from "@/lib/domain/hubbuy-balance-ser…
+      5| import { packageCostServices } from "@/lib/domain/package-cost-service…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/77]⎯
+
+ FAIL  tests/integration/hubbuy-balance-migration.test.ts [ tests/integration/hubbuy-balance-migration.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\9134b50b8f1c347d67c9486bc77740ab44fa82b5'
+ ❯ tests/integration/hubbuy-balance-migration.test.ts:7:1
+      5| import { eq } from "drizzle-orm";
+      6| import { migrate } from "drizzle-orm/libsql/migrator";
+      7| import { openDatabase } from "@/lib/db/connection";
+       | ^
+      8| import { financialOperations, hubbuyBalanceCreditShares, hubbuyBalance…
+      9| import { hubbuyBalanceServices } from "@/lib/domain/hubbuy-balance-ser…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/77]⎯
+
+ FAIL  tests/integration/hubbuy-balance-services.test.ts [ tests/integration/hubbuy-balance-services.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\3e8bd9c57c5c0e677313186141ee207d6f3ae8c8'
+ ❯ tests/integration/hubbuy-balance-services.test.ts:3:1
+      1| import { afterEach, beforeEach, describe, expect, it } from "vitest";
+      2| import { eq } from "drizzle-orm";
+      3| import { financialOperations, hubbuyAccounts, hubbuyBalanceCreditShare…
+       | ^
+      4| import { hubbuyBalanceServices } from "@/lib/domain/hubbuy-balance-ser…
+      5| import { fixture, type Fixture } from "./helpers";
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/77]⎯
+
+ FAIL  tests/integration/hubbuy-credit-traceability-audit.test.ts [ tests/integration/hubbuy-credit-traceability-audit.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\3e8bd9c57c5c0e677313186141ee207d6f3ae8c8'
+ ❯ tests/integration/hubbuy-credit-traceability-audit.test.ts:2:1
+      1| import { describe, expect, it } from "vitest";
+      2| import { user, workspaceMembers } from "@/lib/db/schema";
+       | ^
+      3| import { hubbuyBalanceServices } from "@/lib/domain/hubbuy-balance-ser…
+      4| import { packageCostServices } from "@/lib/domain/package-cost-service…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/77]⎯
+
+ FAIL  tests/integration/hubbuy-rights-origins.test.ts [ tests/integration/hubbuy-rights-origins.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\3e8bd9c57c5c0e677313186141ee207d6f3ae8c8'
+ ❯ tests/integration/hubbuy-rights-origins.test.ts:3:1
+      1| import { afterEach, beforeEach, describe, expect, it } from "vitest";
+      2| import { eq } from "drizzle-orm";
+      3| import { hubbuyAccounts, hubbuyBalanceConsumptions, hubbuyBalanceCredi…
+       | ^
+      4| import { hubbuyBalanceServices } from "@/lib/domain/hubbuy-balance-ser…
+      5| import { packageCostServices } from "@/lib/domain/package-cost-service…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/77]⎯
+
+ FAIL  tests/integration/invitation-concurrency.test.ts [ tests/integration/invitation-concurrency.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\9134b50b8f1c347d67c9486bc77740ab44fa82b5'
+ ❯ tests/integration/invitation-concurrency.test.ts:4:1
+      2| import { eq } from "drizzle-orm";
+      3| import { migrate } from "drizzle-orm/libsql/migrator";
+      4| import { openDatabase } from "@/lib/db/connection";
+       | ^
+      5| import { invitationService } from "@/lib/domain/invitations";
+      6| import { account, user, workspaceInvitations, workspaceMembers, worksp…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/77]⎯
+
+ FAIL  tests/integration/invitation-migration.test.ts [ tests/integration/invitation-migration.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\9134b50b8f1c347d67c9486bc77740ab44fa82b5'
+ ❯ tests/integration/invitation-migration.test.ts:6:1
+      4| import { expect, it } from "vitest";
+      5| import { migrate } from "drizzle-orm/libsql/migrator";
+      6| import { openDatabase } from "@/lib/db/connection";
+       | ^
+      7| import { favorites, user, userPreferences, workspaceInvitations, works…
+      8| it("upgrades an existing database without changing records and repeats…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/77]⎯
+
+ FAIL  tests/integration/invitations.test.ts [ tests/integration/invitations.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\9141b02e4e977fcc6458c4e0abb438268dd7bd78'
+ ❯ tests/integration/invitations.test.ts:3:1
+      1| import { afterEach, beforeEach, describe, expect, it } from "vitest";
+      2| import { and, eq } from "drizzle-orm";
+      3| import { fixture, type Fixture } from "./helpers";
+       | ^
+      4| import { invitationService, hashInviteToken, limitInvitations } from "…
+      5| import { createAuth } from "@/lib/auth/config";
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/77]⎯
+
+ FAIL  tests/integration/legacy.test.ts [ tests/integration/legacy.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\9b094a63461b40ccd93fb6998a0a3b61dbdd013f'
+ ❯ scripts/legacy-reader.ts:2:1
+      1| import ExcelJS from "exceljs";
+      2| import { normalizeText } from "../src/lib/domain/categories";
+       | ^
+      3| import { parseMoney } from "../src/lib/domain/money";
+      4| import { productUrl } from "../src/lib/domain/validation";
+ ❯ tests/integration/legacy.test.ts:3:1
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[23/77]⎯
+
+ FAIL  tests/integration/logistics-finalization.test.ts [ tests/integration/logistics-finalization.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\9141b02e4e977fcc6458c4e0abb438268dd7bd78'
+ ❯ tests/integration/logistics-finalization.test.ts:4:1
+      2| import {eq} from "drizzle-orm";
+      3| import {migrate} from "drizzle-orm/libsql/migrator";
+      4| import {fixture} from "./helpers";
+       | ^
+      5| import * as s from "@/lib/db/schema";
+      6| import {packageCostServices} from "@/lib/domain/package-cost-services";
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[24/77]⎯
+
+ FAIL  tests/integration/logistics-legacy-financials.test.ts [ tests/integration/logistics-legacy-financials.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\9141b02e4e977fcc6458c4e0abb438268dd7bd78'
+ ❯ tests/integration/logistics-legacy-financials.test.ts:3:1
+      1| import {it,expect} from "vitest";
+      2| import {migrate} from "drizzle-orm/libsql/migrator";
+      3| import {fixture} from "./helpers";
+       | ^
+      4| import {packageCostServices} from "@/lib/domain/package-cost-services";
+      5| import {readWorkflowFinancialSummary,projectLegacyPackageCharge} from …
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[25/77]⎯
+
+ FAIL  tests/integration/logistics-transition-races.test.ts [ tests/integration/logistics-transition-races.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\9141b02e4e977fcc6458c4e0abb438268dd7bd78'
+ ❯ tests/integration/logistics-transition-races.test.ts:6:1
+      4| import {randomUUID} from "node:crypto";
+      5| import {migrate} from "drizzle-orm/libsql/migrator";
+      6| import {fixture} from "./helpers";
+       | ^
+      7| import {warehouseServices} from "@/lib/domain/warehouse-services";
+      8| import {logisticsPackageServices} from "@/lib/domain/logistics-package…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[26/77]⎯
+
+ FAIL  tests/integration/orders-transition-baseline.test.ts [ tests/integration/orders-transition-baseline.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\3871b0db70ffabc3a736e5d452a6baa9af66ffc3'
+ ❯ tests/integration/orders-transition-baseline.test.ts:3:1
+      1| import { describe, expect, it } from "vitest";
+      2| import { migrate } from "drizzle-orm/libsql/migrator";
+      3| import { legacyMigrationsFolder } from "../fixtures/orders-transition/…
+       | ^
+      4| import { openDatabase } from "@/lib/db/connection";
+      5| import { user, workspaceMembers, workspaces } from "@/lib/db/schema";
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[27/77]⎯
+
+ FAIL  tests/integration/orders-transition-comparison.test.ts [ tests/integration/orders-transition-comparison.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\9134b50b8f1c347d67c9486bc77740ab44fa82b5'
+ ❯ tests/integration/orders-transition-comparison.test.ts:5:1
+      3| import { migrate } from "drizzle-orm/libsql/migrator";
+      4| import { legacyMigrationsFolder } from "../fixtures/orders-transition/…
+      5| import { openDatabase } from "@/lib/db/connection";
+       | ^
+      6| import { hubbuyExternalItems, purchaseCostRefunds, purchaseItems, qcEv…
+      7| import { qcServices } from "@/lib/domain/qc-services";
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[28/77]⎯
+
+ FAIL  tests/integration/package-costs.test.ts [ tests/integration/package-costs.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\3e8bd9c57c5c0e677313186141ee207d6f3ae8c8'
+ ❯ tests/integration/package-costs.test.ts:3:1
+      1| import { afterEach, beforeEach, describe, expect, it } from "vitest";
+      2| import { eq } from "drizzle-orm";
+      3| import { purchaseCostTrackings, purchaseItemCosts, purchasePackageItem…
+       | ^
+      4| import { packageCostServices } from "@/lib/domain/package-cost-service…
+      5| import { fixture, type Fixture } from "./helpers";
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[29/77]⎯
+
+ FAIL  tests/integration/package-refund-concurrency.test.ts [ tests/integration/package-refund-concurrency.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\5dda0955cd5b424b020c048f4a21b5f62539141f'
+ ❯ tests/integration/package-refund-concurrency.test.ts:8:1
+      6| import { hubbuyAccounts } from "@/lib/db/schema";
+      7| import { hubbuyBalanceServices } from "@/lib/domain/hubbuy-balance-ser…
+      8| import { packageCostServices } from "@/lib/domain/package-cost-service…
+       | ^
+      9| import { fixture, type Fixture } from "./helpers";
+     10|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[30/77]⎯
+
+ FAIL  tests/integration/package-refund-hubbuy.test.ts [ tests/integration/package-refund-hubbuy.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\3e8bd9c57c5c0e677313186141ee207d6f3ae8c8'
+ ❯ tests/integration/package-refund-hubbuy.test.ts:3:1
+      1| import { afterEach, beforeEach, describe, expect, it } from "vitest";
+      2| import { eq } from "drizzle-orm";
+      3| import { hubbuyAccounts, hubbuyBalanceConsumptions, hubbuyBalanceEntri…
+       | ^
+      4| import { hubbuyBalanceServices as balanceServices } from "@/lib/domain…
+      5| import { packageCostServices } from "@/lib/domain/package-cost-service…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[31/77]⎯
+
+ FAIL  tests/integration/package-refund-migration.test.ts [ tests/integration/package-refund-migration.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\9134b50b8f1c347d67c9486bc77740ab44fa82b5'
+ ❯ tests/integration/package-refund-migration.test.ts:6:1
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[32/77]⎯
+
+ FAIL  tests/integration/package-refunds.test.ts [ tests/integration/package-refunds.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\3e8bd9c57c5c0e677313186141ee207d6f3ae8c8'
+ ❯ src/lib/domain/package-cost-services.ts:5:1
+
+ ❯ tests/integration/package-refunds.test.ts:3:1
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[33/77]⎯
+
+ FAIL  tests/integration/password-reset.test.ts [ tests/integration/password-reset.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\21fecd6c87583da1c6bb78e1c974221f8588b9a1'
+ ❯ tests/integration/password-reset.test.ts:3:1
+      1| import { afterEach, beforeEach, describe, expect, it } from "vitest";
+      2| import { eq } from "drizzle-orm";
+      3| import { createAuth } from "@/lib/auth/config";
+       | ^
+      4| import { account, session, user } from "@/lib/db/schema";
+      5| import { resetDatabaseUrl, resetMemberPassword } from "../../scripts/p…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[34/77]⎯
+
+ FAIL  tests/integration/profile.test.ts [ tests/integration/profile.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\21fecd6c87583da1c6bb78e1c974221f8588b9a1'
+ ❯ tests/integration/profile.test.ts:3:1
+      1| import { afterEach, beforeEach, describe, expect, it } from "vitest";
+      2| import { eq } from "drizzle-orm";
+      3| import { createAuth } from "@/lib/auth/config";
+       | ^
+      4| import { account, purchaseItems, session, user, workspaceMembers } fro…
+      5| import { createServices } from "@/lib/domain/services";
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[35/77]⎯
+
+ FAIL  tests/integration/purchase-additional-orders.test.ts [ tests/integration/purchase-additional-orders.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\3e8bd9c57c5c0e677313186141ee207d6f3ae8c8'
+ ❯ tests/integration/purchase-additional-orders.test.ts:3:1
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[36/77]⎯
+
+ FAIL  tests/integration/purchase-order-correction-migration.test.ts [ tests/integration/purchase-order-correction-migration.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\9134b50b8f1c347d67c9486bc77740ab44fa82b5'
+ ❯ tests/integration/purchase-order-correction-migration.test.ts:7:1
+      5| import { migrate } from "drizzle-orm/libsql/migrator";
+      6| import { eq } from "drizzle-orm";
+      7| import { openDatabase } from "@/lib/db/connection";
+       | ^
+      8| import { createServices } from "@/lib/domain/services";
+      9| import {initializeLegacyPurchaseCosts} from "@/lib/domain/purchase-cos…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[37/77]⎯
+
+ FAIL  tests/integration/purchase-order-corrections.test.ts [ tests/integration/purchase-order-corrections.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\5dda0955cd5b424b020c048f4a21b5f62539141f'
+ ❯ tests/integration/purchase-order-corrections.test.ts:9:1
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[38/77]⎯
+
+ FAIL  tests/integration/purchase-sharing-concurrency.test.ts [ tests/integration/purchase-sharing-concurrency.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\3e8bd9c57c5c0e677313186141ee207d6f3ae8c8'
+ ❯ src/lib/domain/services.ts:3:1
+      1| import { desc, eq, inArray } from "drizzle-orm";
+      2| import type { AppDatabase } from "../db/connection";
+      3| import { collections, favorites, purchases, purchaseItems, purchaseIte…
+       | ^
+      4| import { authorization } from "./authorization";
+      5| import { favoriteInput, collectionInput } from "./validation";
+ ❯ tests/integration/purchase-sharing-concurrency.test.ts:3:1
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[39/77]⎯
+
+ FAIL  tests/integration/purchase-sharing-migration.test.ts [ tests/integration/purchase-sharing-migration.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\9134b50b8f1c347d67c9486bc77740ab44fa82b5'
+ ❯ tests/integration/purchase-sharing-migration.test.ts:6:1
+      4| import { describe, expect, it } from "vitest";
+      5| import { migrate } from "drizzle-orm/libsql/migrator";
+      6| import { openDatabase } from "@/lib/db/connection";
+       | ^
+      7|
+      8| describe("purchase cost-sharing migration", () => {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[40/77]⎯
+
+ FAIL  tests/integration/purchases.test.ts [ tests/integration/purchases.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\9141b02e4e977fcc6458c4e0abb438268dd7bd78'
+ ❯ tests/integration/purchases.test.ts:5:1
+      3| import { purchaseItems, purchaseItemParticipants, purchases } from "@/…
+      4| import { personSummary, purchaseSummary } from "@/lib/domain/money";
+      5| import { fixture, favorite, type Fixture } from "./helpers";
+       | ^
+      6|
+      7| let f: Fixture;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[41/77]⎯
+
+ FAIL  tests/integration/qc-migration.test.ts [ tests/integration/qc-migration.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\9134b50b8f1c347d67c9486bc77740ab44fa82b5'
+ ❯ tests/integration/qc-migration.test.ts:7:1
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[42/77]⎯
+
+ FAIL  tests/integration/qc-services.test.ts [ tests/integration/qc-services.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\9134b50b8f1c347d67c9486bc77740ab44fa82b5'
+ ❯ tests/integration/qc-services.test.ts:5:1
+      3| import { eq } from "drizzle-orm";
+      4| import { hubbuyExternalItems, purchaseItems, purchases, qcEvents, qcIm…
+      5| import { openDatabase, type AppDatabase } from "@/lib/db/connection";
+       | ^
+      6| import { qcServices } from "@/lib/domain/qc-services";
+      7| import { QcDomainError } from "@/lib/domain/qc-errors";
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[43/77]⎯
+
+ FAIL  tests/integration/warehouse-concurrency.test.ts [ tests/integration/warehouse-concurrency.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\9141b02e4e977fcc6458c4e0abb438268dd7bd78'
+ ❯ tests/integration/warehouse-concurrency.test.ts:5:1
+      3| import {promisify} from "node:util";
+      4| import {randomUUID} from "node:crypto";
+      5| import {fixture} from "./helpers";
+       | ^
+      6| import {warehouseServices} from "@/lib/domain/warehouse-services";
+      7| import {hubbuyBalanceServices} from "@/lib/domain/hubbuy-balance-servi…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[44/77]⎯
+
+ FAIL  tests/integration/warehouse-workflow.test.ts [ tests/integration/warehouse-workflow.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\9141b02e4e977fcc6458c4e0abb438268dd7bd78'
+ ❯ tests/integration/warehouse-workflow.test.ts:3:1
+      1| import { describe,it,expect } from "vitest";
+      2| import { migrate } from "drizzle-orm/libsql/migrator";
+      3| import { fixture,favorite } from "./helpers";
+       | ^
+      4| import * as s from "@/lib/db/schema";
+      5| import { warehouseServices } from "@/lib/domain/warehouse-services";
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[45/77]⎯
+
+ FAIL  tests/unit/additional-product-pricing.test.ts [ tests/unit/additional-product-pricing.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\a99fe10ad9e5979da5ef26e476802a670e6ad529'
+ ❯ src/lib/domain/additional-product-pricing.ts:1:1
+      1| import { MAX_FINANCIAL_MINOR, formatCnyMinor, parseFinancialMinor } fr…
+       | ^
+      2|
+      3| export type ProductPriceBasis = "unit" | "total";
+ ❯ tests/unit/additional-product-pricing.test.ts:2:1
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[46/77]⎯
+
+ FAIL  tests/unit/auth-session.test.ts [ tests/unit/auth-session.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\fcaa923eb49d7b578be5905814b2d8f935a28b91'
+ ❯ src/lib/auth/session.ts:1:1
+      1| import "server-only";
+       | ^
+      2| import { headers } from "next/headers";
+      3| import { isAPIError } from "better-auth/api";
+ ❯ tests/unit/auth-session.test.ts:6:1
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[47/77]⎯
+
+ FAIL  tests/unit/cost-sharing.test.ts [ tests/unit/cost-sharing.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\34a929a94b5d272f929fa18a33bdae12cdbbed1d'
+ ❯ tests/unit/cost-sharing.test.ts:3:1
+      1| import { describe, expect, it } from "vitest";
+      2| import { allocateItemCost, type CostParticipant } from "@/lib/domain/c…
+      3| import { parsePercentageBps, percentageBpsInput } from "@/lib/domain/m…
+       | ^
+      4|
+      5| const equal = (personIds: string[]): CostParticipant[] => personIds.ma…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[48/77]⎯
+
+ FAIL  tests/unit/domain.test.ts [ tests/unit/domain.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\34a929a94b5d272f929fa18a33bdae12cdbbed1d'
+ ❯ tests/unit/domain.test.ts:4:1
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[49/77]⎯
+
+ FAIL  tests/unit/financial-money.test.ts [ tests/unit/financial-money.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\a99fe10ad9e5979da5ef26e476802a670e6ad529'
+ ❯ tests/unit/financial-money.test.ts:2:1
+      1| import { describe, expect, it } from "vitest";
+      2| import {
+       | ^
+      3|   calculateExternalFeeBrl,
+      4|   convertByCapturedPair,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[50/77]⎯
+
+ FAIL  tests/unit/hubbuy-balance-calculations.test.ts [ tests/unit/hubbuy-balance-calculations.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\3a40375be4f9967e2b16776ec9be47a32cc8e31b'
+ ❯ tests/unit/hubbuy-balance-calculations.test.ts:2:1
+      1| import { describe, expect, it } from "vitest";
+      2| import {
+       | ^
+      3|   allocateExactMinor,
+      4|   allocateRefundAcrossSources,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[51/77]⎯
+
+ FAIL  tests/unit/hubbuy-balance-traceability.test.ts [ tests/unit/hubbuy-balance-traceability.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\5ed5acd1b43183a54cc5c15ba788eda6c6e8f678'
+ ❯ tests/unit/hubbuy-balance-traceability.test.ts:2:1
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[52/77]⎯
+
+ FAIL  tests/unit/hubbuy-rights-presentation.test.ts [ tests/unit/hubbuy-rights-presentation.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\c94dd78ff466d742bc2f8c579ee7f9e2f05c4f71'
+ ❯ tests/unit/hubbuy-rights-presentation.test.ts:2:1
+      1| import { describe, expect, it } from "vitest";
+      2| import { presentIndividualRights, type AvailableCreditShare, type Refu…
+       | ^
+      3|
+      4| const entry = (id: string, sequence: number, sourceType = "refund_rece…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[53/77]⎯
+
+ FAIL  tests/unit/orders-transition-storage.test.ts [ tests/unit/orders-transition-storage.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\fcaa923eb49d7b578be5905814b2d8f935a28b91'
+ ❯ src/lib/qc/orders-transition-storage.ts:1:1
+      1| import "server-only";
+       | ^
+      2| import { createHash } from "node:crypto";
+      3| import { existsSync, mkdirSync, readFileSync, realpathSync, unlinkSync…
+ ❯ tests/unit/orders-transition-storage.test.ts:2:1
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[54/77]⎯
+
+ FAIL  tests/unit/package-cost-calculations.test.ts [ tests/unit/package-cost-calculations.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\a5cc0e51b3805b199fe1b31d704c1233906a5632'
+ ❯ tests/unit/package-cost-calculations.test.ts:2:1
+      1| import { describe, expect, it } from "vitest";
+      2| import { calculateCostTracking, roundFeeCents, splitByWeights, type Co…
+       | ^
+      3|
+      4| const known = (amountCents: number) => ({ state: "known" as const, amo…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[55/77]⎯
+
+ FAIL  tests/unit/package-refund-calculations.test.ts [ tests/unit/package-refund-calculations.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\cb2d5a3ef43c3a00745067825006ea84f2d78683'
+ ❯ tests/unit/package-refund-calculations.test.ts:2:1
+      1| import { describe, expect, it } from "vitest";
+      2| import { allocateRefundCredit, parseCostCents } from "@/lib/domain/pac…
+       | ^
+      3| import { calculateCostTracking, type CostLineInput } from "@/lib/domai…
+      4|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[56/77]⎯
+
+ FAIL  tests/unit/qc-client-state.test.ts [ tests/unit/qc-client-state.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\1d98bebe87a58e5905c63d79be4e4cb58c0f656a'
+ ❯ src/components/qc/qc-client-state.ts:1:1
+      1| import { qcPreviewCache } from "./qc-preview-cache";
+       | ^
+      2|
+      3| export type QcPreview = { imageId: string; previewUrl: string; preview…
+ ❯ tests/unit/qc-client-state.test.ts:2:1
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[57/77]⎯
+
+ FAIL  tests/unit/qc-concurrency.test.ts [ tests/unit/qc-concurrency.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\1643e4f2fa6432f83ff5b618b5eeba50f77b077e'
+ ❯ tests/unit/qc-concurrency.test.ts:2:1
+      1| import { describe, expect, it } from "vitest";
+      2| import { FifoSemaphore, SerialQueue } from "@/lib/qc/concurrency";
+       | ^
+      3|
+      4| function deferred() {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[58/77]⎯
+
+ FAIL  tests/unit/qc-download.test.ts [ tests/unit/qc-download.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\fcaa923eb49d7b578be5905814b2d8f935a28b91'
+ ❯ src/lib/qc/download.ts:1:1
+      1| import "server-only";
+       | ^
+      2| import https from "node:https";
+      3| import { lookup as dnsLookup } from "node:dns/promises";
+ ❯ tests/unit/qc-download.test.ts:2:1
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[59/77]⎯
+
+ FAIL  tests/unit/qc-http.test.ts [ tests/unit/qc-http.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\6c3ebb94a189c4b34e9d6ab80d8205367e3c7d6b'
+ ❯ src/lib/domain/qc-http.ts:3:1
+      1| import { NextResponse } from "next/server";
+      2| import { z } from "zod";
+      3| import { authOrigin } from "../auth/origin";
+       | ^
+      4| import { DomainError } from "./errors";
+      5| import { QcDomainError } from "./qc-errors";
+ ❯ tests/unit/qc-http.test.ts:2:1
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[60/77]⎯
+
+ FAIL  tests/unit/qc-image-validation.test.ts [ tests/unit/qc-image-validation.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\fcaa923eb49d7b578be5905814b2d8f935a28b91'
+ ❯ src/lib/qc/image-validation.ts:1:1
+      1| import "server-only";
+       | ^
+      2| import { createHash } from "node:crypto";
+      3| import sharp from "sharp";
+ ❯ tests/unit/qc-image-validation.test.ts:3:1
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[61/77]⎯
+
+ FAIL  tests/unit/qc-matching.test.ts [ tests/unit/qc-matching.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\2aeb0dcc3fe03109719c7031cf0a0d879f28ad34'
+ ❯ src/lib/domain/qc-matching.ts:1:1
+      1| import { buildCanonicalProductKey, detectPlatform } from "./urls";
+       | ^
+      2| import type { QcOccurrenceInput } from "./qc-validation";
+      3|
+ ❯ tests/unit/qc-matching.test.ts:2:1
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[62/77]⎯
+
+ FAIL  tests/unit/qc-metrics.test.ts [ tests/unit/qc-metrics.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\4017e047f5e8b607b561b16c7a4e03f98b6db377'
+ ❯ tests/unit/qc-metrics.test.ts:2:1
+      1| import { describe, expect, it } from "vitest";
+      2| import { createQcMetricCollector, measureQcStage, withQcMetricContext,…
+       | ^
+      3|
+      4| describe("QC run metrics", () => {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[63/77]⎯
+
+ FAIL  tests/unit/qc-preview-route.test.ts [ tests/unit/qc-preview-route.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\aebc77a89ef143a1497e0460d31f5049f9a469ca'
+ ❯ src/app/api/qc/images/[imageId]/preview/route.ts:4:1
+      2| import { requireUser } from "@/lib/auth/session";
+      3| import { db } from "@/lib/db";
+      4| import { qcFailure } from "@/lib/domain/qc-http";
+       | ^
+      5| import { qcPreviewHeaders } from "@/lib/qc/preview-http";
+      6| import { qcServices } from "@/lib/domain/qc-services";
+ ❯ tests/unit/qc-preview-route.test.ts:6:1
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[64/77]⎯
+
+ FAIL  tests/unit/qc-validation.test.ts [ tests/unit/qc-validation.test.ts ]
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\56f32407ed7a7574ae82cdecb1186d7c2bb900b3'
+ ❯ src/lib/domain/qc-validation.ts:3:1
+      1| import { createHash } from "node:crypto";
+      2| import { z } from "zod";
+      3| import { DomainError } from "./errors";
+       | ^
+      4| import { QC_LIMITS } from "./qc-limits";
+      5|
+ ❯ tests/unit/qc-validation.test.ts:2:1
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[65/77]⎯
+
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 11 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/integration/password-reset-cli.test.ts > executes the reset CLI against a disposable file and fails without exposing secrets
+Error: Test timed out in 20000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ tests/integration/password-reset-cli.test.ts:10:1
+      8| const execute = promisify(execFile);
+      9|
+     10| it("executes the reset CLI against a disposable file and fails without…
+       | ^
+     11|   const directory = await mkdtemp(join(tmpdir(), "loti-password-reset-…
+     12|   const url = `file:${join(directory, "db.sqlite")}`;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[66/77]⎯
+
+ FAIL  tests/unit/development-seed-target.test.ts > development seed destination > CLI plan stays offline even with production app credentials present
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ tests/unit/development-seed-target.test.ts:35:3
+     33|     expect(developmentSeedTarget({ ...valid, GITHUB_ACTIONS: "true", G…
+     34|   });
+     35|   it("CLI plan stays offline even with production app credentials pres…
+       |   ^
+     36|     const result = spawnSync(process.execPath, ["--conditions=react-se…
+     37|       encoding: "utf8", windowsHide: true,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[67/77]⎯
+
+ FAIL  tests/unit/qc-storage-fixture.test.ts > local S3 fixture boundary > rejects the fixture when VERCEL violates isolation
+ FAIL  tests/unit/qc-storage-fixture.test.ts > local S3 fixture boundary > rejects the fixture when LOTI_E2E_QC_VIEWER violates isolation
+ FAIL  tests/unit/qc-storage-fixture.test.ts > local S3 fixture boundary > rejects the fixture when TURSO_DATABASE_URL violates isolation
+ FAIL  tests/unit/qc-storage-fixture.test.ts > local S3 fixture boundary > rejects the fixture when TURSO_DATABASE_URL violates isolation
+ FAIL  tests/unit/qc-storage-fixture.test.ts > local S3 fixture boundary > rejects the fixture when BETTER_AUTH_URL violates isolation
+ FAIL  tests/unit/qc-storage-fixture.test.ts > local S3 fixture boundary > rejects the fixture when LOTI_QC_TEST_S3_ENDPOINT violates isolation
+ FAIL  tests/unit/qc-storage-fixture.test.ts > local S3 fixture boundary > rejects the fixture when R2_BUCKET_NAME violates isolation
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\56f32407ed7a7574ae82cdecb1186d7c2bb900b3'
+ ❯ src/lib/qc/storage.ts:6:1
+      4| import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+      5| import { QC_LIMITS } from "../domain/qc-limits";
+      6| import { DomainError } from "../domain/errors";
+       | ^
+      7|
+      8| export type QcObject = { key: string; bytes: Buffer; mimeType: string;…
+ ❯ tests/unit/qc-storage-fixture.test.ts:19:43
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[68/77]⎯
+
+ FAIL  tests/unit/qc-storage-fixture.test.ts > local S3 fixture boundary > permits only the exact disposable localhost fixture
+Error: ENOENT: no such file or directory, open 'C:\Users\Gabriel\AppData\Local\Packages\sandbox.{77405c05-2081-4b93-8f27-85e69defda57}\AC\Temp\iN00GdStPP9gI2dkWJL0J\ssr\56f32407ed7a7574ae82cdecb1186d7c2bb900b3'
+ ❯ src/lib/qc/storage.ts:6:1
+      4| import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+      5| import { QC_LIMITS } from "../domain/qc-limits";
+      6| import { DomainError } from "../domain/errors";
+       | ^
+      7|
+      8| export type QcObject = { key: string; bytes: Buffer; mimeType: string;…
+ ❯ tests/unit/qc-storage-fixture.test.ts:23:43
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[69/77]⎯
+
+ FAIL  tests/unit/warehouse-calculations.test.ts > rounds every unit/person cell by at most one cent while preserving both margins
+Error: Test timed out in 5000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ tests/unit/warehouse-calculations.test.ts:13:1
+     11|   expect([0,1].map(i => matrix.reduce((sum,r) => sum+r[i].amountCents,…
+     12| });
+     13| it("rounds every unit/person cell by at most one cent while preserving…
+       | ^
+     14|   for(let quantity=1;quantity<=8;quantity++)for(let total=0;total<=41;…
+     15|     const units=Array.from({length:quantity},(_,i)=>unitMinorCapacity(…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[70/77]⎯
+
+
+ Test Files  70 failed | 12 passed (82)
+      Tests  11 failed | 73 passed (84)
+   Start at  22:06:35
+   Duration  42.23s (tests 92%, transform 4%, worker 2%, import 2%)
+
+    Isolate  82 workers spawned · ~960ms startup each (spawn + environment, per file)
+             at least ~6.20s faster with isolate: false — reuses workers across files instead of one per file
+

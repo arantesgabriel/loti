@@ -1,0 +1,5 @@
+npm notice run loti@0.1.0 test
+npm notice run vitest run --maxWorkers=2
+
+ RUN  v5.0.3 C:/Fontes/loti
+

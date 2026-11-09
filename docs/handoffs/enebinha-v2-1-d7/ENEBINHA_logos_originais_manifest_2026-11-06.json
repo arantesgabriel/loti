@@ -1,0 +1,142 @@
+[
+  {
+    "name": "Nike",
+    "url": "https://enebinha.netlify.app/images/logos/editorial/nike.svg",
+    "file": "marcas-originais/nike.svg",
+    "bytes": 415,
+    "sha256": "fd0ddc746210644f055d6c42d472dcce6cc1ea80956144f3bcefab382cb72df2"
+  },
+  {
+    "name": "Adidas",
+    "url": "https://enebinha.netlify.app/images/logos/editorial/adidas.svg",
+    "file": "marcas-originais/adidas.svg",
+    "bytes": 264,
+    "sha256": "3b492374e3ff9a3dff753df5a6e1857e16e18fbd58924d4088cff7048427932f"
+  },
+  {
+    "name": "Jordan",
+    "url": "https://enebinha.netlify.app/images/logos/editorial/jordan.svg",
+    "file": "marcas-originais/jordan.svg",
+    "bytes": 3170,
+    "sha256": "68f177a6b85c2e496f8abf3e81f66da86fdec9abe13be39de15e7a0a231e6b6c"
+  },
+  {
+    "name": "Supreme",
+    "url": "https://enebinha.netlify.app/images/logos/editorial/supreme.svg",
+    "file": "marcas-originais/supreme.svg",
+    "bytes": 2329,
+    "sha256": "333c51ebbe0d502ec739619139b90d4f95d033c206054315acaee14a8eb1fcea"
+  },
+  {
+    "name": "Stüssy",
+    "url": "https://enebinha.netlify.app/images/logos/editorial/stussy.svg",
+    "file": "marcas-originais/stussy.svg",
+    "bytes": 21807,
+    "sha256": "b6f8206e54a3234e53cd05158fdc4e024771d126637f4138e0607e962d0b159d"
+  },
+  {
+    "name": "Carhartt",
+    "url": "https://enebinha.netlify.app/images/logos/editorial/carhartt.svg",
+    "file": "marcas-originais/carhartt.svg",
+    "bytes": 11381,
+    "sha256": "cae0983c441733d61048252a99186ef3c9569eee9b3e33882296e308bb7378b7"
+  },
+  {
+    "name": "New Balance",
+    "url": "https://enebinha.netlify.app/images/logos/editorial/newbalance.svg",
+    "file": "marcas-originais/newbalance.svg",
+    "bytes": 865,
+    "sha256": "fff9f083d6c14ee42745367714864c061e8c84d175deb61d05151671451e77be"
+  },
+  {
+    "name": "Puma",
+    "url": "https://enebinha.netlify.app/images/logos/editorial/puma.svg",
+    "file": "marcas-originais/puma.svg",
+    "bytes": 1391,
+    "sha256": "bd0ec09cd2147f19400bcfd33de2f32cf11745adccb145670ba6053523035a32"
+  },
+  {
+    "name": "The North Face",
+    "url": "https://enebinha.netlify.app/images/logos/editorial/thenorthface.svg",
+    "file": "marcas-originais/thenorthface.svg",
+    "bytes": 2139,
+    "sha256": "d8e80ffe73b8ca692469d7708494b35b14f3ecd821704bd6e222a47e7bb53eba"
+  },
+  {
+    "name": "Palace",
+    "url": "https://enebinha.netlify.app/images/logos/editorial/palace.webp",
+    "file": "marcas-originais/palace.webp",
+    "bytes": 16284,
+    "sha256": "d07e617ba99d173285999ee307b57115f5abd5379a1fad86dad0753e84c67845"
+  },
+  {
+    "name": "Louis Vuitton",
+    "url": "https://enebinha.netlify.app/images/logos/editorial/louisvuitton.svg",
+    "file": "marcas-originais/louisvuitton.svg",
+    "bytes": 8990,
+    "sha256": "a9d8dfd04b55383b2fe95fd7d5d61e2e427ab64c0a233b6f37bba4f121281639"
+  },
+  {
+    "name": "Gucci",
+    "url": "https://enebinha.netlify.app/images/logos/editorial/gucci.svg",
+    "file": "marcas-originais/gucci.svg",
+    "bytes": 3989,
+    "sha256": "53f6a5e9b427b0c868f996ea7909d5e6af74ceb6b8fe9cfd3a18f0cf41d0c954"
+  },
+  {
+    "name": "Prada",
+    "url": "https://enebinha.netlify.app/images/logos/editorial/prada.svg",
+    "file": "marcas-originais/prada.svg",
+    "bytes": 2867,
+    "sha256": "f2662ba6986c5be3ddf129bf48990314ef4330666f919215243371b0c2cb5aee"
+  },
+  {
+    "name": "Dior",
+    "url": "https://enebinha.netlify.app/images/logos/editorial/dior.svg",
+    "file": "marcas-originais/dior.svg",
+    "bytes": 2066,
+    "sha256": "dd4bad6f9b663c39e93be488368147dbfd9fa8b90eddf6d802c8d1ff694d0b08"
+  },
+  {
+    "name": "Balenciaga",
+    "url": "https://enebinha.netlify.app/images/logos/editorial/balenciaga.svg",
+    "file": "marcas-originais/balenciaga.svg",
+    "bytes": 1912,
+    "sha256": "d64c402c61f3288c9c83e1ef01cffafc57ab9ee72538ad249655990753b53dfe"
+  },
+  {
+    "name": "Apple",
+    "url": "https://enebinha.netlify.app/images/logos/editorial/apple.svg",
+    "file": "marcas-originais/apple.svg",
+    "bytes": 671,
+    "sha256": "e58dd0a4f57138a51a103469959d343cd82208d33194324f1897abdd1bb52831"
+  },
+  {
+    "name": "Sony",
+    "url": "https://enebinha.netlify.app/images/logos/editorial/sony.svg",
+    "file": "marcas-originais/sony.svg",
+    "bytes": 2765,
+    "sha256": "02983d28b7fd2f7be3a1069148e61e53a926d5c71c9d7c85be82c9b0ac1b0df7"
+  },
+  {
+    "name": "Samsung",
+    "url": "https://enebinha.netlify.app/images/logos/editorial/samsung.svg",
+    "file": "marcas-originais/samsung.svg",
+    "bytes": 2307,
+    "sha256": "12c46b4b73d8e3f236c83a28e9da2dab86461697e6249911a06f85cb48284ced"
+  },
+  {
+    "name": "Logitech",
+    "url": "https://enebinha.netlify.app/images/logos/editorial/logitech.svg",
+    "file": "marcas-originais/logitech.svg",
+    "bytes": 6656,
+    "sha256": "fb015402a4d717c5af7c67cff1adbeec042a3725aee18202a783b0bf0b5215a3"
+  },
+  {
+    "name": "Razer",
+    "url": "https://enebinha.netlify.app/images/logos/editorial/razer.svg",
+    "file": "marcas-originais/razer.svg",
+    "bytes": 7221,
+    "sha256": "8a7cd9e72f9361c1a66628c6723bdbd3ced73635136a5d777384f6a9a39a0024"
+  }
+]

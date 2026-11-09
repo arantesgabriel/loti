@@ -59,11 +59,11 @@ export function AdditionalOrdersPanel({ detail, locked, busy, mutate, createPack
   useEffect(() => {
     let active = true;
     const ids = accountKey.split("|").filter(Boolean);
-    for (const accountId of ids) void costRequest<{ account: { id: string }; rights: Balance["rights"] }>(`/api/hubbuy/accounts/${encodeURIComponent(accountId)}`).then(result => {
+    for (const accountId of ids) void costRequest<{ account: { id: string }; rights: Balance["rights"] }>(`/api/hubbuy/accounts/${encodeURIComponent(accountId)}`, undefined, detail.tracking.workspaceId).then(result => {
       if (active && result.ok && result.data) setBalances(current => ({ ...current, [accountId]: { accountId, rights: result.data!.rights } }));
     });
     return () => { active = false; };
-  }, [accountKey]);
+  }, [accountKey, detail.tracking.workspaceId]);
 
   const draftOrders = detail.productOrders.filter(order => order.kind === "additional" && order.state === "draft");
   const selectedOrderId = resumeOrderId ?? activeOrderId;

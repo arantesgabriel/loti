@@ -404,6 +404,8 @@ export function ProductCostsList(props: Props) {
                 <Fragment key={item.id}>
                   <tr
                     className={`cost-compact-row ${open ? "is-expanded" : ""}`}
+                    data-cost-target={`order-product-${item.id}`}
+                    tabIndex={-1}
                   >
                     <td>
                       <Identity item={item} purchaseId={detail.purchase.id} />
@@ -461,7 +463,12 @@ export function ProductCostsList(props: Props) {
           const open = !!expanded[item.id],
             status = productStatus(item);
           return (
-            <article className="cost-product-mobile-card" key={item.id}>
+            <article
+              className="cost-product-mobile-card"
+              key={item.id}
+              data-cost-target={`order-product-${item.id}`}
+              tabIndex={-1}
+            >
               <div className="cost-compact-mobile-heading">
                 <Identity item={item} purchaseId={detail.purchase.id} mobile />
                 <div className="cost-compact-mobile-total">

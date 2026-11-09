@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { sqliteTable, text, integer, index, uniqueIndex, check, primaryKey, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, index, uniqueIndex, check, primaryKey, foreignKey, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 const timestamp = (name: string) => integer(name, { mode: "timestamp_ms" }).notNull();
 const dates = () => ({ createdAt: timestamp("created_at"), updatedAt: timestamp("updated_at") });
 // Better Auth's canonical field contract; passwords and sessions are managed by its adapter.
@@ -19,7 +19,14 @@ export const account = sqliteTable("account", {
 export const verification = sqliteTable("verification", {
   id: text("id").primaryKey(), identifier: text("identifier").notNull(), value: text("value").notNull(), expiresAt: timestamp("expires_at"), ...dates(),
 }, t => [index("verification_identifier_idx").on(t.identifier)]);
-export const workspaces = sqliteTable("workspaces", { id: text("id").primaryKey(), name: text("name").notNull(), createdAt: timestamp("created_at") });
+export const workspaces = sqliteTable("workspaces", {
+  id: text("id").primaryKey(), name: text("name").notNull(),
+  kind: text("kind", { enum: ["personal", "shared"] }).notNull().default("shared"),
+  ownerUserId: text("owner_user_id").references(() => user.id),
+  createdAt: timestamp("created_at"),
+}, t => [
+  uniqueIndex("workspace_personal_owner_idx").on(t.ownerUserId).where(sql`${t.kind} = 'personal'`),
+]);
 export const workspaceMembers = sqliteTable("workspace_members", {
   workspaceId: text("workspace_id").notNull().references(() => workspaces.id), userId: text("user_id").notNull().references(() => user.id), createdAt: timestamp("created_at"),
 }, t => [primaryKey({ columns: [t.workspaceId, t.userId] })]);
@@ -83,6 +90,96 @@ export const authEmailDeliveries = sqliteTable("auth_email_deliveries", {
   state: text("state", { enum: ["reserved", "sent", "failed", "uncertain"] }).notNull(),
   createdAt: timestamp("created_at"), expiresAt: timestamp("expires_at"), consumedAt: integer("consumed_at", { mode: "timestamp_ms" }),
 }, t => [index("auth_email_expiry_idx").on(t.expiresAt), check("auth_email_kind", sql`${t.kind} IN ('reset','verification','invitation')`), check("auth_email_state", sql`${t.state} IN ('reserved','sent','failed','uncertain')`)]);
+
+export const referralLinks = sqliteTable("referral_links", {
+  id: text("id").primaryKey(), referrerUserId: text("referrer_user_id").notNull().unique().references(() => user.id),
+  token: text("token").notNull().unique(), tokenHash: text("token_hash").notNull().unique(), createdAt: timestamp("created_at"),
+});
+export const referralAttributions = sqliteTable("referral_attributions", {
+  id: text("id").primaryKey(), linkId: text("link_id").notNull().references(() => referralLinks.id),
+  referrerUserId: text("referrer_user_id").notNull().references(() => user.id), referredUserId: text("referred_user_id").notNull().unique().references(() => user.id),
+  capturedAt: timestamp("captured_at"), confirmedAt: integer("confirmed_at", { mode: "timestamp_ms" }),
+}, t => [check("referral_not_self", sql`${t.referrerUserId} <> ${t.referredUserId}`), index("referral_referrer_idx").on(t.referrerUserId)]);
+
+// Presence marks accounts created through a flow that requires email activation.
+// Older/operator accounts have no row and retain their existing access behavior.
+export const accountActivationRequirements = sqliteTable("account_activation_requirements", {
+  userId: text("user_id").primaryKey().references(() => user.id, { onDelete: "cascade" }),
+  source: text("source", { enum: ["public_signup", "invitation"] }).notNull(),
+  createdAt: timestamp("created_at"),
+}, t => [check("account_activation_source", sql`${t.source} IN ('public_signup','invitation')`)]);
+
+// Guidance is user-scoped. Workspace context is authorized at every command,
+// never inferred from a profile answer or stored as a permission here.
+export const onboardingEnrollments = sqliteTable("onboarding_enrollments", {
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  flowKey: text("flow_key").notNull(),
+  cohort: text("cohort", { enum: ["existing", "new"] }).notNull(),
+  initialFlowVersion: integer("initial_flow_version").notNull(),
+  createdAt: timestamp("created_at"),
+}, t => [
+  primaryKey({ columns: [t.userId, t.flowKey] }),
+  check("onboarding_flow_key", sql`${t.flowKey} = 'h3c'`),
+  check("onboarding_cohort", sql`${t.cohort} IN ('existing','new')`),
+  check("onboarding_initial_version", sql`typeof(${t.initialFlowVersion}) = 'integer' AND ${t.initialFlowVersion} >= 1`),
+]);
+export const userGuidanceProfiles = sqliteTable("user_guidance_profiles", {
+  userId: text("user_id").primaryKey().references(() => user.id, { onDelete: "cascade" }),
+  experience: text("experience", { enum: ["unspecified", "never", "sometimes", "frequent", "expert"] }).notNull().default("unspecified"),
+  usageIntent: text("usage_intent", { enum: ["unspecified", "individual", "group", "both", "undecided"] }).notNull().default("unspecified"),
+  revision: integer("revision").notNull(), ...dates(),
+}, t => [
+  check("guidance_experience", sql`${t.experience} IN ('unspecified','never','sometimes','frequent','expert')`),
+  check("guidance_usage_intent", sql`${t.usageIntent} IN ('unspecified','individual','group','both','undecided')`),
+  check("guidance_profile_revision", sql`typeof(${t.revision}) = 'integer' AND ${t.revision} >= 1`),
+]);
+export const onboardingRuns = sqliteTable("onboarding_runs", {
+  userId: text("user_id").notNull(), flowKey: text("flow_key").notNull(), flowVersion: integer("flow_version").notNull(),
+  status: text("status", { enum: ["in_progress", "completed", "skipped"] }).notNull(),
+  currentStepId: text("current_step_id", { enum: ["introduction", "personalization", "entry"] }).notNull(),
+  startedAt: integer("started_at", { mode: "timestamp_ms" }),
+  closedAt: integer("closed_at", { mode: "timestamp_ms" }),
+  completedAt: integer("completed_at", { mode: "timestamp_ms" }),
+  skippedAt: integer("skipped_at", { mode: "timestamp_ms" }),
+  revision: integer("revision").notNull(), ...dates(),
+}, t => [
+  primaryKey({ columns: [t.userId, t.flowKey, t.flowVersion] }),
+  foreignKey({ columns: [t.userId, t.flowKey], foreignColumns: [onboardingEnrollments.userId, onboardingEnrollments.flowKey] }).onDelete("cascade"),
+  check("onboarding_run_version", sql`typeof(${t.flowVersion}) = 'integer' AND ${t.flowVersion} >= 1`),
+  check("onboarding_run_revision", sql`typeof(${t.revision}) = 'integer' AND ${t.revision} >= 1`),
+  check("onboarding_run_step", sql`${t.currentStepId} IN ('introduction','personalization','entry')`),
+  check("onboarding_run_state", sql`
+    (${t.status} = 'in_progress' AND ${t.completedAt} IS NULL AND ${t.skippedAt} IS NULL)
+    OR (${t.status} = 'completed' AND ${t.completedAt} IS NOT NULL AND ${t.skippedAt} IS NULL AND ${t.closedAt} IS NULL)
+    OR (${t.status} = 'skipped' AND ${t.skippedAt} IS NOT NULL AND ${t.completedAt} IS NULL AND ${t.closedAt} IS NULL)
+  `),
+]);
+export const onboardingHelpPreferences = sqliteTable("onboarding_help_preferences", {
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  helpId: text("help_id", { enum: ["all", "favorites.first-action", "purchase.first-item"] }).notNull(),
+  helpVersion: integer("help_version").notNull(), proactive: integer("proactive", { mode: "boolean" }).notNull(),
+  revision: integer("revision").notNull(), ...dates(),
+}, t => [
+  primaryKey({ columns: [t.userId, t.helpId, t.helpVersion] }),
+  check("onboarding_help_id", sql`${t.helpId} IN ('all','favorites.first-action','purchase.first-item')`),
+  check("onboarding_help_version", sql`typeof(${t.helpVersion}) = 'integer' AND ${t.helpVersion} >= 1`),
+  check("onboarding_help_revision", sql`typeof(${t.revision}) = 'integer' AND ${t.revision} >= 1`),
+  check("onboarding_help_proactive", sql`${t.proactive} IN (0,1)`),
+]);
+
+export const onboardingMilestones = sqliteTable("onboarding_milestones", {
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  milestone: text("milestone", { enum: ["M1", "M2"] }).notNull(),
+  workspaceId: text("workspace_id").references(() => workspaces.id, { onDelete: "set null" }),
+  evidence: text("evidence", { enum: ["committed", "preexisting"] }).notNull(),
+  source: text("source", { enum: ["favorite", "purchase_item"] }).notNull(),
+  occurredAt: integer("occurred_at", { mode: "timestamp_ms" }),
+  recordedAt: timestamp("recorded_at"),
+}, t => [primaryKey({ columns: [t.userId, t.milestone] }),
+  check("onboarding_milestone_key", sql`${t.milestone} IN ('M1','M2')`),
+  check("onboarding_milestone_source", sql`${t.source} IN ('favorite','purchase_item') AND (${t.milestone} <> 'M2' OR ${t.source} = 'purchase_item')`),
+  check("onboarding_milestone_evidence", sql`(${t.evidence} = 'committed' AND ${t.occurredAt} IS NOT NULL) OR (${t.evidence} = 'preexisting' AND ${t.occurredAt} IS NULL)`),
+]);
 
 export const workspaceCostSettings = sqliteTable("workspace_cost_settings", {
   workspaceId: text("workspace_id").primaryKey().references(() => workspaces.id),
@@ -641,6 +738,68 @@ export const hubbuyBalanceConsumptions = sqliteTable("hubbuy_balance_consumption
   check("hubbuy_consumption_cny", sql`typeof(${t.amountCnyMinor}) = 'integer' AND ${t.amountCnyMinor} BETWEEN 1 AND 1000000000000`),
   check("hubbuy_consumption_brl", sql`typeof(${t.historicalBrlCents}) = 'integer' AND ${t.historicalBrlCents} BETWEEN 0 AND 1000000000000`),
 ]);
+
+export const orderWarehousePositions = sqliteTable("order_warehouse_positions", {
+  costItemId: text("cost_item_id").primaryKey().references(() => purchaseItemCosts.id),
+  workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+  accountId: text("account_id").references(() => hubbuyAccounts.id),
+  reviewState: text("review_state", { enum: ["pending_review", "confirmed"] }).notNull(),
+  receivedUnits: text("received_units", { mode: "json" }).$type<number[]>().notNull(),
+  revision: integer("revision").notNull().default(0),
+  updatedBy: text("updated_by").references(() => user.id), updatedAt: timestamp("updated_at"),
+}, t => [index("warehouse_workspace_account_idx").on(t.workspaceId,t.accountId,t.costItemId),check("warehouse_review", sql`${t.reviewState} IN ('pending_review','confirmed')`), check("warehouse_revision", sql`${t.revision} >= 0`)]);
+
+export const logisticsPackages = sqliteTable("logistics_packages", {
+  id: text("id").primaryKey(), workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+  accountId: text("account_id").references(() => hubbuyAccounts.id),
+  legacyPackageId: text("legacy_package_id").unique().references(() => purchasePackages.id),
+  name: text("name").notNull(), revision: integer("revision").notNull().default(0),
+  reviewState: text("review_state", { enum: ["pending_review", "confirmed"] }).notNull(),
+  stage: text("stage", { enum: ["preparing", "sent", "received"] }).notNull().default("preparing"),
+  contentClosedAt: integer("content_closed_at", { mode: "timestamp_ms" }),
+  freightCents: integer("freight_cents"), freightFeeCents: integer("freight_fee_cents"),
+  freightState:text("freight_state",{enum:["pending","known","no_charge"]}).notNull().default("pending"),
+  customsState:text("customs_state",{enum:["pending","known","no_charge"]}).notNull().default("pending"),
+  freightPaymentMethod:text("freight_payment_method",{enum:["pix","card"]}),
+  freightFeeBps:integer("freight_fee_bps"),
+  freightPaidAt: integer("freight_paid_at", { mode: "timestamp_ms" }),
+  customsCents: integer("customs_cents"), customsPaidAt: integer("customs_paid_at", { mode: "timestamp_ms" }),
+  weightGrams: integer("weight_grams"), dispatchedAt: integer("dispatched_at", { mode: "timestamp_ms" }),
+  receivedAt: integer("received_at", { mode: "timestamp_ms" }), financialClosedAt: integer("financial_closed_at", { mode: "timestamp_ms" }),
+  createdBy: text("created_by").references(() => user.id), createdAt: timestamp("created_at"),
+}, t => [check("logistics_stage", sql`${t.stage} IN ('preparing','sent','received')`), check("logistics_review", sql`${t.reviewState} IN ('pending_review','confirmed')`), check("logistics_weight", sql`${t.weightGrams} IS NULL OR (typeof(${t.weightGrams}) = 'integer' AND ${t.weightGrams} BETWEEN 1 AND 1000000000)`), check("logistics_money", sql`(${t.freightCents} IS NULL OR ${t.freightCents} >= 0) AND (${t.freightFeeCents} IS NULL OR ${t.freightFeeCents} >= 0) AND (${t.customsCents} IS NULL OR ${t.customsCents} >= 0)`)]);
+
+export const logisticsLegacyCharges = sqliteTable("logistics_legacy_charges", {
+  legacyChargeId:text("legacy_charge_id").primaryKey().references(()=>purchaseCostCharges.id),
+  packageId:text("package_id").notNull().references(()=>logisticsPackages.id),
+  snapshot:text("snapshot",{mode:"json"}).$type<unknown>().notNull(),
+});
+
+export const logisticsReservations = sqliteTable("logistics_reservations", {
+  id: text("id").primaryKey(), packageId: text("package_id").notNull().references(() => logisticsPackages.id),
+  costItemId: text("cost_item_id").notNull().references(() => purchaseItemCosts.id),
+  unitIndex: integer("unit_index").notNull(), releasedAt: integer("released_at", { mode: "timestamp_ms" }),
+  createdBy: text("created_by").references(() => user.id), createdAt: timestamp("created_at"),
+}, t => [uniqueIndex("logistics_active_unit_idx").on(t.costItemId, t.unitIndex).where(sql`${t.releasedAt} IS NULL`), check("logistics_unit_index", sql`${t.unitIndex} >= 0`)]);
+
+export const logisticsEvents = sqliteTable("logistics_events", {
+  id: text("id").primaryKey(), workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+  resourceId: text("resource_id").notNull(), action: text("action").notNull(), reason: text("reason").notNull(),
+  before: text("before", { mode: "json" }).$type<unknown>(), after: text("after", { mode: "json" }).$type<unknown>(),
+  actorId: text("actor_id").notNull().references(() => user.id), createdAt: timestamp("created_at"),
+});
+
+export const logisticsManifests = sqliteTable("logistics_manifests", {
+  id: text("id").primaryKey(), packageId: text("package_id").notNull().references(() => logisticsPackages.id),
+  revision: integer("revision").notNull(), snapshot: text("snapshot", { mode: "json" }).$type<unknown>().notNull(),
+  createdBy: text("created_by").notNull().references(() => user.id), createdAt: timestamp("created_at"),
+}, t => [uniqueIndex("logistics_manifest_revision_idx").on(t.packageId, t.revision)]);
+
+export const logisticsCommands = sqliteTable("logistics_commands", {
+  id: text("id").primaryKey(), workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+  key: text("key").notNull(), payload: text("payload").notNull(), resultId: text("result_id").notNull(),
+  actorId: text("actor_id").notNull().references(() => user.id), createdAt: timestamp("created_at"),
+}, t => [uniqueIndex("logistics_command_key_idx").on(t.workspaceId, t.key)]);
 
 export const memberBalanceFinancingEntries = sqliteTable("member_balance_financing_entries", {
   id: text("id").primaryKey(), operationId: text("operation_id").notNull().references(() => financialOperations.id),

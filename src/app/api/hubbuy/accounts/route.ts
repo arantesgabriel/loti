@@ -20,8 +20,8 @@ export async function POST(request: Request) {
   try {
     requirePackageCostOrigin(request);
     const user = await requireUser();
-    const body = z.object({ operation: z.literal("createAccount") }).passthrough().parse(await request.json());
+    const body = z.object({ operation: z.literal("createAccount") }).passthrough().and(z.object({ workspaceId: z.string().min(1) })).parse(await request.json());
     const payload = Object.fromEntries(Object.entries(body).filter(([key]) => key !== "operation"));
-    return NextResponse.json({ data: await hubbuyBalanceServices(db, user.id).createAccount(payload) }, { headers: packageCostPrivateHeaders });
+    return NextResponse.json({ data: await hubbuyBalanceServices(db, user.id, body.workspaceId).createAccount(payload) }, { headers: packageCostPrivateHeaders });
   } catch (error) { return packageCostFailure(error); }
 }

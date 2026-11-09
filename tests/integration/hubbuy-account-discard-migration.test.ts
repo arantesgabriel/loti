@@ -5,8 +5,9 @@ import { describe, expect, it } from "vitest";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import { eq } from "drizzle-orm";
 import { openDatabase } from "@/lib/db/connection";
-import { hubbuyAccounts, user, workspaceMembers, workspaces } from "@/lib/db/schema";
+import { hubbuyAccounts, user, workspaceMembers } from "@/lib/db/schema";
 import { hubbuyBalanceServices } from "@/lib/domain/hubbuy-balance-services";
+import { insertSharedWorkspaces } from "./helpers";
 
 describe("incorrect-registration correction migration", () => {
   it("preserves an existing reconciliation and ledger through 0019 and permits only audited reversal afterward", async () => {
@@ -21,7 +22,7 @@ describe("incorrect-registration correction migration", () => {
       await migrate(db, { migrationsFolder: dir });
       const now = new Date();
       await db.insert(user).values({ id: "alice", name: "Alice", email: "alice@discard.test", emailVerified: true, createdAt: now, updatedAt: now }).run();
-      await db.insert(workspaces).values({ id: "workspace", name: "Loti", createdAt: now }).run();
+      await insertSharedWorkspaces({ db, client }, [{ id: "workspace", name: "Loti", createdAt: now }]);
       await db.insert(workspaceMembers).values({ workspaceId: "workspace", userId: "alice", createdAt: now }).run();
       const service = hubbuyBalanceServices(db, "alice");
       const a = await service.createAccount({ workspaceId: "workspace", idempotencyKey: "create", label: "Cadastro legado", confirmZeroBalance: true });

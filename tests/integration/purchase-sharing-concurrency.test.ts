@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import { createServices } from "@/lib/domain/services";
 import { openDatabase } from "@/lib/db/connection";
-import { user, workspaces, workspaceMembers, purchaseItems, purchaseItemParticipants } from "@/lib/db/schema";
+import { user, workspaceMembers, purchaseItems, purchaseItemParticipants } from "@/lib/db/schema";
+import { insertSharedWorkspaces } from "./helpers";
 
 describe("purchase cost-sharing transaction boundaries", () => {
   it("rolls back a product when participant insertion fails, and serializes edits with finalization across connections", async () => {
@@ -17,7 +18,7 @@ describe("purchase cost-sharing transaction boundaries", () => {
         { id: "alice", name: "Alice", email: "alice@sharing.test", emailVerified: true, createdAt: now, updatedAt: now },
         { id: "bob", name: "Bob", email: "bob@sharing.test", emailVerified: true, createdAt: now, updatedAt: now },
       ]).run();
-      await first.db.insert(workspaces).values({ id: "workspace", name: "Loti", createdAt: now }).run();
+      await insertSharedWorkspaces(first, [{ id: "workspace", name: "Loti", createdAt: now }]);
       await first.db.insert(workspaceMembers).values([
         { workspaceId: "workspace", userId: "alice", createdAt: now },
         { workspaceId: "workspace", userId: "bob", createdAt: now },

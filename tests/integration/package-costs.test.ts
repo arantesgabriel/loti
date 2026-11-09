@@ -87,14 +87,14 @@ describe("package and cost tracking", () => {
     const { purchase } = await finalizedPurchase();
     const service = packageCostServices(f.db, "alice");
     expect(await service.getSettings()).toMatchObject({ pixBps: 100, cardBps: 500 });
-    await service.saveSettings({ pixBps: 175, cardBps: 750 });
+    await service.saveSettings({ workspaceId: "workspace", pixBps: 175, cardBps: 750 });
     const tracking = await service.startTracking(purchase.id);
     let detail = await service.getTracking(tracking.id);
     const item = detail.items[0];
     detail = await service.saveItemCosts(tracking.id, { expectedRevision: detail.tracking.revision, itemId: item.id, effectivePriceState: "known", effectivePriceUnitCents: 1_000, chinaFreightState: "known", chinaFreightUnitCents: 0 });
     detail = await service.saveCharge(tracking.id, detail.productsCharge!.id, { expectedRevision: detail.tracking.revision, chargeType: "products", paymentMethod: "pix" });
     expect(detail.productsCharge?.feeBps).toBe(175);
-    await service.saveSettings({ pixBps: 300, cardBps: 900 });
+    await service.saveSettings({ workspaceId: "workspace", pixBps: 300, cardBps: 900 });
     detail = await service.getTracking(tracking.id);
     expect(detail.productsCharge?.feeBps).toBe(175);
     expect(detail.calculation.productsCharge.feeCents).toBe(18);

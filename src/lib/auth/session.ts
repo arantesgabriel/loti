@@ -2,8 +2,10 @@ import "server-only";
 import { headers } from "next/headers";
 import { isAPIError } from "better-auth/api";
 import { auth } from "./index";
+import { db } from "../db";
+import { activationState } from "./activation";
 import { DomainError } from "../domain/errors";
-export async function requireUser() {
+export async function requireUser(options: { allowPendingActivation?: boolean } = {}) {
   const requestHeaders = await headers();
   let session;
   try {
@@ -18,5 +20,8 @@ export async function requireUser() {
     throw error;
   }
   if (!session) throw new DomainError("Entre na sua conta para continuar.", 401);
+  if (!options.allowPendingActivation && (await activationState(db, session.user.id)).pending) {
+    throw new DomainError("Confirme seu email para acessar o Loti.", 403, "EMAIL_ACTIVATION_REQUIRED");
+  }
   return session.user;
 }

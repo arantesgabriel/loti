@@ -6,10 +6,12 @@ import { migrate } from "drizzle-orm/libsql/migrator";
 import { eq } from "drizzle-orm";
 import { openDatabase } from "@/lib/db/connection";
 import { createServices } from "@/lib/domain/services";
+import {initializeLegacyPurchaseCosts} from "@/lib/domain/purchase-cost-initialization";
 import { hubbuyBalanceServices } from "@/lib/domain/hubbuy-balance-services";
 import { purchaseCostOrderServices } from "@/lib/domain/purchase-cost-order-services";
 import { packageCostServices } from "@/lib/domain/package-cost-services";
-import { purchaseCostCharges, purchaseCostTrackings, user, workspaceMembers, workspaces } from "@/lib/db/schema";
+import { purchaseCostCharges, purchaseCostTrackings, user, workspaceMembers } from "@/lib/db/schema";
+import { insertSharedWorkspaces } from "./helpers";
 
 describe("additional payment correction migration", () => {
   it("upgrades 0019 twice without changing payments, snapshots, ledger or package state", async () => {
@@ -25,9 +27,9 @@ describe("additional payment correction migration", () => {
       await migrate(db, { migrationsFolder: directory });
       const now = new Date();
       await db.insert(user).values({ id: "alice", name: "Alice", email: "alice@correction.test", emailVerified: true, createdAt: now, updatedAt: now }).run();
-      await db.insert(workspaces).values({ id: "workspace", name: "Loti", createdAt: now }).run();
+      await insertSharedWorkspaces({ db, client }, [{ id: "workspace", name: "Loti", createdAt: now }]);
       await db.insert(workspaceMembers).values({ workspaceId: "workspace", userId: "alice", createdAt: now }).run();
-      const app = createServices(db, "alice");
+      const app = createServices(db, "alice",initializeLegacyPurchaseCosts);
       const purchase = await app.savePurchase({ name: "Upgrade sintético" });
       await app.saveManualItem({ name: "Original", url: "https://shop.test/original", quantity: 1, unitPriceCents: 1_000, personId: "alice" });
       await app.finalizePurchase(purchase!.id, true);
