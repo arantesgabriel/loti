@@ -574,39 +574,36 @@ export function FinalLandingPage() {
                 <circle className={styles.sceneOrbA} cx="284" cy="98" r="8" fill="#F77014" opacity=".45" />
                 <circle className={styles.sceneOrbB} cx="842" cy="86" r="12" fill="#E5A9B8" opacity=".47" />
               </svg>
-              <div className={styles.sceneCaption}>da descoberta à organização</div>
             </div>
           </div>
         </section>
 
         <section className={styles.finalRail} id="d-rail" aria-label="Pilares da organização no Loti">
           <div className={styles.wrap}>
-            <div className={styles.railDock}>
-              <div className={styles.railHighlights} role="list">
-                {RAIL_PILLARS.map((pillar, idx) => {
-                  const Icon = pillar.icon;
-                  return (
-                    <div
-                      key={pillar.title}
-                      className={styles.railChip}
-                      role="listitem"
+            <div className={styles.railHighlights} role="list">
+              {RAIL_PILLARS.map((pillar, idx) => {
+                const Icon = pillar.icon;
+                return (
+                  <div
+                    key={pillar.title}
+                    className={styles.railChip}
+                    role="listitem"
+                  >
+                    <span
+                      className={styles.railIconBox}
+                      style={{ animationDelay: `${idx * 1.4}s` }}
+                      aria-hidden="true"
                     >
-                      <span
-                        className={styles.railIconBox}
-                        style={{ animationDelay: `${idx * 1.4}s` }}
-                        aria-hidden="true"
-                      >
-                        <Icon size={16} strokeWidth={2.1} />
-                      </span>
-                      <div className={styles.railCopy}>
-                        <strong className={styles.railTitleFull}>{pillar.title}</strong>
-                        <strong className={styles.railTitleCompact}>{pillar.mobileTitle}</strong>
-                        <span>{pillar.detail}</span>
-                      </div>
+                      <Icon size={16} strokeWidth={2.1} />
+                    </span>
+                    <div className={styles.railCopy}>
+                      <strong className={styles.railTitleFull}>{pillar.title}</strong>
+                      <strong className={styles.railTitleCompact}>{pillar.mobileTitle}</strong>
+                      <span>{pillar.detail}</span>
                     </div>
-                  );
-                })}
-              </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </section>

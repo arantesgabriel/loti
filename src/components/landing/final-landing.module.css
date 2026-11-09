@@ -627,40 +627,20 @@
   animation: pulseOrb 6.2s ease-in-out -2.4s infinite;
 }
 
-.finalScene .sceneCaption {
-  position: absolute;
-  bottom: 14px;
-  right: 2%;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-  padding: 6px 14px;
-  background: rgb(255 249 244 / 0.92);
-  font-weight: 760;
-  font-size: 11.5px;
-  color: var(--orange-ink-strong);
-}
-
-/* RAIL — DARK WINE SURFACE WITH MINIMAL STROKES & SUBTLE AMBIENT MOTION */
+/* RAIL — DARK WINE ARCHITECTURAL STAGE WITH CLEAN OVERLAPPING LIGHT SHEET BELOW */
 .finalRail {
-  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-warm) 100%);
-  padding: 12px 0 28px;
-}
-
-.railDock {
   position: relative;
-  border-radius: 22px;
-  background:
-    radial-gradient(480px 160px at 18% 0%, rgb(247 112 20 / 0.12), transparent 72%),
-    var(--wine);
-  padding: 20px 26px;
-  box-shadow: 0 18px 40px -20px rgb(28 1 19 / 0.28);
-  overflow: hidden;
+  z-index: 1;
+  background-color: var(--wine);
+  border-radius: 36px 36px 0 0;
+  padding: 34px 0 84px;
+  box-shadow: 0 -10px 30px -16px rgb(28 1 19 / 0.14);
 }
 
 .railHighlights {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 18px;
+  gap: 20px;
   align-items: center;
 }
 
@@ -732,9 +712,17 @@
   line-height: 1.25;
 }
 
-/* STORY — CLEAN PROPORTIONS & ELEVATION */
+/* STORY — CLEAN OVERLAPPING LIGHT SHEET LIFTING OVER DARK RAIL */
 .finalStory {
+  position: relative;
+  z-index: 2;
+  margin-top: -46px;
+  border-radius: 36px 36px 0 0;
   background: var(--paper-warm);
+  padding-top: 64px;
+  box-shadow:
+    0 -18px 42px -16px rgb(28 1 19 / 0.28),
+    0 -1px 0 0 rgb(255 249 244 / 0.7) inset;
 }
 
 .finalStory .storyLead {
@@ -2337,21 +2325,16 @@
     margin-top: 4px;
   }
 
-  .finalScene .sceneCaption {
-    right: 2%;
-    bottom: 8px;
-    font-size: 10px;
-    padding: 5px 10px;
-  }
-
-  /* Compact 2x2 pillar grid on mobile */
+  /* Compact 2x2 pillar grid on mobile with clean overlapping sheet */
   .finalRail {
-    padding: 8px 0 18px;
+    border-radius: 26px 26px 0 0;
+    padding: 20px 0 54px;
   }
 
-  .railDock {
-    padding: 14px 16px;
-    border-radius: 18px;
+  .finalStory {
+    margin-top: -30px;
+    border-radius: 26px 26px 0 0;
+    padding-top: 44px;
   }
 
   .railHighlights {
