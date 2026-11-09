@@ -9,7 +9,8 @@ test("landing preserves app theme and saved Favorites view across authenticated 
   await expect(page.getByRole("button", { name: "Cards", exact: true })).toHaveAttribute("aria-pressed", "true");
   const before = await page.evaluate(() => ({ stored: localStorage.getItem("loti.theme"), resolved: document.documentElement.dataset.theme }));
   await page.goto("/landing");
-  await expect(page.locator("h1")).toHaveText("Suas importações, tudo em um só lugar.");
+  await expect(page.locator("h1")).toContainText("Do favorito ao pacote.");
+  await expect(page.locator("h1")).toContainText("Tudo no lugar.");
   expect(await page.evaluate(() => ({ stored: localStorage.getItem("loti.theme"), resolved: document.documentElement.dataset.theme }))).toEqual(before);
   await page.goto("/favorites");
   await expect(page.getByRole("button", { name: "Cards", exact: true })).toHaveAttribute("aria-pressed", "true");
