@@ -4,7 +4,7 @@ import { ProductCategoryMarker } from "@/components/product-category-icons";
 import { QcGalleryButton } from "@/components/qc/qc-components";
 import { formatMoney } from "@/lib/domain/money";
 import { OrdersBadge, useOrdersCompact } from "./orders-workspace";
-import { orderStage } from "./orders-list-state";
+import { orderStage, projectArrival } from "./orders-list-state";
 import type { WarehouseData } from "./orders-screen";
 import "./order-detail-panel.css";
 import { OrdersStepper } from "./orders-stepper";
@@ -13,17 +13,19 @@ import { OrderItemActions } from "./order-item-actions";
 type Row = WarehouseData["rows"][number];
 
 type DetailProps = {
+  pendingArrival?: number;
   row: Row; data: WarehouseData; members: { id: string; name: string }[];
 } & ({ readOnly: true } | {
   readOnly?: false;
   quantity: number; disabled: boolean; returnTo: string;
-  onSelect: (row: Row, quantity: number) => void; onReceive: (row: Row) => void; onChanged: (replacement?: { previousId: string; nextId: string }) => void;
+  onSelect: (row: Row, quantity: number) => void; onReceive: (row: Row, mode?: "correct") => void; onChanged: (replacement?: { previousId: string; nextId: string }) => void;
 });
 
 export function OrderDetailPanel(props: DetailProps) {
   const { row, data, members } = props;
   const compact = useOrdersCompact();
-  const stage = orderStage(row, data.packages);
+  const displayed = props.pendingArrival ? projectArrival(row, props.pendingArrival) : row;
+  const stage = orderStage(displayed, data.packages);
   const origin = data.origins.find(item => item.trackingId === row.cost.trackingId);
   const metrics = <>
     <div className="orders-item-metrics">
@@ -41,7 +43,7 @@ export function OrderDetailPanel(props: DetailProps) {
     </section>
     <div className="orders-item-secondary">
       <details className="orders-item-more orders-item-breakdown"><summary>Quantidades e pacotes</summary><dl className="orders-item-quantities">
-        {([["Compradas", row.quantity], ["Recebidas", row.reviewState === "pending_review" ? "Sem registro" : row.receivedUnits.length], ["Em pacotes", row.reservations.length], ...(row.cancelledUnits.length ? [["Canceladas", row.cancelledUnits.length]] : [])] as const).map(([label, value]) => <div key={label}><dt>{label}</dt><dd data-missing={typeof value === "string"}>{value}</dd></div>)}
+        {([["Compradas", row.quantity], ["Recebidas", displayed.reviewState === "pending_review" ? "Sem registro" : displayed.receivedUnits.filter(unit => !row.cancelledUnits.includes(unit)).length], ["Em pacotes", row.reservations.length], ...(row.cancelledUnits.length ? [["Canceladas", row.cancelledUnits.length]] : [])] as const).map(([label, value]) => <div key={label}><dt>{label}</dt><dd data-missing={typeof value === "string"}>{value}</dd></div>)}
       </dl>
       <dl className="orders-item-package-meta">
         <div><dt>Participantes</dt><dd>{row.participants.map(person => members.find(member => member.id === person.personId)?.name ?? "Membro").join(", ") || "Sem participantes"}</dd></div>
@@ -61,6 +63,7 @@ export function OrderDetailPanel(props: DetailProps) {
         <ProductCategoryMarker visualKey={row.source.visualKey} />
         <div><h3>{row.name}</h3>{row.source.variant && <p>{row.source.variant}</p>}<OrdersBadge tone={stage.tone}>{stage.label}</OrdersBadge></div>
       </section>}
+    {!!props.pendingArrival && <p role="status">Confirmando a chegada de {props.pendingArrival} {props.pendingArrival === 1 ? "unidade" : "unidades"}.</p>}
     {stage.detail && <p className="orders-item-stage-detail">{stage.detail}</p>}
     {props.readOnly ? metrics : <OrderItemActions row={row} data={data} disabled={props.disabled} returnTo={props.returnTo} onReceive={props.onReceive} onChanged={props.onChanged}>
       {metrics}

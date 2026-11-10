@@ -21,7 +21,7 @@ type Action = "edit" | "refund" | "origin" | "refunds" | null;
 type RefundAction = { id: string; mode: "receive" | "correct" | "void" | "edit" } | null;
 export function OrderItemActions({ row, data, disabled, returnTo, children, onReceive, onChanged }: {
   row: Row; data: WarehouseData; disabled: boolean; returnTo: string; children: ReactNode;
-  onReceive: (row: Row) => void; onChanged: (replacement?: { previousId: string; nextId: string }) => void;
+  onReceive: (row: Row, mode?: "correct") => void; onChanged: (replacement?: { previousId: string; nextId: string }) => void;
 }) {
   const { data: workspace, registerWorkspaceDraft } = useWorkspace();
   const [detail, setDetail] = useState<CostTrackingView | null>(null), [action, setAction] = useState<Action>(null);
@@ -81,7 +81,8 @@ export function OrderItemActions({ row, data, disabled, returnTo, children, onRe
   const blocked = disabled || busy || loading;
   return <PackageSurfaceProvider orders error={error} intro={action === "edit" && row.order.kind === "original" ? <p className="orders-action-notice">Nome, variação e quantidade pertencem à compra finalizada e permanecem no histórico. Aqui você corrige somente custos e divisão permitidos.</p> : undefined}>
     <div className="orders-item-primary-actions" role="group" aria-label="Ações do item">
-      <Button type="button" variant={row.reviewState === "pending_review" ? "default" : "outline"} disabled={disabled || busy} onClick={() => onReceive(row)} aria-label={`Registrar chegada de ${row.name}`}>Registrar chegada</Button>
+      <Button type="button" variant={row.reviewState === "pending_review" ? "default" : "outline"} disabled={disabled || busy || (row.reviewState === "confirmed" && row.receivedUnits.filter(unit => !row.cancelledUnits.includes(unit)).length >= row.quantity - row.cancelledUnits.length)} onClick={() => onReceive(row)} aria-label={`Registrar chegada de ${row.name}`}>Registrar chegada</Button>
+      {row.reviewState === "confirmed" && <Button type="button" variant="ghost" disabled={disabled || busy} onClick={() => onReceive(row, "correct")}>Corrigir chegada</Button>}
       <Button type="button" variant="outline" disabled={blocked || !canEdit} title={!canEdit ? loading ? "Carregando item" : closed ? "Custos encerrados ou indisponíveis" : "Edição indisponível para este item" : undefined} onClick={() => open("edit")}>Editar item</Button>
     </div>
     {children}

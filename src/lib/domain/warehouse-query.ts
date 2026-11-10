@@ -5,7 +5,7 @@ import type {warehouseQuerySchema} from "./warehouse-services";
 import type {z} from "zod";
 
 /** Filter and page identities before loading metadata, unit arrays or financial projections. */
-export async function warehousePage(db:Pick<AppDatabase,"all">,workspaceId:string,q:z.infer<typeof warehouseQuerySchema>){
+export async function warehousePage(db:Pick<AppDatabase,"all">,workspaceId:string,q:z.infer<typeof warehouseQuerySchema>, readCost?: (trackingIds: string[]) => Promise<{ id: string; cents: number }[]>){
   const cancelled=sql`EXISTS(SELECT 1 FROM purchase_cost_refunds f WHERE f.cost_item_id=w.cost_item_id AND f.status!='voided' AND j.value>=f.unit_start AND j.value<f.unit_start+f.quantity)`;
   const reserved=sql`EXISTS(SELECT 1 FROM logistics_reservations r WHERE r.cost_item_id=w.cost_item_id AND r.released_at IS NULL AND r.unit_index=j.value)`;
   const promoted=sql`p.content_closed_at IS NOT NULL AND ${freightPaidSql("p")}`;
@@ -37,6 +37,38 @@ export async function warehousePage(db:Pick<AppDatabase,"all">,workspaceId:strin
   if(q.view && q.view!=="all")filters.push(stage[q.view]);
   const from=sql`FROM order_warehouse_positions w JOIN purchase_item_costs c ON c.id=w.cost_item_id JOIN purchase_cost_orders o ON o.id=c.order_id LEFT JOIN purchase_items i ON i.id=c.purchase_item_id LEFT JOIN purchase_additional_order_items a ON a.id=c.additional_order_item_id WHERE ${sql.join(filters,sql` AND `)}`;
   const count=await db.all<{total:number}>(sql`SELECT count(*) AS total ${from}`);
-  const ids=await db.all<{id:string}>(sql`SELECT w.cost_item_id AS id ${from} ORDER BY o.created_at DESC,o.id,c.item_order,c.id LIMIT ${q.pageSize} OFFSET ${q.page*q.pageSize}`);
+  const fallback = sql`o.created_at DESC,o.id,c.item_order,c.id`;
+  const direction = q.direction === "desc" ? sql`DESC` : sql`ASC`;
+  if (q.sort === "product" || q.sort === "cost") {
+    // Load only sort keys and identities for matching rows. Full row projection is paged.
+    const candidates = await db.all<{ id: string; name: string; trackingId: string }>(sql`SELECT w.cost_item_id AS id, coalesce(i.name,a.name) AS name, c.tracking_id AS trackingId ${from}`);
+    const sign = q.direction === "desc" ? -1 : 1;
+    const compareIds = (a: string, b: string) => a === b ? 0 : a < b ? -1 : 1;
+    if (q.sort === "product") {
+      const collator = new Intl.Collator("pt-BR");
+      candidates.sort((a,b) => sign * collator.compare(a.name,b.name) || compareIds(a.id,b.id));
+    } else {
+      if (!readCost) throw new Error("A ordenação por custo exige a projeção financeira.");
+      const cents = new Map<string, number>();
+      const matchingIds = new Set(candidates.map(row => row.id));
+      for (const row of await readCost([...new Set(candidates.map(row => row.trackingId))])) if (matchingIds.has(row.id)) cents.set(row.id, row.cents);
+      candidates.sort((a,b) => {
+        const left = cents.get(a.id), right = cents.get(b.id);
+        if (left === undefined || right === undefined) return Number(left === undefined) - Number(right === undefined) || compareIds(a.id,b.id);
+        return sign * (left - right) || compareIds(a.id,b.id);
+      });
+    }
+    const start = q.page * q.pageSize;
+    return { ids: candidates.slice(start,start+q.pageSize).map(row => row.id), total: count[0].total };
+  }
+  const units = sql`CASE WHEN w.review_state='confirmed' THEN (SELECT count(*) FROM json_each(w.received_units) j WHERE NOT ${cancelled} AND NOT ${reserved}) ELSE 0 END`;
+  const stages = [stage.awaiting, stage.warehouse, stage.package, stage.sent, stage.received];
+  const stageCount = sql.join(stages.map(condition => sql`(CASE WHEN ${condition} THEN 1 ELSE 0 END)`),sql` + `);
+  const exceptional = sql`w.review_state!='pending_review' AND (${stageCount})!=1`;
+  const stageCases = sql.join(stages.map((condition,index) => sql`WHEN ${condition} THEN ${index+1}`),sql` `);
+  const rank = sql`CASE WHEN ${stage.review} THEN 0 ${stageCases} ELSE 0 END`;
+  const order = q.sort === "units" ? sql`${units} ${direction},c.id`
+    : q.sort === "stage" ? sql`${exceptional} ASC, CASE WHEN ${exceptional} THEN 0 ELSE ${rank} END ${direction},c.id` : fallback;
+  const ids=await db.all<{id:string}>(sql`SELECT w.cost_item_id AS id ${from} ORDER BY ${order} LIMIT ${q.pageSize} OFFSET ${q.page*q.pageSize}`);
   return {ids:ids.map(r=>r.id),total:count[0].total};
 }

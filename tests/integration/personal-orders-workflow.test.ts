@@ -69,7 +69,7 @@ describe("personal orders, warehouse and packages", () => {
       operation: "release", packageId: reservation.id, expectedRevision: packageDetail.pkg.revision,
       reservationIds: packageDetail.reservations.map(row => row.id), reason: "Tentativa em espaço desatualizado",
     })).rejects.toMatchObject({ status: 409, code: "WORKSPACE_CONTEXT_CHANGED" });
-    await expect(logisticsPackageServices(f.db, "bob").get(reservation.id)).rejects.toMatchObject({ status: 409 });
+    await expect(logisticsPackageServices(f.db, "bob").get(reservation.id)).rejects.toMatchObject({ status: 403 });
     expect(await f.db.select().from(logisticsPackages).where(eq(logisticsPackages.id, reservation.id)).get()).toMatchObject({ revision: packageDetail.pkg.revision, workspaceId: workspace.id });
 
     await f.alice.selectWorkspace(workspace.id, "workspace");
