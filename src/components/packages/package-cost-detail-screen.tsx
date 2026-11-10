@@ -52,6 +52,7 @@ import {
   type FinancingPosition,
 } from "./additional-orders-panel";
 import { QcImportPanel } from "@/components/qc/qc-components";
+import { useInvalidateLogistics } from "@/components/orders/logistics-query";
 import { useWorkspace } from "@/components/workspace-provider";
 
 type Detail = CostTrackingView;
@@ -135,6 +136,7 @@ export function PackageCostDetailScreen({
 }) {
   const router = useRouter();
   const { data: workspace, registerWorkspaceDraft } = useWorkspace();
+  const invalidateLogistics = useInvalidateLogistics(workspace.currentUser.id, workspace.workspaceId);
   const [detail, setDetail] = useState<Detail | null>(null),
     [loading, setLoading] = useState(true),
     [error, setError] = useState("");
@@ -258,6 +260,7 @@ export function PackageCostDetailScreen({
       return false;
     }
     if (result.ok && result.data) {
+      invalidateLogistics();
       if (operation === "order.additional.correct") {
         const correction = result.data.orderCorrections.find(row => row.previousOrderId === rest.orderId);
         const oldItem = detail.productOrders.find(order => order.id === rest.orderId)?.items.find(row => row.cost.id === (rest.input as { itemId?: string })?.itemId);

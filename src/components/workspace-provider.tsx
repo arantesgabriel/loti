@@ -1,4 +1,5 @@
 "use client";
+import { LogisticsQueryProvider } from "@/components/orders/logistics-query";
 import { useRouter } from "next/navigation";
 import { createContext, useContext, useState, useCallback, useEffect, useRef } from "react";
 import { toast, Toaster } from "sonner";
@@ -116,7 +117,7 @@ export function WorkspaceProvider({ initialData, children }: { initialData: Clie
       if (version === dataVersion.current && nextData.workspaceId === expectedWorkspaceId && activeWorkspaceId.current === expectedWorkspaceId) publish(nextData);
       else if (activeWorkspaceId.current === expectedWorkspaceId) void refresh();
       toast.success(message);
-      window.dispatchEvent(new Event("loti:domain-committed"));
+      window.dispatchEvent(new CustomEvent("loti:domain-committed", { detail: operation }));
       return true;
     } catch {
       toast.error("Não foi possível conectar. Tente novamente.");
@@ -179,7 +180,7 @@ export function WorkspaceProvider({ initialData, children }: { initialData: Clie
   }
 
   return <Context.Provider value={{ data, busy, switching, hasOpenEditor, mutate, refresh, updateProfileName, switchWorkspace, registerWorkspaceDraft }}>
-    {children}<Toaster theme={resolvedTheme} richColors position="top-right" closeButton />
+    <LogisticsQueryProvider key={JSON.stringify([data.currentUser.id, data.workspaceId])}>{children}</LogisticsQueryProvider><Toaster theme={resolvedTheme} richColors position="top-right" closeButton />
   </Context.Provider>;
 }
 
