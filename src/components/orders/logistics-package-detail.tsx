@@ -15,6 +15,7 @@ import { formatMoney } from "@/lib/domain/money";
 import type { logisticsPackageServices } from "@/lib/domain/logistics-package-services";
 import type { WarehouseData } from "./orders-screen";
 import { OrderDetailPanel } from "./order-detail-panel";
+import { useInvalidateLogistics } from "./logistics-query";
 import { useWorkspace } from "@/components/workspace-provider";
 import "./orders.css";
 import "@/components/packages/product-costs.css";
@@ -155,70 +156,54 @@ function formatRecordedAt(value: Date | string) {
   }).format(new Date(value));
 }
 
-type AllocationUnit = {
-  unitIndex: number;
-  amountCents: number;
-  people: { personId: string; amountCents: number }[];
+type RateioManifest = NonNullable<Detail["valuation"] | Detail["listValuation"]>;
+type ParticipantRateio = {
+  personId: string;
+  totalCents: number;
+  products: [string, { amountCents: number; pending: boolean }][];
 };
 
-function AllocationTable({
-  caption,
-  units,
-  personName,
-}: {
-  caption: string;
-  units: AllocationUnit[];
-  personName: (id: string) => string;
-}) {
-  const subtotal = units.reduce((sum, unit) => sum + unit.amountCents, 0);
+function buildParticipantRateios(
+  manifest: RateioManifest | null | undefined,
+  legacyProjections: Detail["legacyProjections"],
+): ParticipantRateio[] {
+  const byPerson = new Map<string, {
+    personId: string;
+    totalCents: number;
+    products: Map<string, { amountCents: number; pending: boolean }>;
+  }>();
+  const addShare = (costItemId: string, personId: string, amountCents: number | null) => {
+    const participant = byPerson.get(personId) ?? { personId, totalCents: 0, products: new Map() };
+    const product = participant.products.get(costItemId) ?? { amountCents: 0, pending: false };
+    if (amountCents === null) product.pending = true;
+    else {
+      product.amountCents += amountCents;
+      participant.totalCents += amountCents;
+    }
+    participant.products.set(costItemId, product);
+    byPerson.set(personId, participant);
+  };
 
-  return (
-    <div className="orders-allocation-table-wrap">
-      <table className="orders-allocation-table">
-        <caption className="sr-only">{caption}</caption>
-        <thead>
-          <tr>
-            <th scope="col">Unidade</th>
-            <th scope="col">Participante</th>
-            <th scope="col">Valor</th>
-          </tr>
-        </thead>
-        {units.map((unit) => (
-          <tbody key={unit.unitIndex}>
-            {unit.people.length ? (
-              unit.people.map((person, index) => (
-                <tr key={person.personId}>
-                  {index === 0 && (
-                    <th scope="rowgroup" rowSpan={unit.people.length}>
-                      <span>Unidade {unit.unitIndex + 1}</span>
-                      <small>Total da unidade {formatMoney(unit.amountCents)}</small>
-                    </th>
-                  )}
-                  <td>{personName(person.personId)}</td>
-                  <td className="orders-allocation-money">{formatMoney(person.amountCents)}</td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <th scope="row">
-                  <span>Unidade {unit.unitIndex + 1}</span>
-                  <small>Total da unidade {formatMoney(unit.amountCents)}</small>
-                </th>
-                <td>Sem participantes</td>
-                <td className="orders-allocation-money">—</td>
-              </tr>
-            )}
-          </tbody>
-        ))}
-        <tfoot>
-          <tr>
-            <th scope="row" colSpan={2}>Subtotal neste pacote</th>
-            <td className="orders-allocation-money">{formatMoney(subtotal)}</td>
-          </tr>
-        </tfoot>
-      </table>
-    </div>
-  );
+  for (const item of manifest?.items ?? []) {
+    for (const participant of item.participants) addShare(item.costItemId, participant.personId, 0);
+    for (const component of item.components) for (const unit of component.units) {
+      for (const person of unit.people) addShare(item.costItemId, person.personId, person.amountCents);
+    }
+  }
+  for (const charge of manifest?.charges ?? []) for (const unit of charge.units) {
+    for (const person of unit.people) addShare(unit.costItemId, person.personId, person.amountCents);
+  }
+  for (const charge of legacyProjections.filter(candidate => candidate.active)) {
+    for (const item of charge.items) for (const component of item.components) {
+      for (const person of component.people) addShare(item.costItemId, person.personId, person.amountCents);
+    }
+  }
+
+  return [...byPerson.values()].map(participant => ({
+    personId: participant.personId,
+    totalCents: participant.totalCents,
+    products: [...participant.products],
+  }));
 }
 
 export function LogisticsPackageDetail({
@@ -229,6 +214,7 @@ export function LogisticsPackageDetail({
   returnTo?: string;
 }) {
   const { data: workspace, registerWorkspaceDraft } = useWorkspace();
+  const invalidateLogistics = useInvalidateLogistics(workspace.currentUser.id, workspace.workspaceId);
   const [data, setData] = useState<Detail | null>(null);
   const [warehouse, setWarehouse] = useState<WarehouseData | null>(null);
   const [error, setError] = useState("");
@@ -361,6 +347,7 @@ export function LogisticsPackageDetail({
       return;
     }
 
+    invalidateLogistics();
     setAction(null);
     setError("");
     await load();
@@ -423,6 +410,7 @@ export function LogisticsPackageDetail({
       return;
     }
 
+    invalidateLogistics();
     setData(result.data);
     setSelectedLogisticsStage(targetStage);
     setRegressionConfirmed(false);
@@ -449,7 +437,8 @@ export function LogisticsPackageDetail({
   const capturedManifest = contentClosed && data.manifests.length > 0;
   const sumUnits = (units: readonly { amountCents: number }[]) =>
     units.reduce((sum, unit) => sum + unit.amountCents, 0);
-  const inherited = data.valuation?.items.reduce(
+  const rateioManifest = data.valuation ?? data.listValuation;
+  const inherited = rateioManifest?.items.reduce(
     (sum, item) => sum + item.components.reduce(
       (componentSum, component) => componentSum + sumUnits(component.units),
       0,
@@ -532,6 +521,8 @@ export function LogisticsPackageDetail({
   const productDetail = warehouse?.rows.find(row => row.costItemId === productDetailId);
   const personName = (id: string) =>
     workspace.members.find((member) => member.id === id)?.name ?? (workspace.workspaceKind === "personal" ? "Você" : "Membro");
+  const participantRateios = buildParticipantRateios(rateioManifest, data.legacyProjections);
+  const rateioPartial = !finalKnown || data.legacyProjections.some(charge => charge.active && charge.finalCents === null);
   const recordChargeAvailable = editable && hasUnits;
   const recordFreightAvailable = recordChargeAvailable && !freightPaid;
   const freightAction: Action | null = recordFreightAvailable
@@ -880,134 +871,42 @@ export function LogisticsPackageDetail({
         sheet
         className="orders-package-review-sheet orders-package-rateio-sheet"
       >
-        {data.valuation && (
-          <section className="orders-package-section orders-inherited-distribution" aria-labelledby="orders-inherited-heading">
-            <h2 id="orders-inherited-heading">Valores herdados dos produtos</h2>
-            <p className="muted">
-              {capturedManifest
-                ? "Distribuição capturada no manifesto vigente. As versões anteriores permanecem no histórico."
-                : "Prévia da montagem. A distribuição será capturada ao fechar o conteúdo."}
-            </p>
-            {data.valuation.items.map((item) => {
-              const row = warehouse?.rows.find((candidate) => candidate.costItemId === item.costItemId);
-              const origin = warehouse?.origins.find((candidate) => candidate.trackingId === item.trackingId);
-              const productTotal = item.components.reduce(
-                (sum, component) => sum + sumUnits(component.units),
-                0,
-              );
-              return (
-                <details className="orders-allocation-product" key={item.costItemId}>
-                  <summary>
-                    <span>
-                      <strong>{row?.name ?? "Item da origem financeira"}</strong>
-                      <small>
-                        {row?.order.kind === "additional" ? "Adicional" : "Compra"}
-                        {" · "}
-                        {origin?.name ?? "Origem da compra"}
-                        {row?.source.variant ? " · " + row.source.variant : ""}
-                      </small>
-                    </span>
-                    <strong>Subtotal {formatMoney(productTotal)}</strong>
-                  </summary>
-                  {item.components.map((component) => (
-                    <section className="orders-allocation-component" key={component.name}>
-                      <div className="orders-allocation-component-heading">
-                        <h3>{component.name}</h3>
-                        <strong>Subtotal {formatMoney(sumUnits(component.units))}</strong>
-                      </div>
-                      <AllocationTable
-                        caption={(row?.name ?? "Item da origem financeira") + " · " + component.name}
-                        units={component.units}
-                        personName={personName}
-                      />
-                    </section>
-                  ))}
-                </details>
-              );
-            })}
-          </section>
-        )}
-        <section
-          className="orders-package-section orders-charge-distribution"
-          aria-label="Distribuição dos encargos do pacote"
-        >
-          <h2>Encargos do pacote</h2>
-          <p className="muted">
+        <section className="orders-package-section orders-participant-distribution" aria-label="Rateio por participante">
+          <p className="orders-package-rateio-note">
             {capturedManifest
-              ? "Rateio capturado no manifesto vigente; valores herdados dos produtos estão apresentados separadamente."
-              : "Prévia da montagem; estes encargos serão capturados ao fechar o conteúdo."}
+              ? "Rateio capturado no manifesto vigente."
+              : "Prévia da montagem; o rateio será capturado ao fechar o conteúdo."} Os valores incluem os custos herdados e encargos conhecidos; itens sem valor informado ficam fora do total parcial.
           </p>
-          {data.valuation?.charges.map((charge) => (
-            <details className="orders-package-charge" key={charge.name}>
-              <summary>
-                <span>{charge.name}</span>
-                <strong>{formatMoney(charge.amountCents)}</strong>
-              </summary>
-              {[...new Set(charge.units.map((unit) => unit.costItemId))].map((costItemId) => {
-                const units = charge.units.filter((unit) => unit.costItemId === costItemId);
-                return (
-                  <article className="orders-charge-allocation-item" key={costItemId}>
-                    <h3>
-                      {packageItems.find((item) => item.costItemId === costItemId)?.name ?? "Item"}
-                      <span>Subtotal {formatMoney(sumUnits(units))}</span>
-                    </h3>
-                    <AllocationTable
-                      caption={charge.name + " · " + (packageItems.find((item) => item.costItemId === costItemId)?.name ?? "Item")}
-                      units={units}
-                      personName={personName}
-                    />
-                  </article>
-                );
-              })}
-            </details>
-          ))}
-          {data.legacyProjections.filter((charge) => charge.active).map((charge) => (
-            <details className="orders-package-charge" key={charge.legacyChargeId}>
-              <summary>
-                <span>
-                  {charge.chargeType === "brazil_freight"
-                    ? "Frete e taxa já registrados"
-                    : "Receita já registrada"}
-                </span>
-                <strong>
-                  {formatMoney(charge.knownCents)}
-                  {charge.finalCents === null ? " parcial" : ""}
-                </strong>
-              </summary>
-              <p className="muted">
-                Valores da cobrança original, divididos por participante.
-              </p>
-              {charge.items.map((item) => (
-                <article className="orders-legacy-allocation-item" key={item.costItemId}>
-                  <h3>
-                    {packageItems.find((candidate) => candidate.costItemId === item.costItemId)?.name ?? "Item"}
-                  </h3>
-                  {item.components.map((component) => (
-                    <div className="orders-legacy-allocation-component" key={component.name}>
-                      <h4>{component.name}</h4>
-                      <p>Componente: {component.amountCents === null ? "Pendente" : formatMoney(component.amountCents)}</p>
-                      {component.people.map((person) => (
-                        <p key={person.personId}>
-                          Pessoa: {personName(person.personId)} · {person.amountCents === null ? "Pendente" : formatMoney(person.amountCents)}
-                        </p>
-                      ))}
-                    </div>
-                  ))}
-                </article>
-              ))}
-            </details>
-          ))}
-          {data.valuation?.charges.length === 0 && data.legacyProjections.every((charge) => !charge.active) && (
-            <p>Nenhum encargo alocado neste pacote.</p>
-          )}
-          {!data.valuation && <p className="orders-package-review-note">{data.valuationError ?? "Complete os custos dos produtos para ver a divisão."}</p>}
-          {(freight === null || fee === null || customs === null) && (
-            <dl className="orders-package-review-statuses">
-              {freight === null && <div><dt>Frete Brasil</dt><dd>Pendente</dd></div>}
-              {fee === null && <div><dt>Taxa do frete</dt><dd>Pendente</dd></div>}
-              {customs === null && <div><dt>Receita</dt><dd>Pendente</dd></div>}
-            </dl>
-          )}
+          {participantRateios.length > 0 ? <ul className="orders-package-participant-list">
+            {participantRateios.map(participant => (
+              <li key={participant.personId}>
+                <details className="orders-package-participant">
+                  <summary>
+                    <span>{personName(participant.personId)}</span>
+                    <span className="orders-package-participant-total">
+                      {formatMoney(participant.totalCents)}
+                      <small>{rateioPartial ? "Parcial conhecido" : "Total conhecido"}</small>
+                    </span>
+                  </summary>
+                  <ul className="orders-package-participant-products">
+                    {participant.products.map(([costItemId, share]) => {
+                      const item = packageItems.find(candidate => candidate.costItemId === costItemId);
+                      return <li key={costItemId}>
+                        <span className="orders-package-participant-product">
+                          {item?.name ?? "Item da origem financeira"}
+                          {item?.row?.source.variant && <small> · {item.row.source.variant}</small>}
+                        </span>
+                        <span className="orders-package-participant-share">
+                          {formatMoney(share.amountCents)}
+                          {share.pending && <small>Parcela parcial</small>}
+                        </span>
+                      </li>;
+                    })}
+                  </ul>
+                </details>
+              </li>
+            ))}
+          </ul> : <p className="orders-package-review-note">{data.valuationError ?? "Complete os custos e a composição dos produtos para ver a divisão."}</p>}
         </section>
       </Surface>
 

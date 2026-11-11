@@ -4,14 +4,19 @@ import { ordersTransitionTarget, configureOrdersTransitionEnvironment } from "./
 
 // Snapshot ONLY an identified synthetic fixture. Never reads a default .env DB.
 const source = ordersTransitionTarget("file:./data/orders-transition-stage5-20261028-ui-refinements.sqlite");
-const target = ordersTransitionTarget("file:./data/orders-transition-freeze-phase2-20261028.sqlite");
+const currentBuild = process.env.LOTI_ORDERS_LIST_DIST_DIR;
+const target = ordersTransitionTarget(currentBuild
+  ? "file:./data/orders-transition-freeze-phase2-current-" + process.pid + ".sqlite"
+  : "file:./data/orders-transition-freeze-phase2-20261028.sqlite");
 const sourceMarker = JSON.parse(readFileSync(`${source.path}.scenario.json`, "utf8"));
 if (sourceMarker.scenarioId !== "orders-workflow-v2" || sourceMarker.state !== "complete" || sourceMarker.databasePath !== source.path) throw new Error("A completed synthetic source is required");
 configureOrdersTransitionEnvironment(target.url);
 process.env.BETTER_AUTH_URL = "http://localhost:3142";
 process.env.LOTI_ORDERS_TRANSITION_QA = "1";
 process.env.LOTI_QC_MANAGER_USER_ID = sourceMarker.people[0];
-process.env.LOTI_NEXT_DIR = ".next-orders-transition-freeze-phase2";
+const distDir = currentBuild ?? ".next-orders-transition-freeze-phase2";
+if (!/^\.next(?:-[a-z0-9-]+)?$/.test(distDir)) throw new Error("Invalid isolated Orders QA build directory");
+process.env.LOTI_NEXT_DIR = distDir;
 if (!existsSync(target.path)) {
   const { openDatabase } = await import("../src/lib/db/connection");
   const original = openDatabase(source.url);
@@ -19,6 +24,10 @@ if (!existsSync(target.path)) {
   finally { original.client.close(); }
   const fixture = openDatabase(target.url);
   try {
+    if (currentBuild) {
+      const { migrate } = await import("drizzle-orm/libsql/migrator");
+      await migrate(fixture.db, { migrationsFolder: "./drizzle" });
+    }
     const { createServices } = await import("../src/lib/domain/services");
     const { warehouseServices } = await import("../src/lib/domain/warehouse-services");
     const services = createServices(fixture.db, sourceMarker.people[0]);

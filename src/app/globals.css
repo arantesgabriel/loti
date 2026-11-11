@@ -7681,3 +7681,9 @@ details .details-fields {
   .settings-identity { gap: 12px; }
   .settings-theme-options .theme-option > span { gap: 4px; padding-right: 3px; padding-left: 3px; font-size: 11px; }
 }
+.qc-viewer-photo { position: relative; }
+.qc-viewer-photo > .qc-viewer-original { position: absolute; inset: 0; }
+.qc-viewer-original[data-ready="false"] { visibility: hidden; }
+.qc-viewer-photo > .qc-image-unavailable,
+.qc-viewer-photo > [role="status"] { position: absolute; inset: auto 0 0; }
+.qc-viewer-photo > .qc-image-unavailable { min-height: 0; background: var(--surface); }

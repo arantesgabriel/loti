@@ -1,3 +1,4 @@
+import { readCostTracking, readWarehouseCostKeys } from "@/lib/domain/package-cost-reading";
 import { expect, it } from "vitest";
 import { fixture } from "./helpers";
 import { warehouseServices, warehouseQuerySchema } from "@/lib/domain/warehouse-services";
@@ -43,10 +44,48 @@ it("searches real product, variant and order origin across pages, combines views
     expect((await query({ view: "warehouse" })).total).toBe(1);
     expect((await query({ view: "available" })).total).toBe(0);
     const reservedData = await service.list(warehouseQuerySchema.parse({ view: "warehouse" }));
-    expect(orderStage(reservedData.rows[0], reservedData.packages)).toMatchObject({ label: "Etapas diferentes", detail: "1 a caminho · 2 no armazém" });
+    expect(orderStage(reservedData.rows[0], reservedData.packages)).toMatchObject({ label: "Etapas diferentes", detail: "1 a caminho · 2 no armazém · Reservadas no pacote Reserva catálogo · 2 unidades" });
     expect((await query({ view: "warehouse", status: "sent" })).total).toBe(0);
     expect((await warehousePage(f.db, "other", warehouseQuerySchema.parse({ search: "catálogo" }))).total).toBe(0);
     await expect(warehouseServices(f.db, "outsider").list(warehouseQuerySchema.parse({}))).rejects.toMatchObject({ status: 403 });
     expect(warehouseQuerySchema.safeParse({ view: "invalid" }).success).toBe(false);
+  } finally { f.client.close(); }
+});
+
+it("reads cost keys across trackings with fewer queries and preserves both page orders", async () => {
+  const f = await fixture(":memory:", "orders");
+  try {
+    for (const price of [450, 150, 450, 200]) {
+      const purchase = await f.alice.savePurchase({ name: "Compra de ordenação" });
+      await f.alice.saveManualItem({ name: "Custo QA", url: "https://shop.test/cost", quantity: 2, unitPriceCents: price, personId: "alice" });
+      await f.alice.finalizePurchase(purchase.id, true);
+    }
+    const service = warehouseServices(f.db, "alice");
+    const rows = (await service.list(warehouseQuerySchema.parse({ search: "Custo QA" }))).rows;
+    const ids = [...new Set(rows.map(row => row.cost.trackingId))];
+    let selects = 0;
+    const counting = { select: ((...args: unknown[]) => {
+      selects++;
+      return Reflect.apply(f.db.select, f.db, args);
+    }) as typeof f.db.select };
+    const baselineStart = performance.now();
+    for (const id of ids) await readCostTracking(counting, "alice", id, "order");
+    const baseline = selects;
+    const baselineMs = performance.now() - baselineStart;
+    selects = 0;
+    const batchStart = performance.now();
+    const keys = await readWarehouseCostKeys(counting, "workspace", ids);
+    const batchedMs = performance.now() - batchStart;
+    expect(selects).toBe(13);
+    expect(selects).toBeLessThan(baseline);
+    const cents = (row: typeof rows[number]) => row.financial!.total.finalCents ?? row.financial!.total.knownCents;
+    expect(new Map(keys.map(key => [key.id, key.cents]))).toEqual(new Map(rows.map(row => [row.costItemId, cents(row)])));
+    for (const direction of ["asc", "desc"]) {
+      const expected = [...rows].sort((a,b) => (direction === "asc" ? 1 : -1) * (cents(a) - cents(b)) || (a.costItemId < b.costItemId ? -1 : 1));
+      const actual = [];
+      for (const page of [0, 1]) actual.push(...(await service.list(warehouseQuerySchema.parse({ search: "Custo QA", sort: "cost", direction, pageSize: 2, page }))).rows);
+      expect(actual.map(row => row.costItemId)).toEqual(expected.map(row => row.costItemId));
+    }
+    console.info("Cost-key SELECT builders and elapsed ms", { baseline, batched: selects, baselineMs, batchedMs });
   } finally { f.client.close(); }
 });

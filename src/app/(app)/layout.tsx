@@ -28,5 +28,5 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (activationPendingEmail) return <ActivationPendingScreen email={activationPendingEmail}/>;
   if (noWorkspace) return <main className="empty-state"><h1>Nenhum espaço disponível</h1><p>Sua conta ainda não tem um espaço pessoal ou compartilhado para acessar.</p><a href="/login">Voltar ao login</a></main>;
   if (denied || !data) return <main className="empty-state"><h1>Acesso restrito</h1><p>Peça ao responsável pelo grupo para adicionar sua conta ao espaço.</p><a href="/login">Voltar ao login</a></main>;
-  return <WorkspaceProvider initialData={data}><OnboardingProvider><AppShell>{children}</AppShell></OnboardingProvider></WorkspaceProvider>;
+  return <WorkspaceProvider key={data.currentUser.id} initialData={data}><OnboardingProvider><AppShell>{children}</AppShell></OnboardingProvider></WorkspaceProvider>;
 }

@@ -3,11 +3,12 @@
 import { LoadingState } from "@/components/ui/loading-state";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { ArrowDown, ChevronDown, ChevronRight, ListFilter, Package, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OrdersBottomSheet } from "@/components/orders/orders-workspace";
-import { costRequest } from "@/components/packages/package-cost-client";
+import { logisticsQuery } from "./logistics-query";
 import { formatMoney } from "@/lib/domain/money";
 import { useWorkspace } from "@/components/workspace-provider";
 import type { listLogisticsPackages, PackageListQuery } from "@/lib/domain/logistics-package-list";
@@ -46,39 +47,18 @@ function costTitle(row: PackageList["rows"][number]) {
 
 export function LogisticsPackagesScreen({ initialQuery }: { initialQuery: PackageListQuery }) {
   const { data: workspace } = useWorkspace();
-  const [data, setData] = useState<PackageList | null>(null);
-  const [error, setError] = useState("");
-  const [loadedQuery, setLoadedQuery] = useState<string | null>(null);
   const [queryState, setQueryState] = useState(initialQuery);
   const [filterOpen, setFilterOpen] = useState(false);
   const [sortOpen, setSortOpen] = useState(false);
   const [filterDraft, setFilterDraft] = useState<{ filter: MobileStageFilter; pendingOnly: boolean }>({ filter: "all", pendingOnly: false });
-  const [retryKey, setRetryKey] = useState(0);
-  const query = listQueryString(queryState);
-  const requestKey = `${query}:${retryKey}`;
-  const loading = loadedQuery !== requestKey;
+  const query = listQueryString({ ...queryState, search: queryState.search.trim() });
+  const list = useQuery({
+    ...logisticsQuery<PackageList>(workspace.currentUser.id, workspace.workspaceId, "packages", "/api/logistics/packages", query, "Não foi possível carregar os pacotes."),
+    placeholderData: keepPreviousData,
+  });
+  const { data, isPending: loading } = list;
+  const error = list.error?.message;
   const listHref = packageListHref(queryState);
-
-  useEffect(() => {
-    let active = true;
-    void costRequest<PackageList>(`/api/logistics/packages?${query}`, undefined, workspace.workspaceId)
-      .then(result => {
-        if (!active) return;
-        if (result.ok && result.data) {
-          setData(result.data);
-          setError("");
-        } else {
-          setError(result.error ?? "Não foi possível carregar os pacotes.");
-        }
-      })
-      .catch(() => {
-        if (active) setError("Não foi possível carregar os pacotes.");
-      })
-      .finally(() => {
-        if (active) setLoadedQuery(requestKey);
-      });
-    return () => { active = false; };
-  }, [query, requestKey, workspace.workspaceId]);
 
   function updateQuery(next: PackageListQuery) {
     setQueryState(next);
@@ -198,12 +178,12 @@ export function LogisticsPackagesScreen({ initialQuery }: { initialQuery: Packag
       {!loading && error && (
         <div className="orders-request-error">
           <p role="alert" className="form-error">{error}</p>
-          <Button type="button" variant="outline" onClick={() => { setError(""); setRetryKey(value => value + 1); }}>Tentar novamente</Button>
+          <Button type="button" variant="outline" onClick={() => void list.refetch()}>Tentar novamente</Button>
         </div>
       )}
       {loading && <LoadingState label="Carregando pacotes…" rows={3} />}
 
-      {!loading && !error && data && !rows.length && (
+      {!list.isPlaceholderData && data && !rows.length && (
         <div className="orders-package-empty">
           <h2>{filtered ? "Nenhum pacote encontrado" : "Nenhum pacote por aqui ainda"}</h2>
           <p>{filtered ? "Ajuste a busca ou os filtros para ver outros pacotes." : "Monte um pacote com unidades que já estão disponíveis em Pedidos."}</p>
@@ -214,10 +194,10 @@ export function LogisticsPackagesScreen({ initialQuery }: { initialQuery: Packag
         </div>
       )}
 
-      <div className="orders-package-table-wrap" aria-busy={loading}>
+      <div className="orders-package-table-wrap" aria-busy={loading || list.isPlaceholderData}>
         {!!rows.length && <div className="orders-package-table-head" aria-hidden="true"><span>Pacote</span><span>Logística</span><span>Custos e pendências</span><span /> </div>}
-        <div className="orders-package-table">
-          {!loading && !error && rows.map(row => {
+        <div className="orders-package-table" inert={list.isPlaceholderData}>
+          {rows.map(row => {
             const detailHref = `/packages/detail/${encodeURIComponent(row.pkg.id)}?returnTo=${encodeURIComponent(listHref)}`;
             const logisticsLabel = row.pkg.stage === "received" ? "Recebido" : row.pkg.stage === "sent" ? "A caminho" : "Em montagem";
             const logisticsClass = row.pkg.stage === "received" ? "received" : "preparing";
@@ -254,9 +234,9 @@ export function LogisticsPackagesScreen({ initialQuery }: { initialQuery: Packag
         </div>
       </div>
 
-      {!loading && !error && rows.length > 0 && <p className="orders-package-mobile-footer">Mostrando {visibleCount} de {data?.pagination.total ?? 0} pacotes</p>}
+      {!list.isPlaceholderData && rows.length > 0 && <p className="orders-package-mobile-footer">Mostrando {visibleCount} de {data?.pagination.total ?? 0} pacotes</p>}
 
-      {!loading && !error && (data?.pagination.total ?? 0) > 20 && (
+      {!list.isPlaceholderData && (data?.pagination.total ?? 0) > 20 && (
         <nav className="orders-pagination" aria-label="Páginas de pacotes">
           <Button variant="outline" disabled={!queryState.page} onClick={() => updateQuery({ ...queryState, page: queryState.page - 1 })}>Anterior</Button>
           <span>{queryState.page + 1} / {Math.ceil((data?.pagination.total ?? 0) / 20)}</span>

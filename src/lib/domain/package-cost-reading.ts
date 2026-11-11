@@ -84,18 +84,7 @@ export async function readCostTracking(db: CostDatabase, userId: string, trackin
   for (const event of refundEventRows) refundEventsById.set(event.refundId, [...(refundEventsById.get(event.refundId) ?? []), event]);
   const packageEventsById = new Map<string, typeof packageEventRows>();
   for (const event of packageEventRows) packageEventsById.set(event.packageId, [...(packageEventsById.get(event.packageId) ?? []), event]);
-  const refundsByCostItem = new Map<string, typeof refunds>();
-  for (const refund of refunds) refundsByCostItem.set(refund.costItemId, [...(refundsByCostItem.get(refund.costItemId) ?? []), refund]);
-  const refundCalculationRows = (costItemId: string) => (refundsByCostItem.get(costItemId) ?? []).map(refund => ({
-    status: refund.status, quantity: refund.quantity,
-    requestedProductCents: refund.requestedProductCents, requestedChinaCents: refund.requestedChinaCents,
-    receivedProductCents: refund.receivedProductCents, receivedChinaCents: refund.receivedChinaCents,
-    participants: (refundParticipantsById.get(refund.id) ?? []).map(person => ({
-      personId: person.personId, allocationOrder: person.allocationOrder, weight: person.weight,
-      originalProductShareCents: person.originalProductShareCents, originalChinaShareCents: person.originalChinaShareCents,
-      originalProductFeeShareCents: person.originalProductFeeShareCents,
-    })),
-  }));
+  const refundsByCostItem = groupCostRows(refunds, row => row.costItemId);
   const enrichRefund = (refund: typeof refunds[number]) => ({
     ...refund,
     participants: (refundParticipantsById.get(refund.id) ?? []).map(person => ({ ...person, name: peopleById.get(person.personId)?.name ?? "Membro" })),
@@ -145,32 +134,11 @@ export async function readCostTracking(db: CostDatabase, userId: string, trackin
       }];
     });
   });
+  const costInputs = { calculatedCostItems, purchaseItemsById, additionalItemRows, participantsByCostItem, refunds, refundParticipantsById, allocationTotal };
   let calculation: ReturnType<typeof calculateCostTracking>;
   try { calculation = calculateCostTracking({
     requirePackageCoverage: scope !== "order",
-    items: calculatedCostItems.map(cost => {
-      const original = cost.purchaseItemId ? purchaseItemsById.get(cost.purchaseItemId) : null;
-      const additional = cost.additionalOrderItemId ? additionalItemRows.find(item => item.id === cost.additionalOrderItemId) : null;
-      const quantity = original?.quantity ?? additional?.quantity;
-      if (quantity === undefined) throw new DomainError("Um item do acompanhamento não existe no snapshot do pedido.", 409);
-      const base = {
-        id: cost.id, itemOrder: cost.itemOrder, quantity,
-        effectivePrice: { state: cost.effectivePriceState, amountCents: cost.effectivePriceUnitCents },
-        chinaFreight: { state: cost.chinaFreightState, amountCents: cost.chinaFreightUnitCents },
-        participants: (participantsByCostItem.get(cost.id) ?? []).map(person => ({ personId: person.personId, allocationOrder: person.allocationOrder, weight: person.weight })),
-      };
-      if (cost.additionalOrderItemId) return {
-        ...base,
-        capturedProductCents: allocationTotal(cost.id, "product", "principalBrlCents"),
-        capturedChinaCents: allocationTotal(cost.id, "china", "principalBrlCents"),
-        capturedFeeCents: allocationTotal(cost.id, "product", "feeBrlCents") + allocationTotal(cost.id, "china", "feeBrlCents"),
-        refunds: refundCalculationRows(cost.id),
-      };
-      return {
-        ...base,
-        refunds: refundCalculationRows(cost.id),
-      };
-    }),
+    items: costCalculationItems(costInputs),
     packages: (scope === "order" ? [] : packages).map(pkg => {
       const freight = chargeByScope.get(`${pkg.id}:brazil_freight`), customs = chargeByScope.get(`${pkg.id}:customs`);
       return {
@@ -189,68 +157,7 @@ export async function readCostTracking(db: CostDatabase, userId: string, trackin
   const calculatedItems = new Map(calculation.items.map(item => [item.id, item]));
   const calculatedPackages = new Map(calculation.packages.map(pkg => [pkg.id, pkg]));
   const additionalItemById = new Map(additionalItemRows.map(item => [item.id, item]));
-  const financialDisplay = (() => {
-    try {
-      return projectCostFinancialDisplay(calculatedCostItems.map(cost => {
-        const original = cost.purchaseItemId ? purchaseItemsById.get(cost.purchaseItemId) : null;
-        const additional = cost.additionalOrderItemId ? additionalItemById.get(cost.additionalOrderItemId) : null;
-        const item = calculatedItems.get(cost.id);
-        if (!item || (!original && !additional)) throw new Error("Um item da projeção não existe no acompanhamento.");
-        const amount = (name: string) => item.components.find(component => component.name === name)?.amountCents ?? null;
-        const displayComponent = (name: string, state: string) => {
-          const cents = amount(name);
-          return cents === null
-            ? { name, state: "pending" as const, amountCents: null }
-            : state === "no_charge"
-              ? { name, state: "no_charge" as const, amountCents: null }
-              : { name, state: "known" as const, amountCents: cents };
-        };
-        const packageComponents = item.components
-          .filter(component => component.name.startsWith("Frete Brasil · ") || component.name.startsWith("Taxa do frete · ") || component.name.startsWith("Receita · "))
-          .map(component => ({ name: component.name, state: component.amountCents === null ? "pending" as const : "known" as const, amountCents: component.amountCents }));
-        const refundRows = refundsByCostItem.get(cost.id) ?? [];
-        const refundsInput = refundRows.map(refund => {
-          const snapshot = refundParticipantsById.get(refund.id) ?? [];
-          return {
-            id: refund.id,
-            status: refund.status,
-            quantity: refund.quantity,
-            unitStart: refund.unitStart,
-            originalItemQuantity: refund.originalItemQuantity,
-            requestedProductCents: refund.requestedProductCents,
-            requestedChinaCents: refund.requestedChinaCents,
-            receivedProductCents: refund.receivedProductCents,
-            receivedChinaCents: refund.receivedChinaCents,
-            originalItemFeeCents: refund.originalItemFeeCents,
-            originalProductShareCents: snapshot.length ? snapshot.reduce((sum, person) => sum + person.originalProductShareCents, 0) : null,
-            originalChinaShareCents: snapshot.length ? snapshot.reduce((sum, person) => sum + person.originalChinaShareCents, 0) : null,
-          };
-        });
-        const pendingReasons = item.pendingComponents.filter(reason => reason !== "reembolso solicitado" && reason !== "divisão por pessoa pendente");
-        return {
-          costItemId: cost.id,
-          orderId: cost.orderId,
-          itemOrder: cost.itemOrder,
-          origin: original ? "purchase" as const : "additional" as const,
-          purchasedQuantity: original?.quantity ?? additional!.quantity,
-          product: displayComponent("Preço efetivo", cost.effectivePriceState),
-          china: displayComponent("Frete China", cost.chinaFreightState),
-          productFee: displayComponent("Taxa dos produtos", "known"),
-          packageCosts: packageComponents,
-          pendingReasons,
-          refunds: refundsInput,
-        };
-      }), {
-        partialCents: calculation.summary.partialCents,
-        totalCents: calculation.summary.totalCents,
-        hasKnownAmount: calculation.summary.hasKnownAmount,
-        requestedRefundCents: calculation.summary.requestedRefundCents,
-        receivedRefundCents: calculation.summary.receivedRefundCents,
-      });
-    } catch (error) {
-      throw new DomainError(error instanceof Error ? error.message : "Não foi possível projetar a leitura financeira.", 409);
-    }
-  })();
+  const financialDisplay = costFinancialDisplay(costInputs, calculation);
   const items = legacyCostItems.map(cost => {
     const original = purchaseItemsById.get(cost.purchaseItemId!)!;
     const participants = participantsByCostItem.get(cost.id) ?? [];
@@ -387,4 +294,182 @@ export async function listCostTrackings(db: CostReadDatabase, userId: string, wo
   await authorization(db, userId).requireActiveWorkspaceContext(access.workspaceId);
   const rows = await db.select().from(purchaseCostTrackings).where(eq(purchaseCostTrackings.workspaceId, access.workspaceId)).orderBy(desc(purchaseCostTrackings.updatedAt)).all();
   return Promise.all(rows.map(row => readCostTracking(db, userId, row.id)));
+}
+
+function groupCostRows<T>(rows: T[], key: (row: T) => string) {
+  const groups = new Map<string, T[]>();
+  for (const row of rows) {
+    const id = key(row);
+    const group = groups.get(id);
+    if (group) group.push(row); else groups.set(id, [row]);
+  }
+  return groups;
+}
+
+type CostInputs = {
+  calculatedCostItems: (typeof purchaseItemCosts.$inferSelect)[];
+  purchaseItemsById: Map<string, { quantity: number }>;
+  additionalItemRows: { id: string; quantity: number }[];
+  participantsByCostItem: Map<string, (typeof purchaseCostParticipants.$inferSelect)[]>;
+  refunds: (typeof purchaseCostRefunds.$inferSelect)[];
+  refundParticipantsById: Map<string, (typeof purchaseCostRefundParticipants.$inferSelect)[]>;
+  allocationTotal: (id: string, component: "product" | "china", field: "principalBrlCents" | "feeBrlCents") => number;
+};
+
+function costCalculationItems({ calculatedCostItems, purchaseItemsById, additionalItemRows, participantsByCostItem, refunds, refundParticipantsById, allocationTotal }: CostInputs) {
+  const refundsByCostItem = new Map<string, typeof refunds>();
+  for (const refund of refunds) refundsByCostItem.set(refund.costItemId, [...(refundsByCostItem.get(refund.costItemId) ?? []), refund]);
+  const refundCalculationRows = (costItemId: string) => (refundsByCostItem.get(costItemId) ?? []).map(refund => ({
+    status: refund.status, quantity: refund.quantity,
+    requestedProductCents: refund.requestedProductCents, requestedChinaCents: refund.requestedChinaCents,
+    receivedProductCents: refund.receivedProductCents, receivedChinaCents: refund.receivedChinaCents,
+    participants: (refundParticipantsById.get(refund.id) ?? []).map(person => ({
+      personId: person.personId, allocationOrder: person.allocationOrder, weight: person.weight,
+      originalProductShareCents: person.originalProductShareCents, originalChinaShareCents: person.originalChinaShareCents,
+      originalProductFeeShareCents: person.originalProductFeeShareCents,
+    })),
+  }));
+  return calculatedCostItems.map(cost => {
+      const original = cost.purchaseItemId ? purchaseItemsById.get(cost.purchaseItemId) : null;
+      const additional = cost.additionalOrderItemId ? additionalItemRows.find(item => item.id === cost.additionalOrderItemId) : null;
+      const quantity = original?.quantity ?? additional?.quantity;
+      if (quantity === undefined) throw new DomainError("Um item do acompanhamento não existe no snapshot do pedido.", 409);
+      const base = {
+        id: cost.id, itemOrder: cost.itemOrder, quantity,
+        effectivePrice: { state: cost.effectivePriceState, amountCents: cost.effectivePriceUnitCents },
+        chinaFreight: { state: cost.chinaFreightState, amountCents: cost.chinaFreightUnitCents },
+        participants: (participantsByCostItem.get(cost.id) ?? []).map(person => ({ personId: person.personId, allocationOrder: person.allocationOrder, weight: person.weight })),
+      };
+      if (cost.additionalOrderItemId) return {
+        ...base,
+        capturedProductCents: allocationTotal(cost.id, "product", "principalBrlCents"),
+        capturedChinaCents: allocationTotal(cost.id, "china", "principalBrlCents"),
+        capturedFeeCents: allocationTotal(cost.id, "product", "feeBrlCents") + allocationTotal(cost.id, "china", "feeBrlCents"),
+        refunds: refundCalculationRows(cost.id),
+      };
+      return {
+        ...base,
+        refunds: refundCalculationRows(cost.id),
+      };
+    });
+}
+
+function costFinancialDisplay({ calculatedCostItems, purchaseItemsById, additionalItemRows, refunds, refundParticipantsById }: CostInputs, calculation: ReturnType<typeof calculateCostTracking>) {
+  const calculatedItems = new Map(calculation.items.map(item => [item.id, item]));
+  const additionalItemById = new Map(additionalItemRows.map(item => [item.id, item]));
+  const refundsByCostItem = groupCostRows(refunds, row => row.costItemId);
+  return (() => {
+    try {
+      return projectCostFinancialDisplay(calculatedCostItems.map(cost => {
+        const original = cost.purchaseItemId ? purchaseItemsById.get(cost.purchaseItemId) : null;
+        const additional = cost.additionalOrderItemId ? additionalItemById.get(cost.additionalOrderItemId) : null;
+        const item = calculatedItems.get(cost.id);
+        if (!item || (!original && !additional)) throw new Error("Um item da projeção não existe no acompanhamento.");
+        const amount = (name: string) => item.components.find(component => component.name === name)?.amountCents ?? null;
+        const displayComponent = (name: string, state: string) => {
+          const cents = amount(name);
+          return cents === null
+            ? { name, state: "pending" as const, amountCents: null }
+            : state === "no_charge"
+              ? { name, state: "no_charge" as const, amountCents: null }
+              : { name, state: "known" as const, amountCents: cents };
+        };
+        const packageComponents = item.components
+          .filter(component => component.name.startsWith("Frete Brasil · ") || component.name.startsWith("Taxa do frete · ") || component.name.startsWith("Receita · "))
+          .map(component => ({ name: component.name, state: component.amountCents === null ? "pending" as const : "known" as const, amountCents: component.amountCents }));
+        const refundRows = refundsByCostItem.get(cost.id) ?? [];
+        const refundsInput = refundRows.map(refund => {
+          const snapshot = refundParticipantsById.get(refund.id) ?? [];
+          return {
+            id: refund.id,
+            status: refund.status,
+            quantity: refund.quantity,
+            unitStart: refund.unitStart,
+            originalItemQuantity: refund.originalItemQuantity,
+            requestedProductCents: refund.requestedProductCents,
+            requestedChinaCents: refund.requestedChinaCents,
+            receivedProductCents: refund.receivedProductCents,
+            receivedChinaCents: refund.receivedChinaCents,
+            originalItemFeeCents: refund.originalItemFeeCents,
+            originalProductShareCents: snapshot.length ? snapshot.reduce((sum, person) => sum + person.originalProductShareCents, 0) : null,
+            originalChinaShareCents: snapshot.length ? snapshot.reduce((sum, person) => sum + person.originalChinaShareCents, 0) : null,
+          };
+        });
+        const pendingReasons = item.pendingComponents.filter(reason => reason !== "reembolso solicitado" && reason !== "divisão por pessoa pendente");
+        return {
+          costItemId: cost.id,
+          orderId: cost.orderId,
+          itemOrder: cost.itemOrder,
+          origin: original ? "purchase" as const : "additional" as const,
+          purchasedQuantity: original?.quantity ?? additional!.quantity,
+          product: displayComponent("Preço efetivo", cost.effectivePriceState),
+          china: displayComponent("Frete China", cost.chinaFreightState),
+          productFee: displayComponent("Taxa dos produtos", "known"),
+          packageCosts: packageComponents,
+          pendingReasons,
+          refunds: refundsInput,
+        };
+      }), {
+        partialCents: calculation.summary.partialCents,
+        totalCents: calculation.summary.totalCents,
+        hasKnownAmount: calculation.summary.hasKnownAmount,
+        requestedRefundCents: calculation.summary.requestedRefundCents,
+        receivedRefundCents: calculation.summary.receivedRefundCents,
+      });
+    } catch (error) {
+      throw new DomainError(error instanceof Error ? error.message : "Não foi possível projetar a leitura financeira.", 409);
+    }
+  })();
+}
+
+/** Called inside the authorized warehouse read snapshot. */
+export async function readWarehouseCostKeys(db: CostReadDatabase, workspaceId: string, trackingIds: string[]) {
+  const keys: { id: string; cents: number }[] = [];
+  for (let start = 0; start < trackingIds.length; start += 100) {
+    const ids = trackingIds.slice(start, start + 100);
+    const trackings = db.select({ id: purchaseCostTrackings.id }).from(purchaseCostTrackings)
+      .where(and(eq(purchaseCostTrackings.workspaceId, workspaceId), inArray(purchaseCostTrackings.id, ids)));
+    const costs = db.select({ id: purchaseItemCosts.id }).from(purchaseItemCosts).where(inArray(purchaseItemCosts.trackingId, trackings));
+    const refundIds = db.select({ id: purchaseCostRefunds.id }).from(purchaseCostRefunds).where(inArray(purchaseCostRefunds.trackingId, trackings));
+    const [items, orders, charges, corrections, originals, additionalItemRows, participants, refunds, refundParticipants, allocations] = await Promise.all([
+      db.select().from(purchaseItemCosts).where(inArray(purchaseItemCosts.trackingId, trackings)).all(),
+      db.select().from(purchaseCostOrders).where(inArray(purchaseCostOrders.trackingId, trackings)).orderBy(asc(purchaseCostOrders.createdAt), asc(purchaseCostOrders.id)).all(),
+      db.select().from(purchaseCostCharges).where(and(inArray(purchaseCostCharges.trackingId, trackings), eq(purchaseCostCharges.chargeType, "products"))).all(),
+      db.select({ id: purchaseOrderCorrections.previousOrderId }).from(purchaseOrderCorrections).where(inArray(purchaseOrderCorrections.trackingId, trackings)).all(),
+      db.select({ id: purchaseItems.id, quantity: purchaseItems.quantity }).from(purchaseItems).innerJoin(purchaseItemCosts, eq(purchaseItemCosts.purchaseItemId, purchaseItems.id)).where(inArray(purchaseItemCosts.trackingId, trackings)).all(),
+      db.select({ id: purchaseAdditionalOrderItems.id, quantity: purchaseAdditionalOrderItems.quantity }).from(purchaseAdditionalOrderItems).innerJoin(purchaseItemCosts, eq(purchaseItemCosts.additionalOrderItemId, purchaseAdditionalOrderItems.id)).where(inArray(purchaseItemCosts.trackingId, trackings)).all(),
+      db.select().from(purchaseCostParticipants).where(inArray(purchaseCostParticipants.costItemId, costs)).orderBy(asc(purchaseCostParticipants.allocationOrder)).all(),
+      db.select().from(purchaseCostRefunds).where(inArray(purchaseCostRefunds.trackingId, trackings)).orderBy(asc(purchaseCostRefunds.requestedAt), asc(purchaseCostRefunds.id)).all(),
+      db.select().from(purchaseCostRefundParticipants).where(inArray(purchaseCostRefundParticipants.refundId, refundIds)).orderBy(asc(purchaseCostRefundParticipants.allocationOrder)).all(),
+      db.select().from(purchasePaymentAllocations).innerJoin(purchasePaymentComponents, eq(purchasePaymentAllocations.componentId, purchasePaymentComponents.id)).where(inArray(purchasePaymentAllocations.costItemId, costs)).all(),
+    ]);
+    const itemsByTracking = groupCostRows(items, row => row.trackingId);
+    const refundsByTracking = groupCostRows(refunds, row => row.trackingId);
+    const orderByTracking = groupCostRows(orders, row => row.trackingId);
+    const chargeByOrder = new Map(charges.map(row => [row.orderId, row]));
+    const superseded = new Set(corrections.map(row => row.id));
+    const recorded = new Set(orders.filter(row => row.kind === "additional" && row.state === "recorded" && !superseded.has(row.id)).map(row => row.id));
+    const byAllocation = groupCostRows(allocations.map(row => row.purchase_payment_allocations), row => row.costItemId);
+    const shared = {
+      purchaseItemsById: new Map(originals.map(row => [row.id, row])),
+      additionalItemRows,
+      participantsByCostItem: groupCostRows(participants, row => row.costItemId),
+      refundParticipantsById: groupCostRows(refundParticipants, row => row.refundId),
+      allocationTotal: (id: string, component: "product" | "china", field: "principalBrlCents" | "feeBrlCents") =>
+        (byAllocation.get(id) ?? []).filter(row => row.costComponent === component).reduce((sum, row) => sum + row[field], 0),
+    };
+    for (const [trackingId, rows] of itemsByTracking) {
+      const original = orderByTracking.get(trackingId)?.find(row => row.kind === "original");
+      const charge = chargeByOrder.get(original?.id ?? null);
+      const input = { ...shared, refunds: refundsByTracking.get(trackingId) ?? [], calculatedCostItems: rows.filter(row => row.purchaseItemId !== null || row.additionalOrderItemId !== null && recorded.has(row.orderId)) };
+      const calculation = calculateCostTracking({
+        requirePackageCoverage: false, items: costCalculationItems(input), packages: [],
+        productsCharge: { paymentMethod: charge?.paymentMethod ?? null, feeBps: charge?.feeBps ?? null, paymentStatus: charge?.paymentStatus ?? "pending" },
+      });
+      for (const { costItemId, remaining } of costFinancialDisplay(input, calculation).items) {
+        keys.push({ id: costItemId, cents: remaining.total.finalCents ?? remaining.total.knownCents });
+      }
+    }
+  }
+  return keys;
 }

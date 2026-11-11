@@ -74,6 +74,61 @@ test("private QC previews reuse warm bytes and load only visible presentations",
   }
 });
 
+test("the selected QC preview is visible before the original and distant thumbnails stay idle", async ({ page, request }) => {
+  test.skip(process.env.LOTI_E2E_QC_VIEWER !== "1", "Requires the disposable S3 fixture");
+  const fixture = await (await request.get("http://localhost:3102/fixture")).json();
+  await login(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  const gallery = page.getByRole("dialog");
+  const calls: string[] = [];
+  page.on("request", outgoing => { if (outgoing.url().includes("/qc/images/")) calls.push(new URL(outgoing.url()).pathname); });
+  const original = '<svg xmlns="http://www.w3.org/2000/svg" width="160" height="120"><rect width="160" height="120" fill="green"/></svg>';
+  let releaseOriginal = () => {};
+  const delay = new Promise<void>(resolve => { releaseOriginal = resolve; });
+  let originalTwelveFails = false;
+  await page.route("**/api/qc/images/qc-perf-image-0-12/fallback", async route => {
+    await route.fulfill({ json: { data: { url: "https://scm.hubbuy.app/qc/synthetic-recovery.webp" } } });
+  });
+  await page.route("https://scm.hubbuy.app/qc/**", async route => {
+    if (originalTwelveFails && route.request().url().endsWith("/qc-perf-image-0-12.webp")) {
+      await route.abort();
+      return;
+    }
+    await delay;
+    await route.fulfill({ contentType: "image/svg+xml", body: original });
+  });
+  await page.goto(`/packages/${fixture.trackingId}`);
+  const cover = page.locator('.qc-product-cover[data-qc-image-id="qc-perf-image-0-13"]:visible');
+  await expect(cover.locator("img")).toBeVisible();
+  const start = Date.now();
+  await cover.click();
+  try {
+    await expect(gallery.locator(".qc-viewer-photo > img:not(.qc-viewer-original)")).toBeVisible();
+    await expect(gallery.locator(".qc-viewer-original")).toHaveAttribute("data-ready", "false");
+    const firstImageMs = Date.now() - start;
+    await expect.poll(() => calls.filter(path => path.endsWith("/source")).length).toBe(1);
+    expect(calls).not.toContain("/api/qc/images/qc-perf-image-0-2/preview");
+    mkdirSync("artifacts/qa/qc-viewer-performance", { recursive: true });
+    await page.screenshot({ path: "artifacts/qa/qc-viewer-performance/gallery-preview-390.png" });
+    releaseOriginal();
+    await expect(gallery.locator('.qc-viewer-original[data-ready="true"]')).toBeVisible();
+    const timing = JSON.stringify({ firstImageMs, originalMs: Date.now() - start, calls }, null, 2);
+    writeFileSync("artifacts/qa/qc-viewer-performance/gallery-timing.json", timing);
+    await test.info().attach("qc-viewer-timing", { contentType: "application/json", body: timing });
+
+    originalTwelveFails = true;
+    const previous = gallery.getByRole("button", { name: "Foto anterior" });
+    await previous.click();
+    await expect(gallery.locator('.qc-viewer-original[data-ready="true"]')).toHaveAttribute("src", /synthetic-recovery/);
+    await previous.click();
+    await expect(gallery.locator(".qc-viewer-thumb")).toHaveCount(12);
+    await expect(gallery.getByRole("button", { name: "Selecionar foto 12", exact: true })).toHaveAttribute("aria-current", "true");
+    expect(calls).not.toContain("/api/qc/images/qc-perf-image-0-0/preview");
+  } finally {
+    releaseOriginal();
+  }
+});
+
 test("cached previews still deny tombstones and expired sessions over real HTTP", async ({ page, request }) => {
   test.skip(process.env.LOTI_E2E_QC_VIEWER !== "1" || process.env.LOTI_QC_VIEWER_BASELINE === "1", "Requires optimized disposable QC fixture");
   const fixture = await (await request.get("http://localhost:3102/fixture")).json();
@@ -96,7 +151,8 @@ test("cached previews still deny tombstones and expired sessions over real HTTP"
   await page.context().clearCookies();
   const expired = await page.request.get("/api/qc/images/qc-perf-image-0-0/preview", { headers: { "If-None-Match": "*" } });
   expect(expired.status()).toBe(401); expect(expired.headers()["cache-control"]).toBe("private, no-store");
-  await page.reload();
-  await expect(page).toHaveURL(/\/login/);
-  await expect(page.locator(".qc-product-cover")).toHaveCount(0);
+  const signedOutPage = await page.context().newPage();
+  await signedOutPage.goto(`/packages/${fixture.trackingId}`);
+  await expect(signedOutPage).toHaveURL(/\/login/);
+  await expect(signedOutPage.locator(".qc-product-cover")).toHaveCount(0);
 });

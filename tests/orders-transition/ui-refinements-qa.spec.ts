@@ -88,7 +88,7 @@ test("Stage 5 filters, arrival context, source navigation, empty state, terminol
   await expect(page.locator(".orders-selection")).toContainText("1 unidade selecionada");
 
   // UI-008: arrival counts are contextual; an incompatible correction is blocked in the UI and by the server.
-  const arrivalButton = page.getByRole("button", { name: "Registrar chegada de Camiseta retida QA" });
+  const arrivalButton = page.getByRole("button", { name: "Corrigir chegada", exact: true });
   await arrivalButton.focus();
   await arrivalButton.click();
   let dialog = page.getByRole("dialog");
@@ -102,8 +102,8 @@ test("Stage 5 filters, arrival context, source navigation, empty state, terminol
   await arrivalButton.click();
   dialog = page.getByRole("dialog");
   await dialog.getByLabel("Total recebido").fill("0");
-  await dialog.getByLabel("Motivo do registro").fill("Tentativa sintética sem remover reserva");
-  await dialog.getByRole("button", { name: "Salvar chegada" }).click();
+  await dialog.getByLabel("Motivo da correção").fill("Tentativa sintética sem remover reserva");
+  await dialog.getByRole("button", { name: "Salvar correção" }).click();
   await expect(dialog.getByRole("alert")).toContainText("Retire as unidades do pacote");
   await expect(dialog.getByLabel("Total recebido")).toHaveAttribute("aria-invalid", "true");
   await expect(dialog.getByLabel("Total recebido")).toBeFocused();

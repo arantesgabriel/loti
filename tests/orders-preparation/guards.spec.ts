@@ -15,7 +15,7 @@ test("mobile arrival stays vertical and returns focus to the existing item actio
   const action = page.getByRole("button", { name: "Registrar chegada de JBL Flip 6", exact: true }); await action.click();
   const dialog = page.getByRole("dialog", { name: "Registrar chegada ao armazém", exact: true }); await expect(dialog).toHaveClass(/orders-bottom-sheet/);
   const box = (await dialog.boundingBox())!; expect(Math.round(box.x)).toBe(0); expect(Math.round(box.y + box.height)).toBe(844);
-  await dialog.getByRole("spinbutton", { name: /Total recebido/ }).scrollIntoViewIfNeeded();
+  await dialog.getByRole("spinbutton", { name: /Quantidade que chegou agora/ }).scrollIntoViewIfNeeded();
   await page.screenshot({ path: "artifacts/qa/orders-retomada-f4/arrival-mobile.png" });
   await page.keyboard.press("Escape"); await expect(dialog).toHaveCount(0); await expect(action).toBeFocused();
   await expect(page.locator(".orders-item-detail:visible")).toBeVisible();
