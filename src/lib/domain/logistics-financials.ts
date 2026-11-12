@@ -3,6 +3,10 @@ import {eq} from "drizzle-orm";
 import {z} from "zod";
 import type {AppDatabase} from "../db/connection";
 import * as s from "../db/schema";
+import * as f from "../db/freight-schema";
+import { freightContent } from "./freight-context";
+import { allocateFreightComponent } from "./package-freight-calculations";
+import { netFreightSources } from "./freight-refunds";
 import {DomainError} from "./errors";
 import {authorization} from "./authorization";
 import {readCostTracking} from "./package-cost-reading";
@@ -20,7 +24,7 @@ export function projectLegacyPackageCharge(snapshot:unknown){
 /** Immutable charge events permanently transfer ownership, including a return to pending. */
 export function packageChargeOwnership(pkg: typeof s.logisticsPackages.$inferSelect, events: Pick<typeof s.logisticsEvents.$inferSelect,"action"|"after">[]) {
   const changed = new Set(events.filter(e=>["record_charge","pay_charge","correct_charge"].includes(e.action)).map(e=>z.object({command:z.object({charge:z.enum(["freight","customs"])})}).parse(e.after).command.charge));
-  return {freight:pkg.freightState!=="pending" || changed.has("freight"),customs:pkg.customsState!=="pending" || changed.has("customs")};
+  return {freight:pkg.freightState!=="pending" || changed.has("freight") || events.some(e=>e.action==="freight_funding_confirmed"),customs:pkg.customsState!=="pending" || changed.has("customs")};
 }
 export function addWorkflowMoney(left:number,right:number) {
   if(!Number.isSafeInteger(left) || !Number.isSafeInteger(right) || left<0 || right<0 || !Number.isSafeInteger(left+right))throw new DomainError("O consolidado excede o limite seguro de valores.",409);
@@ -45,16 +49,25 @@ async function readFinancialSnapshot(db:Pick<AppDatabase,"select">,userId:string
   const add=(personId:string,scope:"ordersCents"|"packageChargesCents",amount:number)=>{const p=people.get(personId)??{personId,ordersCents:0,packageChargesCents:0};p[scope]=addWorkflowMoney(p[scope],amount);people.set(personId,p);};
   let ordersCents=0,packageChargesCents=0,pending=false;
   for(const tracking of trackings){const order=await readCostTracking(db,userId,tracking.id,"order");ordersCents=addWorkflowMoney(ordersCents,order.calculation.summary.partialCents);pending ||= order.calculation.summary.totalCents===null;for(const p of order.memberTotals)add(p.personId,"ordersCents",p.totalCents);}
-  const chargeSnapshot=z.object({charges:z.array(z.object({amountCents:minor,units:z.array(z.object({people:z.array(z.object({personId:z.string(),amountCents:minor}))}))}))});
+  const chargeSnapshot=z.object({charges:z.array(z.object({name:z.string().optional(),amountCents:minor,units:z.array(z.object({people:z.array(z.object({personId:z.string(),amountCents:minor}))}))}))});
   for(const pkg of packages){
+    const fundingHead=await db.select().from(f.freightHeads).where(eq(f.freightHeads.packageId,pkg.id)).get();
+    const funding=fundingHead?.paymentId?await db.select().from(f.freightPayments).where(eq(f.freightPayments.id,fundingHead.paymentId)).get():undefined;
     const owned=packageChargeOwnership(pkg,events.filter(e=>e.resourceId===pkg.id));
     for(const bridge of bridges.filter(b=>b.packageId===pkg.id)){
       const captured=projectLegacyPackageCharge(bridge.snapshot);
-      if(captured.chargeType==="brazil_freight"?owned.freight:owned.customs)continue;
+      if(captured.chargeType==="brazil_freight"?owned.freight || !!fundingHead:owned.customs)continue;
       packageChargesCents=addWorkflowMoney(packageChargesCents,captured.knownCents);pending ||= captured.finalCents===null;for(const item of captured.items)for(const p of item.people)add(p.personId,"packageChargesCents",p.amountCents);
     }
     const latest=manifests.filter(m=>m.packageId===pkg.id).sort((a,b)=>b.revision-a.revision)[0];
-    if(latest){const snapshot=chargeSnapshot.parse(latest.snapshot);for(const charge of snapshot.charges){packageChargesCents=addWorkflowMoney(packageChargesCents,charge.amountCents);for(const unit of charge.units)for(const p of unit.people)add(p.personId,"packageChargesCents",p.amountCents);}}
+    if(latest){const snapshot=chargeSnapshot.parse(latest.snapshot);for(const charge of snapshot.charges){if(fundingHead && !charge.name?.startsWith("Receita"))continue;packageChargesCents=addWorkflowMoney(packageChargesCents,charge.amountCents);for(const unit of charge.units)for(const p of unit.people)add(p.personId,"packageChargesCents",p.amountCents);}}
+    if(funding){
+      const {sources}=await netFreightSources(db,funding.id),current=await freightContent(db,pkg.id,true);
+      const content=current.units.length?current:JSON.parse(funding.contentJson) as Awaited<ReturnType<typeof freightContent>>;
+      pending ||= !current.units.length || !pkg.contentClosedAt;
+      packageChargesCents=addWorkflowMoney(packageChargesCents,sources.reduce((sum,row)=>sum+row.principalBrlCents+row.feeBrlCents,0));
+      for(const component of ["principalBrlCents","feeBrlCents"] as const)for(const cell of allocateFreightComponent({units:content.units,sources:sources.map((source,order)=>({sourceId:source.id,order,amountMinor:source[component]}))}).allocations)add(cell.personId,"packageChargesCents",cell.amountMinor);
+    }
     const legacyFreight=!owned.freight && bridges.find(b=>b.packageId===pkg.id && legacyChargeSchema.parse(b.snapshot).chargeType==="brazil_freight");
     const legacyCustoms=!owned.customs && bridges.find(b=>b.packageId===pkg.id && legacyChargeSchema.parse(b.snapshot).chargeType==="customs");
     pending ||= pkg.freightState==="pending" && !legacyFreight || pkg.customsState==="pending" && !legacyCustoms || pkg.freightState==="known" && pkg.freightFeeCents===null;

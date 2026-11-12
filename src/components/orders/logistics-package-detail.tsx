@@ -19,6 +19,7 @@ import { useInvalidateLogistics } from "./logistics-query";
 import { useWorkspace } from "@/components/workspace-provider";
 import "./orders.css";
 import "@/components/packages/product-costs.css";
+import { FreightFinancePanel } from "@/components/packages/freight-finance-panel";
 
 type Detail = Awaited<ReturnType<ReturnType<typeof logisticsPackageServices>["get"]>>;
 type LogisticsStage = "preparing" | "sent" | "received";
@@ -524,10 +525,10 @@ export function LogisticsPackageDetail({
   const participantRateios = buildParticipantRateios(rateioManifest, data.legacyProjections);
   const rateioPartial = !finalKnown || data.legacyProjections.some(charge => charge.active && charge.finalCents === null);
   const recordChargeAvailable = editable && hasUnits;
-  const recordFreightAvailable = recordChargeAvailable && !freightPaid;
+  const recordFreightAvailable = recordChargeAvailable && !freightPaid && !data.usesFreightFunding;
   const freightAction: Action | null = recordFreightAvailable
     ? "record_freight"
-    : recordChargeAvailable && freightPaid
+    : recordChargeAvailable && freightPaid && !data.usesFreightFunding
       ? "correct_freight"
       : null;
   const freightActionLabel = freightAction === "correct_freight" ? "Corrigir frete" : "Informar frete";
@@ -864,6 +865,7 @@ export function LogisticsPackageDetail({
         </div>
       </div>
 
+      {(data.unitCount>0||data.usesFreightFunding)&&<div className="orders-package-freight-finance"><FreightFinancePanel packageId={packageId} revision={pkg.revision} onRefresh={async()=>{await load();await invalidateLogistics();}}/></div>}
       <Surface
         title="Rateios por participante"
         open={allocationsOpen}

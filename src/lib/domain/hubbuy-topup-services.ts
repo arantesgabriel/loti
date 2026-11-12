@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt } from "drizzle-orm";
 import { z } from "zod";
 import type { AppDatabase } from "../db/connection";
 import * as s from "../db/schema";
@@ -11,6 +11,8 @@ import { calculateTopup, principalFromTopupTotal } from "./hubbuy-topup-calculat
 import { MAX_FINANCIAL_MINOR } from "./financial-money";
 import type { CostTransaction } from "./purchase-cost-initialization";
 import { serializeDomainTransaction } from "./transaction-lock";
+import { topupFeeAllocations } from "../db/freight-schema";
+import { usesFreightFinance } from "./orders-workflow";
 
 const minor = z.number().int().min(0).max(MAX_FINANCIAL_MINOR);
 const common = {
@@ -143,6 +145,10 @@ export function hubbuyTopupServices(db: AppDatabase, actorId: string, expectedWo
       if (!original) throw new DomainError("Recarga não encontrada.", 404);
       if (await tx.select().from(t.hubbuyTopupReversals).where(eq(t.hubbuyTopupReversals.topupId, original.id)).get()) throw conflict("Esta recarga já foi anulada.", "TOPUP_ALREADY_REVERSED");
       const shares = current.shares.filter(row => row.creditEntryId === original.creditEntryId);
+      if(await usesFreightFinance(tx)){
+        const fees=await tx.select().from(topupFeeAllocations).where(eq(topupFeeAllocations.topupId,original.id));
+        if(fees.reduce((sum,row)=>sum+(row.reversesId?-row.amountBrlCents:row.amountBrlCents),0)>0)throw conflict("A taxa já tem destinos. Corrija as operações dependentes antes de anular.","TOPUP_HAS_DEPENDENCIES");
+      }
       if (current.consumptions.some(row => shares.some(share => share.id === row.creditShareId))) throw conflict("A recarga já foi consumida. Corrija primeiro as operações dependentes.", "TOPUP_HAS_DEPENDENCIES");
       const preview = { accountId, topupId: original.id, accountRevision: current.account.revision, balanceBeforeCnyMinor: current.account.balanceCnyMinor, balanceAfterCnyMinor: current.account.balanceCnyMinor - original.cnyMinor, cnyMinor: original.cnyMinor, principalBrlCents: original.principalBrlCents, feeBrlCents: original.feeBrlCents, reason: value.reason, occurredAt: value.occurredAt };
       if (previewOnly) return preview;
@@ -157,5 +163,20 @@ export function hubbuyTopupServices(db: AppDatabase, actorId: string, expectedWo
       return result;
     }).catch(error => recover(accountId, value.idempotencyKey, "hubbuy_topup_reversed", hash, error));
   }
-  return { preview: (accountId: string, input: unknown) => record(accountId, input, true), record, previewReversal: (accountId: string, input: unknown) => reverse(accountId, input, true), reverse };
+  async function list(accountId:string,afterSequence?:number){
+    return transact(async tx=>{
+      const current=await state(tx,accountId);
+      const rows=await tx.select({topup:t.hubbuyTopups,sequence:s.hubbuyBalanceEntries.sequence,occurredAt:s.financialOperations.occurredAt,recordedAt:s.financialOperations.recordedAt,actorId:s.financialOperations.actorId,reason:s.financialOperations.reason}).from(t.hubbuyTopups).innerJoin(s.hubbuyBalanceEntries,eq(s.hubbuyBalanceEntries.id,t.hubbuyTopups.creditEntryId)).innerJoin(s.financialOperations,eq(s.financialOperations.id,t.hubbuyTopups.operationId)).where(and(eq(t.hubbuyTopups.accountId,accountId),afterSequence===undefined?undefined:lt(s.hubbuyBalanceEntries.sequence,afterSequence))).orderBy(desc(s.hubbuyBalanceEntries.sequence)).limit(21);
+      const selected=rows.slice(0,20),ids=selected.map(row=>row.topup.id);
+      const funders=ids.length?await tx.select().from(t.hubbuyTopupFunders).where(inArray(t.hubbuyTopupFunders.topupId,ids)):[];
+      const reversals=ids.length?await tx.select().from(t.hubbuyTopupReversals).where(inArray(t.hubbuyTopupReversals.topupId,ids)):[];
+      const fees=ids.length && await usesFreightFinance(tx)?await tx.select().from(topupFeeAllocations).where(inArray(topupFeeAllocations.topupId,ids)):[];
+      return {accountRevision:current.account.revision,items:selected.map(row=>{
+        const assignedFeeBrlCents=fees.filter(fee=>fee.topupId===row.topup.id).reduce((sum,fee)=>sum+(fee.reversesId?-fee.amountBrlCents:fee.amountBrlCents),0);
+        const owners=funders.filter(person=>person.topupId===row.topup.id);
+        return {...row.topup,sequence:row.sequence,occurredAt:row.occurredAt,recordedAt:row.recordedAt,actorId:row.actorId,reason:row.reason,funders:owners,assignedFeeBrlCents,pendingFeeBrlCents:reversals.some(reverse=>reverse.topupId===row.topup.id)?0:row.topup.feeBrlCents-assignedFeeBrlCents,reversed:reversals.some(reverse=>reverse.topupId===row.topup.id),availableCnyMinor:current.availableShares.filter(share=>share.creditEntryId===row.topup.creditEntryId).reduce((sum,share)=>sum+share.availableCnyMinor,0)};
+      }),nextAfterSequence:rows.length>20?selected.at(-1)!.sequence:null};
+    });
+  }
+  return { list, preview: (accountId: string, input: unknown) => record(accountId, input, true), record, previewReversal: (accountId: string, input: unknown) => reverse(accountId, input, true), reverse };
 }

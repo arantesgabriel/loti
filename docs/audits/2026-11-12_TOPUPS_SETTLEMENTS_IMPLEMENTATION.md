@@ -1,12 +1,12 @@
-# Recargas e acertos — execução local parcial
+# Recargas e acertos — implementação e revisão local
 
 Data: 12/11/2026. Contrato: `docs/47_TOPUPS_PACKAGE_FUNDING_AND_SETTLEMENTS_PLAN.md`.
 
 ## Estado real da entrega
 
-A primeira entrega começou pela fase 0 e foi registrada no commit `2ea5585`. **As seis funcionalidades ainda não estão implementadas de ponta a ponta.** Após novo pedido, foi iniciada a persistência e o serviço de F1, descritos ao final. F1 permanece em andamento; F2–F6 ainda precisam de integração operacional, interfaces e validação ponta a ponta.
+O checkpoint solicitado foi registrado em `ad6b412` (`feat: add typed topup ledger transactions and migration guards`), após `2ea5585`. A continuação implementou F1–F6 com serviços, rotas, formulários, prévias, históricos, correções, recebimentos e ambiente sintético navegável. O roteiro operacional é `docs/48_TOPUPS_FREIGHT_SETTLEMENTS_REVIEW.md`. Os registros anteriores abaixo descrevem os checkpoints históricos; suas pendências foram tratadas pela continuação documentada ao final.
 
-Na primeira entrega não houve alteração de schema ou migration. A segunda execução acrescenta uma migration local, ensaiada somente em bancos sintéticos descartáveis. Nenhum serviço externo ou dado real foi alterado. A ausência de acesso a produção não é um bloqueio desta implementação local. Não há necessidade de nova autorização entre as fases locais.
+Migrations 0034–0037 foram ensaiadas somente em bancos sintéticos descartáveis. Nenhum serviço externo ou dado real foi alterado. Publicação, migration remota e aceite humano não foram realizados.
 
 ## Código entregue
 
@@ -103,4 +103,46 @@ Verificações executadas nesta continuação:
 - Regressão executada por arquivo: contas **7/7**, ajustes **5/5**, origens **5/5**, créditos de refund **10/10**, fluxo pessoal de pedidos/armazém/pacotes **1/1**, finalização logística **12/12**. As tentativas conjuntas ficaram sem conclusão ou encerraram sem resumo; não foram consideradas aprovação. As repetições isoladas acima terminaram com código zero e resumo completo.
 - ESLint direcionado final dos serviços/schema/testes/verificador passou. `git diff --check` passou.
 
-Limites atuais: formulário e histórico detalhado ainda pendentes; atribuição de taxa a novos consumos de pedidos/pacotes, capacidade/reversão dessa atribuição e F2–F6 ainda pendentes. O serviço de recarga isolado **não representa F1 concluída**. Não liberar estes comandos em produção antes de concluir e validar a integração de consumo/taxas e os demais gates do plano.
+Estado naquele checkpoint: faltavam formulários, históricos e integração F2–F6. Essa descrição é histórica e não representa a continuação abaixo.
+
+## Continuação F1–F6
+
+| Frente | Implementação |
+| --- | --- |
+| F1 | Formulário e histórico paginado; total com taxa ou discriminação; financiadores separados do autor; crédito e taxa separados; reversão compensatória. Novos pedidos adicionais atribuem a taxa com prévia/aceite e preservam dinheiro novo separado. |
+| F2 | Saldo por titular e lotes, FIFO, fontes externas/mistas/BRL, baixa tipada sem compra artificial, revisão de conta/pacote, confirmação cruzada, compensação, correção e adoção de débito legado sem outra baixa. |
+| F3 | Matriz fonte/unidade/pessoa por moeda/componente, fontes independentes das margens dos beneficiários, células persistidas e consulta paginada. Leitores de logística adicionam o encargo uma única vez. |
+| F4 | Claims diretas com genealogia ou centralização explicitamente escolhida; posições assinadas; versões imutáveis; deltas preservam recebimentos anteriores. |
+| F5 | Par explícito da recarga sem taxa ou manual com data/motivo; conversão BigInt de vetor zero-sum; sem reavaliação de bases antigas; recebimento BRL bloqueado sem conversão. |
+| F6 | Recebimentos reais parciais/totais, distribuição entre claims do mesmo par, capacidade transacional, excesso explícito, devolução real, anulação e histórico. Nenhuma baixa altera saldo HubBuy. |
+
+Migrations 0035–0037 acrescentam tabelas de resultados idempotentes, financiamento, fontes, parcelas, taxa/destinos, versões/claims/recibos e devoluções reais. O verificador adiciona 17 tabelas, 32 guards de imutabilidade e oito invariantes de margens/capacidades. Os dois guards antigos de pagamento/refund foram adaptados deliberadamente para titular pessoal ou membership compartilhado, mantendo suas checagens anteriores de capacidade e escopo.
+
+O protocolo bloqueia writers antigos após adoção detalhada. Devolução observada de frete permanece separada de anulação de registro. Crédito devolvido com consumo posterior impede reversão simples. Acertos emitidos antes de uma alteração de conteúdo/frete/refund ou de anulação de recibo herdado exigem revisão antes de novas baixas.
+
+Respostas incertas conservam a chave/comando na sessão. A recuperação reautoriza recurso/contexto e exige hash idêntico da operação persistida. O teste entre processos encontrou `LOGISTICS_BUSY` depois de uma gravação concorrente já confirmada; a recuperação foi corrigida para consultar esse resultado durável sem repetir a baixa.
+
+Correções realizadas durante os gates: guarda de funder compensatório; capacidade de devolução de excesso já herdado por revisão; hash de migrations com quebras de linha uniformes; leitura de pacote temporariamente vazio; ocultação dos botões legados incompatíveis; preservação de confirmação de taxa e tentativa de pagamento adicional. A distribuição de financiadores da taxa usa sua capacidade restante, evitando redução de uma parcela anterior ao recalcular maior resto cumulativo.
+
+## Evidências da continuação
+
+- Suite unitária: **300 testes passaram em 43 arquivos**.
+- Regressão de integração sequencial: **374 testes passaram em 67 arquivos**; um arquivo/sete testes legados ignorados por exigirem planilha privada, conforme configuração existente. Comando: `vitest run tests/integration --maxWorkers=1 --testTimeout=30000 --reporter=verbose`.
+- Novos serviços: oito cenários completos, incluindo espaço pessoal, misto/BRL direto, rollback após ledger/financiamento, replay/isolamento, excesso/retorno/revisão, concorrência entre processos, taxa repartida entre frete e pedido, correção depois de recibo e devolução real. Todos passaram na execução dirigida.
+- Fronteira HTTP de finanças: 19 testes cobrem as 16 operações, sessão, origem, envelope estrito e ausência de acerto no espaço pessoal. Incluídos no total unitário.
+- Upgrade populado, interrupção e reaplicação preservam as linhas protegidas e FKs. O teste reconhece explicitamente os três guards adaptados para proprietário pessoal.
+- Leitura de chaves de custo: 15 construções SELECT no lote contra 96 lendo quatro trackings separadamente; na execução dirigida, 5,3 ms contra 23,4 ms. São medições locais desse teste, não garantia de latência de produção.
+- O primeiro ensaio completo de navegador confirmou recarga, recuperação de resposta perdida, frete R$ 641,06 e emissão/conversão. O ensaio de recebimentos confirmou quatro registros e todas as três obrigações acertadas, com saldo CNY 0,04 e base R$ 0,04. Verificador: zero violações FK e oito invariantes financeiras novas aprovadas.
+- Screenshots foram inspecionadas; o painel financeiro foi reposicionado após o resumo/etapas para respeitar a hierarquia mobile existente. Não foram adicionadas fotos operacionais ou animações.
+- Gate final: typecheck, lint e build Next.js passaram. O ensaio integral em `freight-review-complete.sqlite` passou em 13,9 segundos no build final: cancelar sem gravação, resposta perdida/replay, conflito real de revisão de conteúdo, nova prévia, F1–F6, consulta de parcelas e quatro recebimentos. O teste auxiliar de retomada de recibos ficou intencionalmente ignorado nessa execução, pois todos os recibos já são cobertos pelo roteiro integral.
+- Comparador final: uma recarga, duas versões de acerto, quatro recebimentos, custo histórico R$ 641,06, saldo CNY 0,04/base R$ 0,04, todas as claims com aberto zero, FKs e margens aprovadas. A fixture está disponível na porta 3147, pacote `f445e31a-c52f-44ff-b652-5357ad02fb25`. O banco/manifesto descartável fica em `data/freight-review-complete.sqlite`.
+
+Relatórios locais: `artifacts/freight-review-regression-final.log`, `artifacts/freight-review-new-services.log`, `artifacts/freight-review-verification.json`, screenshots/traces em `artifacts/freight-review`. Esses artefatos descartáveis não contêm dados reais e ficam fora do commit.
+
+## Operação e limites
+
+O roteiro 48 documenta seed, servidor isolado na porta 3147, credenciais sintéticas, comparador independente de margens por unidade, teste de navegador e cutover/recuperação futura. O comparador principal exige as 30 unidades e valores de referência; experimentos de correção precisam de outra fixture para não confundir a comparação com o roteiro original.
+
+O valor individual da taxa deriva da ordem persistida das unidades e de seus pesos, não do exemplo agregado. As obrigações CNY e o custo total permanecem as âncoras exatas. O relatório do comparador mostra a margem efetivamente persistida e confere uma segunda implementação independente do rateio da taxa.
+
+Aceite humano pendente. Produção e dados reais não foram usados.

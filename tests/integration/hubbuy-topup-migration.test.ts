@@ -48,7 +48,7 @@ describe("typed topup schema upgrade", () => {
       const afterTriggers = (await client.execute("SELECT name,sql FROM sqlite_master WHERE type='trigger' ORDER BY name")).rows;
       for (const trigger of triggers) {
         const after = afterTriggers.find(row => row.name === trigger.name);
-        if (trigger.name === "hubbuy_credit_share_guard") {
+        if (["hubbuy_credit_share_guard","purchase_payment_allocation_capacity_guard","refund_payment_allocation_workspace_guard"].includes(String(trigger.name))) {
           expect(String(after?.sql)).toContain("w.owner_user_id=NEW.person_id");
           expect(String(after?.sql)).toContain("workspace_members");
         } else expect(after).toEqual(trigger);

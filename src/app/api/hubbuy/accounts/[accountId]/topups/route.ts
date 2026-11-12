@@ -8,6 +8,14 @@ import { packageCostFailure, packageCostPrivateHeaders, requirePackageCostOrigin
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 type Context = { params: Promise<{ accountId: string }> };
+export async function GET(request:Request,{params}:Context){
+  try{
+    const user=await requireUser(),{accountId}=await params,query=new URL(request.url).searchParams;
+    const workspaceId=z.string().min(1).parse(query.get("workspaceId"));
+    const after=query.has("afterSequence")?z.coerce.number().int().nonnegative().parse(query.get("afterSequence")):undefined;
+    return NextResponse.json({data:await hubbuyTopupServices(db,user.id,workspaceId).list(accountId,after)},{headers:packageCostPrivateHeaders});
+  }catch(error){return packageCostFailure(error);}
+}
 
 export async function POST(request: Request, { params }: Context) {
   try {
