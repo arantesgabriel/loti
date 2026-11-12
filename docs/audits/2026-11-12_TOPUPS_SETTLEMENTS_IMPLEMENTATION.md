@@ -146,3 +146,7 @@ O roteiro 48 documenta seed, servidor isolado na porta 3147, credenciais sintét
 O valor individual da taxa deriva da ordem persistida das unidades e de seus pesos, não do exemplo agregado. As obrigações CNY e o custo total permanecem as âncoras exatas. O relatório do comparador mostra a margem efetivamente persistida e confere uma segunda implementação independente do rateio da taxa.
 
 Aceite humano pendente. Produção e dados reais não foram usados.
+
+## Revisão dos quatro achados
+
+A revisão posterior identificou dupla restituição de débito associado, anulação de recarga recuperada bloqueada, excesso já devolvido ainda exibido em aberto e destino de frete ausente no saldo. As reproduções, causas, correções de serviços/projeções/UI, migration nova 0038 e evidências específicas constam em `2026-11-12_TOPUPS_FOUR_FINDINGS_REVIEW_FIXES.md`. A migration não corrige dinheiro antigo por backfill; adiciona integridade e diagnóstico. As alterações desta correção permanecem sem commit por instrução do usuário.

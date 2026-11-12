@@ -57,6 +57,8 @@ Esse comparador verifica o roteiro principal, sem alterações posteriores nos v
 
 ## Correções e dependências
 
+Correções da revisão dos quatro achados: ver `audits/2026-11-12_TOPUPS_FOUR_FINDINGS_REVIEW_FIXES.md`. Exigem a migration nova 0038, aplicada explicitamente ao destino local de teste. A associação de débito transfere o caminho de anulação ao financiamento de frete; a recarga recuperada pode ser anulada pelos créditos descendentes comprovados; excesso devolvido por claims de revisão é projetado no servidor; o histórico passa a identificar frete e pacote sem reclassificar o ledger antigo.
+
 - Cancelar ou abrir uma prévia não grava. Uma revisão concorrente exige nova prévia.
 - Resposta perdida conserva a mesma tentativa na sessão. “Conferir tentativa pendente” recupera a operação com a mesma chave; não cria outro pagamento.
 - Anular um registro compensa seus efeitos contábeis. Não afirma que o banco ou a HubBuy devolveram dinheiro.

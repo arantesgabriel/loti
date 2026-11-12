@@ -9,6 +9,8 @@ import { MAX_FINANCIAL_MINOR } from "./financial-money";
 import { previewFifoConsumption } from "./hubbuy-balance-calculations";
 import type { calculateHubBuyBalanceState } from "./hubbuy-balance-services";
 import type { CostTransaction } from "./purchase-cost-initialization";
+import {usesFreightFinance} from "./orders-workflow";
+import {freightSources} from "../db/freight-schema";
 
 const minor = z.number().int().min(0).max(MAX_FINANCIAL_MINOR);
 const positive = minor.min(1);
@@ -70,6 +72,8 @@ export function manualBalanceAdjustmentServices(db: AppDatabase, actorId: string
       if (await tx.select().from(hubbuyBalanceAdjustments).where(eq(hubbuyBalanceAdjustments.reversesAdjustmentId, originalAdjustment.id)).get()) throw fail("Este ajuste já foi anulado.", "ADJUSTMENT_ALREADY_REVERSED");
       const entry = state.entries.find(row => row.id === originalAdjustment!.balanceEntryId);
       if (!entry || entry.historicalBrlCents === null) throw fail("A origem do ajuste está inconsistente.", "ADJUSTMENT_INELIGIBLE");
+      if(entry.direction==="debit"&&await usesFreightFinance(tx)&&await tx.select({id:freightSources.id}).from(freightSources).innerJoin(hubbuyBalanceConsumptions,eq(hubbuyBalanceConsumptions.id,freightSources.consumptionId)).where(eq(hubbuyBalanceConsumptions.debitEntryId,entry.id)).get())throw fail("Este débito financia um frete. Use a correção do financiamento no pacote; o ajuste não pode ser anulado separadamente.","ADJUSTMENT_FREIGHT_DEPENDENCY");
+      if(entry.direction==="debit"&&state.entries.some(row=>row.direction==="credit"&&row.reversalOfEntryId===entry.id))throw fail("Este débito já foi compensado.","ADJUSTMENT_ALREADY_REVERSED");
       amount = entry.amountCnyMinor;
       direction = entry.direction === "credit" ? "debit" : "credit";
       if (entry.direction === "credit") {

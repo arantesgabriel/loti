@@ -43,7 +43,9 @@
     ".next-orders-transition/types/**/*.ts",
     ".next-orders-transition/dev/types/**/*.ts",
     ".next-orders-transition-build/types/**/*.ts",
-    ".next-orders-transition-build/dev/types/**/*.ts"
+    ".next-orders-transition-build/dev/types/**/*.ts",
+    ".next-freight-review/types/**/*.ts",
+    ".next-freight-review/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

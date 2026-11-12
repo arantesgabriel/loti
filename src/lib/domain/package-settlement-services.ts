@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, asc,desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import type { AppDatabase } from "../db/connection";
 import * as s from "../db/schema";
@@ -12,6 +12,7 @@ import { compensateSettlementPositions, convertSettlementPositions, directSettle
 import { convertByCapturedPair } from "./financial-money";
 import { financialCommandBase, financialConflict, financialHash, freightContent, freightContext, freightMinor, freightWrite } from "./freight-context";
 import { netFreightSources } from "./freight-refunds";
+import {projectSettlementExcesses} from "./settlement-excess-projection";
 
 const policySchema = z.discriminatedUnion("mode", [z.object({ mode: z.literal("direct") }).strict(), z.object({ mode: z.literal("centralized"), centralizerId: z.string().min(1), confirmedCompensation: z.literal(true) }).strict()]);
 const pairSchema = z.object({ fromCnyMinor: freightMinor.min(1), toBrlCents: freightMinor.min(1), date: z.iso.datetime({ offset: true }), reason: z.string().trim().min(3).max(1000), topupId: z.string().min(1).nullable() }).strict();
@@ -24,7 +25,8 @@ type Claim = { debtorId: string; creditorId: string; currency: "CNY" | "BRL"; am
 
 async function readSettlementRows(db: Pick<AppDatabase, "select">, packageId: string) {
   const versions = await db.select().from(f.settlementVersions).where(eq(f.settlementVersions.packageId, packageId)).orderBy(desc(f.settlementVersions.sequence));
-  const receipts = await db.select().from(f.settlementReceipts).where(eq(f.settlementReceipts.packageId, packageId));
+  const receiptRows = await db.select({receipt:f.settlementReceipts}).from(f.settlementReceipts).innerJoin(s.financialOperations,eq(s.financialOperations.id,f.settlementReceipts.operationId)).where(eq(f.settlementReceipts.packageId, packageId)).orderBy(asc(s.financialOperations.recordedAt),asc(f.settlementReceipts.id));
+  const receipts=receiptRows.map(row=>row.receipt);
   const reversals = receipts.length ? await db.select().from(f.settlementReceiptReversals).where(inArray(f.settlementReceiptReversals.receiptId, receipts.map(row => row.id))) : [];
   const claims = versions.length ? await db.select().from(f.settlementClaims).where(inArray(f.settlementClaims.versionId, versions.map(row => row.id))) : [];
   const allocations = receipts.length ? await db.select().from(f.settlementReceiptAllocations).where(inArray(f.settlementReceiptAllocations.receiptId, receipts.map(row => row.id))) : [];
@@ -172,7 +174,7 @@ export function packageSettlementServices(db: AppDatabase, actorId: string, work
       const needsReview = !!latest && (!context.pkg.contentClosedAt || latest.contentHash !== content.hash || snapshot?.paymentId !== (context.payment?.id ?? null) || snapshot.receiptIds.some(id => rows.reversals.some(row => row.receiptId === id))) || !!snapshot && financialHash(refundIds)!==financialHash(snapshot.refundIds??[]);
       const operationIds=[...rows.versions.map(row=>row.operationId),...rows.receipts.map(row=>row.operationId),...rows.reversals.map(row=>row.operationId)];
       const operations = operationIds.length?await tx.select().from(s.financialOperations).where(inArray(s.financialOperations.id,operationIds)):[];
-      return { ...rows, latest: latest ?? null, needsReview, claims: rows.claims.map(row => ({ ...row, outstandingMinor: outstanding(row, rows), current: row.versionId === latest?.id })), operations: operations.filter(operation => rows.versions.some(row => row.operationId === operation.id) || rows.receipts.some(row => row.operationId === operation.id) || rows.reversals.some(row => row.operationId === operation.id)) };
+      return { ...rows, excesses:projectSettlementExcesses(rows,needsReview),latest: latest ?? null, needsReview, claims: rows.claims.map(row => ({ ...row, outstandingMinor: outstanding(row, rows), current: row.versionId === latest?.id })), operations: operations.filter(operation => rows.versions.some(row => row.operationId === operation.id) || rows.receipts.some(row => row.operationId === operation.id) || rows.reversals.some(row => row.operationId === operation.id)) };
     });
   }
   return { get, preview: (packageId: string, input: unknown) => issue(packageId, input, true), confirm: issue, previewReceipt: (packageId: string, input: unknown) => receipt(packageId, input, true), recordReceipt: receipt, previewReceiptReversal: (packageId: string, input: unknown) => reverseReceipt(packageId, input, true), reverseReceipt };

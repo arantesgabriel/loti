@@ -20,30 +20,144 @@ import {ensurePersonalWorkspace} from "@/lib/domain/personal-workspaces";
 let f: Fixture;
 beforeEach(async () => { f = await fixture(":memory:", "orders"); });
 afterEach(() => f.client.close());
-async function setup() {
+async function setup(workspaceId="workspace",personal=false) {
   const purchase = await f.alice.savePurchase({ name: "Synthetic freight" });
-  await f.alice.saveManualItem({ name: "Synthetic shared units", url: "https://synthetic.test/product", quantity: 2, unitPriceCents: 100, sharingMode: "equal", participants: [{ personId: "alice" }, { personId: "bob" }] });
+  await f.alice.saveManualItem({ name: "Synthetic shared units", url: "https://synthetic.test/product", quantity: 2, unitPriceCents: 100, sharingMode: "equal", participants: personal?[{personId:"alice"}]:[{ personId: "alice" }, { personId: personal?"alice":"bob" }] });
   await f.alice.finalizePurchase(purchase.id, true);
   const cost = packageCostServices(f.db, "alice"), tracking = (await f.db.select().from(s.purchaseCostTrackings).where(eq(s.purchaseCostTrackings.purchaseId, purchase.id)))[0];
   let detail = await cost.getTracking(tracking.id);
   detail = await cost.saveItemCosts(tracking.id, { expectedRevision: detail.tracking.revision, itemId: detail.items[0].id, effectivePriceState: "known", effectivePriceUnitCents: 100, chinaFreightState: "no_charge", chinaFreightUnitCents: null });
   detail = await cost.saveCharge(tracking.id, detail.productsCharge!.id, { expectedRevision: detail.tracking.revision, chargeType: "products", paymentMethod: "pix" });
   await cost.markChargePaid(tracking.id, detail.productsCharge!.id, { expectedRevision: detail.tracking.revision });
-  const account = await hubbuyBalanceServices(f.db, "alice").createAccount({ workspaceId: "workspace", idempotencyKey: "account", label: "Synthetic", confirmZeroBalance: true });
-  const topup = await hubbuyTopupServices(f.db, "alice", "workspace").record(account.accountId, { expectedRevision: 0, idempotencyKey: "topup", occurredAt: "2026-11-12T10:00:00Z", reason: "Synthetic received topup", cnyMinor: 2000, method: "pix", receipt: { mode: "principal_and_fee", principalBrlCents: 1500, feeBrlCents: 15 }, fee: { mode: "percentage", bps: 100 }, funders: [{ personId: "bob", cnyMinor: 2000, principalBrlCents: 1500, feeBrlCents: 15 }], externalReference: "synthetic-topup", confirmedNoReference: false, confirmedReceived: true });
+  const account = await hubbuyBalanceServices(f.db, "alice").createAccount({ workspaceId, idempotencyKey: "account", label: "Synthetic", confirmZeroBalance: true });
+  const topup = await hubbuyTopupServices(f.db, "alice", workspaceId).record(account.accountId, { expectedRevision: 0, idempotencyKey: "topup", occurredAt: "2026-11-12T10:00:00Z", reason: "Synthetic received topup", cnyMinor: 2000, method: "pix", receipt: { mode: "principal_and_fee", principalBrlCents: 1500, feeBrlCents: 15 }, fee: { mode: "percentage", bps: 100 }, funders: [{ personId: personal?"alice":"bob", cnyMinor: 2000, principalBrlCents: 1500, feeBrlCents: 15 }], externalReference: "synthetic-topup", confirmedNoReference: false, confirmedReceived: true });
   const warehouse = warehouseServices(f.db, "alice"), initial = (await warehouse.list()).rows[0];
-  await warehouse.execute("workspace", "arrive", { operation: "receive", costItemId: initial.costItemId, expectedRevision: initial.revision, accountId: account.accountId, units: [0, 1], reason: "Synthetic received units" });
+  await warehouse.execute(workspaceId, "arrive", { operation: "receive", costItemId: initial.costItemId, expectedRevision: initial.revision, accountId: account.accountId, units: [0, 1], reason: "Synthetic received units" });
   const arrived = (await warehouse.list()).rows[0];
-  const reserved = await warehouse.execute("workspace", "reserve", { operation: "reserve", accountId: account.accountId, name: "Synthetic package", selection: [{ costItemId: arrived.costItemId, expectedRevision: arrived.revision, units: [0, 1] }], reason: "Synthetic selection" });
-  const logistics = logisticsPackageServices(f.db, "alice"), freight = packageFreightServices(f.db, "alice", "workspace"), settlement = packageSettlementServices(f.db, "alice", "workspace");
+  const reserved = await warehouse.execute(workspaceId, "reserve", { operation: "reserve", accountId: account.accountId, name: "Synthetic package", selection: [{ costItemId: arrived.costItemId, expectedRevision: arrived.revision, units: [0, 1] }], reason: "Synthetic selection" });
+  const logistics = logisticsPackageServices(f.db, "alice"), freight = packageFreightServices(f.db, "alice", workspaceId), settlement = packageSettlementServices(f.db, "alice", workspaceId);
   let pkg = await logistics.get(reserved.id);
   await logistics.execute(reserved.id, "close", { operation: "close_content", expectedRevision: pkg.pkg.revision, confirmed: true, reason: "Synthetic closed content" });
   pkg = await logistics.get(reserved.id);
   const data = await freight.get(reserved.id);
-  const payment = { expectedRevision: pkg.pkg.revision, expectedAccountRevision: data.account!.account.revision, contentHash: data.content.hash, idempotencyKey: "freight", occurredAt: "2026-11-12T11:00:00Z", reason: "Synthetic observed freight", nativeCurrency: "CNY" as const, nativeMinor: 1000, balance: [{ personId: "bob", cnyMinor: 1000 }], external: [], topupFees: [], confirmedCrossFunding: true, confirmedObservedPayment: true as const, externalReference: "synthetic-freight", confirmedNoReference: false, replacesPaymentId: null, legacy: null };
+  const payment = { expectedRevision: pkg.pkg.revision, expectedAccountRevision: data.account!.account.revision, contentHash: data.content.hash, idempotencyKey: "freight", occurredAt: "2026-11-12T11:00:00Z", reason: "Synthetic observed freight", nativeCurrency: "CNY" as const, nativeMinor: 1000, balance: [{ personId: personal?"alice":"bob", cnyMinor: 1000 }], external: [], topupFees: [], confirmedCrossFunding: true, confirmedObservedPayment: true as const, externalReference: "synthetic-freight", confirmedNoReference: false, replacesPaymentId: null, legacy: null };
   return { packageId: reserved.id, accountId: account.accountId, topupId: topup.topupId, logistics, freight, settlement, payment };
 }
 describe("complete freight funding and manual settlement", () => {
+  it("recovers personal topups with no memberships and enforces foreign and active-context boundaries",async()=>{
+    const {workspace}=await ensurePersonalWorkspace(f.db,"alice");await f.alice.selectWorkspace(workspace.id,"workspace");const x=await setup(workspace.id,true);
+    await x.freight.confirm(x.packageId,x.payment);let state=await x.freight.get(x.packageId);
+    await expect(packageSettlementServices(f.db,"alice",workspace.id).get(x.packageId)).rejects.toMatchObject({status:403});
+    const undo={expectedRevision:state.pkg.revision,expectedAccountRevision:state.account!.account.revision,paymentId:state.payment!.id,idempotencyKey:"personal-recovery",occurredAt:x.payment.occurredAt,reason:"Synthetic personal compensation",confirmedRegistrationError:true};await x.freight.reverse(x.packageId,undo);state=await x.freight.get(x.packageId);
+    const command={expectedRevision:state.account!.account.revision,idempotencyKey:"personal-topup-recovery",occurredAt:x.payment.occurredAt,reason:"Synthetic personal correction",topupId:x.topupId,confirmedRegistrationError:true};
+    await expect(hubbuyTopupServices(f.db,"bob",workspace.id).reverse(x.accountId,command)).rejects.toMatchObject({status:403});
+    await f.alice.selectWorkspace("workspace",workspace.id);await expect(hubbuyTopupServices(f.db,"alice",workspace.id).reverse(x.accountId,command)).rejects.toMatchObject({code:"WORKSPACE_CONTEXT_CHANGED"});
+    await f.alice.selectWorkspace(workspace.id,"workspace");await hubbuyTopupServices(f.db,"alice",workspace.id).reverse(x.accountId,command);expect((await x.freight.get(x.packageId)).account!.account.balanceCnyMinor).toBe(0);expect(await f.db.select().from(s.workspaceMembers).where(eq(s.workspaceMembers.workspaceId,workspace.id))).toHaveLength(0);
+  });
+  it("review races: debit adoption and independent manual reversal have exactly one winner",async()=>{
+    f.client.close();const url=`file:${join(mkdtempSync(join(tmpdir(),"loti-review-adoption-")),"race.sqlite")}`;f=await fixture(url,"orders");await f.client.execute("PRAGMA journal_mode=WAL");const x=await setup(),balance=hubbuyBalanceServices(f.db,"alice","workspace");
+    const debit=await balance.recordManualAdjustment(x.accountId,{expectedRevision:1,idempotencyKey:"race-prior-debit",kind:"documented_debit",amountCnyMinor:1000,occurredAt:x.payment.occurredAt,reason:"Synthetic prior debit",externalReference:null,shares:[{personId:"bob",amountCnyMinor:1000}]}) as {adjustmentId:string;balanceEntryId:string};
+    const adopt={...x.payment,expectedAccountRevision:2,balance:[],legacy:{mode:"existing_debit",debitEntryId:debit.balanceEntryId}},reverse={expectedRevision:2,idempotencyKey:"race-prior-undo",adjustmentId:debit.adjustmentId,occurredAt:x.payment.occurredAt,reason:"Synthetic independent undo"};
+    const run=async(action:string,input:unknown)=>{const result=await promisify(execFile)(process.execPath,["--import","tsx","tests/integration/freight-worker.ts"],{cwd:process.cwd(),timeout:30000,env:{...process.env,TURSO_AUTH_TOKEN:"",LOTI_FREIGHT_RACE_DATABASE:url,LOTI_FREIGHT_RACE_COMMAND:JSON.stringify({packageId:x.packageId,accountId:x.accountId,action,input})}});return JSON.parse(result.stdout);};
+    const results=await Promise.all([run("freight",adopt),run("adjustment.reverse",reverse)]);expect(results.filter(row=>row.ok),JSON.stringify(results)).toHaveLength(1);
+    if(results[0].ok){expect((await run("freight",adopt)).data.replayed).toBe(true);const state=await x.freight.get(x.packageId);await x.freight.reverse(x.packageId,{expectedRevision:state.pkg.revision,expectedAccountRevision:state.account!.account.revision,paymentId:state.payment!.id,idempotencyKey:"race-authorized-undo",occurredAt:x.payment.occurredAt,reason:"Synthetic authorized undo",confirmedRegistrationError:true});}else expect((await run("adjustment.reverse",reverse)).data.replayed).toBe(true);
+    expect((await balance.getAccountBalance(x.accountId)).ledgerBalanceCnyMinor).toBe(2000);expect((await f.client.execute("PRAGMA foreign_key_check")).rows).toHaveLength(0);
+  },60000);
+  it("review races: topup reversal and later consumption compete on the restored capacity",async()=>{
+    f.client.close();const url=`file:${join(mkdtempSync(join(tmpdir(),"loti-review-topup-")),"race.sqlite")}`;f=await fixture(url,"orders");await f.client.execute("PRAGMA journal_mode=WAL");const x=await setup();await x.freight.confirm(x.packageId,x.payment);let state=await x.freight.get(x.packageId);
+    await x.freight.reverse(x.packageId,{expectedRevision:state.pkg.revision,expectedAccountRevision:state.account!.account.revision,paymentId:state.payment!.id,idempotencyKey:"race-restore",occurredAt:x.payment.occurredAt,reason:"Synthetic restored capacity",confirmedRegistrationError:true});state=await x.freight.get(x.packageId);
+    const common={expectedRevision:state.account!.account.revision,occurredAt:x.payment.occurredAt,reason:"Synthetic competing capacity"};
+    const run=async(action:string,input:unknown)=>{const result=await promisify(execFile)(process.execPath,["--import","tsx","tests/integration/freight-worker.ts"],{cwd:process.cwd(),timeout:30000,env:{...process.env,TURSO_AUTH_TOKEN:"",LOTI_FREIGHT_RACE_DATABASE:url,LOTI_FREIGHT_RACE_COMMAND:JSON.stringify({accountId:x.accountId,action,input})}});return JSON.parse(result.stdout);};
+    const results=await Promise.all([run("topup.reverse",{...common,idempotencyKey:"race-root-undo",topupId:x.topupId,confirmedRegistrationError:true}),run("adjustment.record",{...common,idempotencyKey:"race-root-use",kind:"documented_debit",amountCnyMinor:1,externalReference:null,shares:[{personId:"bob",amountCnyMinor:1}]})]);expect(results.filter(row=>row.ok),JSON.stringify(results)).toHaveLength(1);const final=await hubbuyBalanceServices(f.db,"alice").getAccountBalance(x.accountId);expect(final.reconciled).toBe(true);expect(final.ledgerBalanceCnyMinor).toBe(results[0].ok?0:1999);
+  },60000);
+  it("review regression P1: an adopted manual debit has one restitution owner",async()=>{
+    const x=await setup(),balance=hubbuyBalanceServices(f.db,"alice","workspace");
+    const debit=await balance.recordManualAdjustment(x.accountId,{expectedRevision:1,idempotencyKey:"adopt-debit",kind:"documented_debit",amountCnyMinor:1000,occurredAt:x.payment.occurredAt,reason:"Synthetic prior freight debit",externalReference:"legacy-freight",shares:[{personId:"bob",amountCnyMinor:1000}]});
+    let state=await x.freight.get(x.packageId);
+    await x.freight.confirm(x.packageId,{...x.payment,expectedAccountRevision:state.account!.account.revision,balance:[],legacy:{mode:"existing_debit",debitEntryId:(debit as {balanceEntryId:string}).balanceEntryId},externalReference:"legacy-freight"});
+    state=await x.freight.get(x.packageId);
+    await expect(balance.reverseManualAdjustment(x.accountId,{expectedRevision:state.account!.account.revision,idempotencyKey:"independent-undo",adjustmentId:(debit as {adjustmentId:string}).adjustmentId,occurredAt:x.payment.occurredAt,reason:"Synthetic adjustment undo"})).rejects.toMatchObject({code:"ADJUSTMENT_FREIGHT_DEPENDENCY"});
+    await x.freight.reverse(x.packageId,{expectedRevision:state.pkg.revision,expectedAccountRevision:state.account!.account.revision,paymentId:state.payment!.id,idempotencyKey:"adopt-undo",occurredAt:x.payment.occurredAt,reason:"Synthetic freight undo",confirmedRegistrationError:true});
+    expect((await balance.getAccountBalance(x.accountId)).ledgerBalanceCnyMinor).toBe(2000);
+    const after=await x.freight.get(x.packageId);
+    await expect(balance.reverseManualAdjustment(x.accountId,{expectedRevision:after.account!.account.revision,idempotencyKey:"independent-late-undo",adjustmentId:(debit as {adjustmentId:string}).adjustmentId,occurredAt:x.payment.occurredAt,reason:"Synthetic late adjustment undo"})).rejects.toMatchObject({code:"ADJUSTMENT_FREIGHT_DEPENDENCY"});
+    const ledger=await f.db.select().from(s.hubbuyBalanceEntries),restoration=ledger.find(row=>row.reversalOfEntryId===(debit as {balanceEntryId:string}).balanceEntryId)!;
+    await expect(f.db.insert(s.hubbuyBalanceEntries).values({...restoration,id:"forged-second-restoration",sequence:restoration.sequence+1})).rejects.toMatchObject({cause:expect.objectContaining({message:expect.stringContaining("DEBIT_RESTITUTION_CAPACITY")})});
+    expect((await balance.readStatement(x.accountId)).entries.find(row=>row.id===(debit as {balanceEntryId:string}).balanceEntryId)?.adjustment?.canReverse).toBe(false);
+    expect((await f.client.execute("PRAGMA foreign_key_check")).rows).toHaveLength(0);
+  });
+  it("review regression P2: compensated freight permits topup reversal using restored lots",async()=>{
+    const x=await setup();await x.freight.confirm(x.packageId,x.payment);let state=await x.freight.get(x.packageId);
+    await x.freight.reverse(x.packageId,{expectedRevision:state.pkg.revision,expectedAccountRevision:state.account!.account.revision,paymentId:state.payment!.id,idempotencyKey:"freight-undo",occurredAt:x.payment.occurredAt,reason:"Synthetic compensation",confirmedRegistrationError:true});state=await x.freight.get(x.packageId);
+    const topups=hubbuyTopupServices(f.db,"alice","workspace");
+    await topups.reverse(x.accountId,{expectedRevision:state.account!.account.revision,idempotencyKey:"topup-undo",occurredAt:x.payment.occurredAt,reason:"Synthetic topup correction",topupId:x.topupId,confirmedRegistrationError:true});
+    expect((await hubbuyBalanceServices(f.db,"alice").getAccountBalance(x.accountId)).ledgerBalanceCnyMinor).toBe(0);
+  });
+  it("review regression P3: an inherited excess is returned by payments of correction claims",async()=>{
+    const x=await setup();await x.freight.confirm(x.packageId,x.payment);let state=await x.freight.get(x.packageId);
+    const issue={expectedRevision:state.pkg.revision,expectedSettlementSequence:0,idempotencyKey:"excess-v1",occurredAt:x.payment.occurredAt,reason:"Synthetic settlement",contentHash:state.content.hash,policy:{mode:"centralized",centralizerId:"bob",confirmedCompensation:true},pair:{fromCnyMinor:2000,toBrlCents:1500,date:x.payment.occurredAt,reason:"Synthetic captured pair",topupId:x.topupId},confirmedRevisionWithReceipts:false};
+    await x.settlement.confirm(x.packageId,issue);let view=await x.settlement.get(x.packageId),claim=view.claims.find(row=>row.current)!;state=await x.freight.get(x.packageId);
+    const original=await x.settlement.recordReceipt(x.packageId,{expectedRevision:state.pkg.revision,idempotencyKey:"excess-actual",occurredAt:x.payment.occurredAt,reason:"Synthetic actual excess",versionId:view.latest!.id,debtorId:"alice",creditorId:"bob",amountBrlCents:479,allocations:[{claimId:claim.id,amountBrlCents:379}],confirmedExcess:true,returnsReceiptId:null,externalReference:null});state=await x.freight.get(x.packageId);
+    await x.settlement.confirm(x.packageId,{...issue,expectedRevision:state.pkg.revision,expectedSettlementSequence:1,idempotencyKey:"excess-v2",confirmedRevisionWithReceipts:true});view=await x.settlement.get(x.packageId);claim=view.claims.find(row=>row.current)!;state=await x.freight.get(x.packageId);
+    await x.settlement.recordReceipt(x.packageId,{expectedRevision:state.pkg.revision,idempotencyKey:"excess-returned",occurredAt:x.payment.occurredAt,reason:"Synthetic bank return",versionId:view.latest!.id,debtorId:"bob",creditorId:"alice",amountBrlCents:100,allocations:[{claimId:claim.id,amountBrlCents:100}],confirmedExcess:false,returnsReceiptId:null,externalReference:null});
+    view=await x.settlement.get(x.packageId);
+    expect((view as unknown as {excesses:{receiptId:string;returnedBrlCents:number;openBrlCents:number}[]}).excesses).toContainEqual(expect.objectContaining({receiptId:original.receiptId,returnedBrlCents:100,openBrlCents:0}));
+  });
+  it("review regression P4: freight uses identify package, funder and beneficiaries",async()=>{
+    const x=await setup();await x.freight.confirm(x.packageId,x.payment);
+    const balance=await hubbuyBalanceServices(f.db,"alice").getAccountBalance(x.accountId),uses=balance.traceability.flatMap(person=>person.origins.flatMap(origin=>origin.receipts.flatMap(receipt=>receipt.uses)));
+    const freight=uses.find(use=>use.kind==="package_freight_payment")!;
+    expect(freight.destinations).toHaveLength(2);
+    expect(freight.destinations.reduce((sum,row)=>sum+row.amountCnyMinor,0)).toBe(1000);
+    expect(freight.destinations.reduce((sum,row)=>sum+row.historicalBrlCents,0)).toBe(750);
+    expect(freight.destinations).toContainEqual(expect.objectContaining({beneficiaryId:"alice",packageId:x.packageId,funderId:"bob"}));
+    expect(balance.traceability.find(row=>row.personId==="bob")!.origins[0]).toMatchObject({freightConsumedCnyMinor:1000,purchaseConsumedCnyMinor:0,adjustmentDeltaCnyMinor:0,availableCnyMinor:1000});
+  });
+  it("rejects adoption of a compensated debit and preserves reference/idempotency rules",async()=>{
+    const x=await setup(),balance=hubbuyBalanceServices(f.db,"alice","workspace");
+    const command={expectedRevision:1,idempotencyKey:"prior-debit",kind:"documented_debit" as const,amountCnyMinor:1000,occurredAt:x.payment.occurredAt,reason:"Synthetic prior debit",externalReference:"synthetic-prior",shares:[{personId:"bob",amountCnyMinor:1000}]};
+    const debit=await balance.recordManualAdjustment(x.accountId,command) as {adjustmentId:string;balanceEntryId:string};
+    await expect(balance.recordManualAdjustment(x.accountId,{...command,expectedRevision:2,idempotencyKey:"duplicate-prior"})).rejects.toMatchObject({code:"ADJUSTMENT_REFERENCE_DUPLICATE"});
+    const undo={expectedRevision:2,idempotencyKey:"prior-undo",adjustmentId:debit.adjustmentId,occurredAt:x.payment.occurredAt,reason:"Synthetic prior debit correction"};
+    await balance.reverseManualAdjustment(x.accountId,undo);await expect(balance.reverseManualAdjustment(x.accountId,undo)).resolves.toMatchObject({replayed:true});
+    const state=await x.freight.get(x.packageId);
+    await expect(x.freight.confirm(x.packageId,{...x.payment,expectedAccountRevision:state.account!.account.revision,balance:[],legacy:{mode:"existing_debit",debitEntryId:debit.balanceEntryId}})).rejects.toMatchObject({code:"LEGACY_DEBIT_INELIGIBLE"});
+    expect(state.account!.account.balanceCnyMinor).toBe(2000);expect(await f.db.select().from(fdb.freightPayments)).toHaveLength(0);
+  });
+  it("never substitutes an unrelated credit for an active topup dependency",async()=>{
+    const x=await setup();await x.freight.confirm(x.packageId,{...x.payment,topupFees:[{topupId:x.topupId,amountBrlCents:0}]});let state=await x.freight.get(x.packageId);const balance=hubbuyBalanceServices(f.db,"alice","workspace");
+    const unrelated=await balance.recordManualAdjustment(x.accountId,{expectedRevision:state.account!.account.revision,idempotencyKey:"unrelated-credit",kind:"documented_credit",amountCnyMinor:5000,occurredAt:x.payment.occurredAt,reason:"Synthetic unrelated money",externalReference:"synthetic-unrelated",shares:[{personId:"bob",amountCnyMinor:5000,historicalBrlCents:3500}]}) as {balanceEntryId:string};
+    state=await x.freight.get(x.packageId);const topups=hubbuyTopupServices(f.db,"alice","workspace"),command={expectedRevision:state.account!.account.revision,idempotencyKey:"root-with-unrelated",occurredAt:x.payment.occurredAt,reason:"Synthetic root cancellation",topupId:x.topupId,confirmedRegistrationError:true};
+    await expect(topups.reverse(x.accountId,command)).rejects.toMatchObject({code:"TOPUP_HAS_DEPENDENCIES"});
+    await x.freight.reverse(x.packageId,{expectedRevision:state.pkg.revision,expectedAccountRevision:state.account!.account.revision,paymentId:state.payment!.id,idempotencyKey:"restore-with-unrelated",occurredAt:x.payment.occurredAt,reason:"Synthetic root recovery",confirmedRegistrationError:true});state=await x.freight.get(x.packageId);
+    await topups.reverse(x.accountId,{...command,expectedRevision:state.account!.account.revision});const final=await balance.getAccountBalance(x.accountId);expect(final).toMatchObject({ledgerBalanceCnyMinor:5000,reconciled:true});expect(final.rights[0].availableHistoricalBrlCents).toBe(3500);
+    const shares=await f.db.select().from(s.hubbuyBalanceCreditShares).where(eq(s.hubbuyBalanceCreditShares.creditEntryId,unrelated.balanceEntryId));for(const share of shares)expect(await f.db.select().from(s.hubbuyBalanceConsumptions).where(eq(s.hubbuyBalanceConsumptions.creditShareId,share.id))).toHaveLength(0);
+  });
+  it("blocks partial recovery and later consumption, then recovers nested compensations exactly",async()=>{
+    const x=await setup();await x.freight.confirm(x.packageId,x.payment);let state=await x.freight.get(x.packageId);
+    const topups=hubbuyTopupServices(f.db,"alice","workspace"),undo={expectedRevision:state.account!.account.revision,idempotencyKey:"nested-topup-undo",occurredAt:x.payment.occurredAt,reason:"Synthetic restored topup",topupId:x.topupId,confirmedRegistrationError:true};
+    await expect(topups.previewReversal(x.accountId,undo)).rejects.toMatchObject({code:"TOPUP_HAS_DEPENDENCIES"});
+    await x.freight.reverse(x.packageId,{expectedRevision:state.pkg.revision,expectedAccountRevision:state.account!.account.revision,paymentId:state.payment!.id,idempotencyKey:"nested-freight-undo",occurredAt:x.payment.occurredAt,reason:"Synthetic freight compensation",confirmedRegistrationError:true});state=await x.freight.get(x.packageId);
+    expect((await topups.list(x.accountId)).items[0]).toMatchObject({canReverse:true,recoverableCnyMinor:2000,availableCnyMinor:1000});
+    const balance=hubbuyBalanceServices(f.db,"alice","workspace");
+    const debit=await balance.recordManualAdjustment(x.accountId,{expectedRevision:state.account!.account.revision,idempotencyKey:"later-use",kind:"documented_debit",amountCnyMinor:1100,occurredAt:x.payment.occurredAt,reason:"Synthetic later consumption",externalReference:null,shares:[{personId:"bob",amountCnyMinor:1100}]}) as {adjustmentId:string};state=await x.freight.get(x.packageId);
+    await expect(topups.reverse(x.accountId,{...undo,expectedRevision:state.account!.account.revision})).rejects.toMatchObject({code:"TOPUP_HAS_DEPENDENCIES"});
+    expect((await topups.list(x.accountId)).items[0].canReverse).toBe(false);
+    await balance.reverseManualAdjustment(x.accountId,{expectedRevision:state.account!.account.revision,idempotencyKey:"later-use-undo",adjustmentId:debit.adjustmentId,occurredAt:x.payment.occurredAt,reason:"Synthetic nested compensation"});state=await x.freight.get(x.packageId);
+    const command={...undo,expectedRevision:state.account!.account.revision};await topups.reverse(x.accountId,command);await expect(topups.reverse(x.accountId,command)).resolves.toMatchObject({replayed:true});
+    await expect(topups.reverse(x.accountId,{...command,reason:"Different payload"})).rejects.toMatchObject({code:"IDEMPOTENCY_CONFLICT"});
+    const final=await balance.getAccountBalance(x.accountId);expect(final).toMatchObject({reconciled:true,ledgerBalanceCnyMinor:0});expect(final.rights.reduce((n,row)=>n+row.availableHistoricalBrlCents,0)).toBe(0);
+  });
+  it("reverses two topups pooled in a restoration without substituting unrelated credits",async()=>{
+    const x=await setup(),topups=hubbuyTopupServices(f.db,"alice","workspace");
+    const second=await topups.record(x.accountId,{expectedRevision:1,idempotencyKey:"second-topup",occurredAt:x.payment.occurredAt,reason:"Synthetic second topup",cnyMinor:2000,method:"pix",receipt:{mode:"principal_and_fee",principalBrlCents:1000,feeBrlCents:10},fee:{mode:"percentage",bps:100},funders:[{personId:"bob",cnyMinor:2000,principalBrlCents:1000,feeBrlCents:10}],externalReference:"synthetic-second",confirmedNoReference:false,confirmedReceived:true});
+    let state=await x.freight.get(x.packageId);await x.freight.confirm(x.packageId,{...x.payment,expectedAccountRevision:state.account!.account.revision,nativeMinor:3000,balance:[{personId:"bob",cnyMinor:3000}]});state=await x.freight.get(x.packageId);
+    await x.freight.reverse(x.packageId,{expectedRevision:state.pkg.revision,expectedAccountRevision:state.account!.account.revision,paymentId:state.payment!.id,idempotencyKey:"pooled-undo",occurredAt:x.payment.occurredAt,reason:"Synthetic pooled compensation",confirmedRegistrationError:true});
+    const trace=(await hubbuyBalanceServices(f.db,"alice").getAccountBalance(x.accountId)).traceability.flatMap(person=>person.origins.flatMap(origin=>origin.receipts.flatMap(receipt=>receipt.uses))).filter(use=>use.kind==="package_freight_payment");
+    expect(trace.reduce((sum,use)=>sum+use.restored.reduce((n,row)=>n+row.personCnyMinor,0),0)).toBe(3000);for(const use of trace)expect(use.restored.reduce((n,row)=>n+row.personCnyMinor,0)).toBe(use.amountCnyMinor);
+    for(const [index,topupId] of [x.topupId,second.topupId].entries()){state=await x.freight.get(x.packageId);await topups.reverse(x.accountId,{expectedRevision:state.account!.account.revision,idempotencyKey:`pooled-topup-undo-${index}`,occurredAt:x.payment.occurredAt,reason:"Synthetic exact root reversal",topupId,confirmedRegistrationError:true});}
+    expect((await x.freight.get(x.packageId)).account!.account.balanceCnyMinor).toBe(0);expect((await f.client.execute("PRAGMA foreign_key_check")).rows).toHaveLength(0);
+  });
   it("funds personal freight and additional orders with owner-only rights while refusing shared settlement",async()=>{
     const {workspace}=await ensurePersonalWorkspace(f.db,"alice");await f.alice.selectWorkspace(workspace.id,"workspace");
     const purchase=await f.alice.savePurchase({name:"Synthetic personal freight"},undefined,workspace.id);

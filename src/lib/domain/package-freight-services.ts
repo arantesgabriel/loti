@@ -34,6 +34,8 @@ export function packageFreightServices(db: AppDatabase, actorId: string, workspa
     if (await tx.select().from(f.freightReversals).where(eq(f.freightReversals.paymentId, payment.id)).get()) throw financialConflict("O pagamento já foi compensado.");
     const sources = await tx.select().from(f.freightSources).where(eq(f.freightSources.paymentId, payment.id));
     const balance = sources.filter(source => source.kind === "balance");
+    const originalDebits=balance.length?await tx.select({entry:s.hubbuyBalanceEntries}).from(s.hubbuyBalanceConsumptions).innerJoin(s.hubbuyBalanceEntries,eq(s.hubbuyBalanceEntries.id,s.hubbuyBalanceConsumptions.debitEntryId)).where(inArray(s.hubbuyBalanceConsumptions.id,balance.map(row=>row.consumptionId!))):[];
+    if(originalDebits.length&&await tx.select().from(s.hubbuyBalanceEntries).where(and(eq(s.hubbuyBalanceEntries.direction,"credit"),inArray(s.hubbuyBalanceEntries.reversalOfEntryId,originalDebits.map(row=>row.entry.id)))).get())throw financialConflict("O débito original já foi compensado. Confira sua genealogia antes de corrigir o frete.","FREIGHT_DEBIT_ALREADY_RESTORED");
     let creditEntryId: string | null = null;
     if (balance.length) {
       const state = await calculateHubBuyBalanceState(tx, accountId);
@@ -88,6 +90,7 @@ export function packageFreightServices(db: AppDatabase, actorId: string, workspa
         const debitId = command.legacy.debitEntryId;
         const debit = state.entries.find(row => row.id === debitId && row.direction === "debit");
         if (!debit || debit.sourceType !== "manual_adjustment" || debit.amountCnyMinor !== command.nativeMinor || command.external.length || command.nativeCurrency !== "CNY") throw financialConflict("O débito existente não corresponde integralmente ao frete.", "LEGACY_DEBIT_INELIGIBLE");
+        if(state.entries.some(row=>row.direction==="credit"&&row.reversalOfEntryId===debit.id))throw financialConflict("O débito já foi anulado ou compensado e não pode financiar o frete.","LEGACY_DEBIT_INELIGIBLE");
         const uses = state.consumptions.filter(row => row.debitEntryId === debit.id);
         for (const use of uses) {
           if (use.paymentAllocationId || await tx.select().from(f.freightSources).where(eq(f.freightSources.consumptionId, use.id)).get()) throw financialConflict("O débito já tem outro destino.", "LEGACY_DEBIT_INELIGIBLE");
@@ -169,7 +172,8 @@ export function packageFreightServices(db: AppDatabase, actorId: string, workspa
       const operationIds=[...payments.map(row=>row.operationId),...paymentReversals.map(row=>row.operationId),...net.refunds.map(row=>row.operationId),...net.reversals.map(row=>row.operationId)];
       const operations=operationIds.length?await tx.select().from(s.financialOperations).where(inArray(s.financialOperations.id,operationIds)):[];
       const account = context.pkg.accountId ? await calculateHubBuyBalanceState(tx, context.pkg.accountId) : null;
-      const eligibleLegacyDebits=account?account.entries.filter(row=>row.direction==="debit" && row.sourceType==="manual_adjustment").map(row=>({id:row.id,sequence:row.sequence,amountCnyMinor:row.amountCnyMinor,historicalBrlCents:row.historicalBrlCents})):[];
+      const linkedDebits=context.pkg.accountId?await tx.select({id:s.hubbuyBalanceConsumptions.debitEntryId}).from(f.freightSources).innerJoin(s.hubbuyBalanceConsumptions,eq(s.hubbuyBalanceConsumptions.id,f.freightSources.consumptionId)).innerJoin(f.freightPayments,eq(f.freightPayments.id,f.freightSources.paymentId)).innerJoin(s.logisticsPackages,and(eq(s.logisticsPackages.id,f.freightPayments.packageId),eq(s.logisticsPackages.accountId,context.pkg.accountId),eq(s.logisticsPackages.workspaceId,workspaceId))):[];
+      const eligibleLegacyDebits=account?account.entries.filter(row=>row.direction==="debit" && row.sourceType==="manual_adjustment"&&!linkedDebits.some(link=>link.id===row.id)&&!account.entries.some(credit=>credit.direction==="credit"&&credit.reversalOfEntryId===row.id)).map(row=>({id:row.id,sequence:row.sequence,amountCnyMinor:row.amountCnyMinor,historicalBrlCents:row.historicalBrlCents})):[];
       return { ...context, content, payments,paymentReversals, sources, operations,refunds:net.refunds,refundReversals:net.reversals,activeRefundIds:net.active.map(row=>row.id),eligibleLegacyDebits, account: account ? { account: account.account, rights: account.rights, availableShares: account.availableShares.map(row => ({ ...row, sequence: account.entries.find(entry => entry.id === row.creditEntryId)!.sequence })), reconciled: account.reconciled } : null };
     });
   }

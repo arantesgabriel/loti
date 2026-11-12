@@ -2,6 +2,8 @@ import type {Client} from "@libsql/client";
 export async function verifyFreightDatabase(client:Pick<Client,"execute">){
  const tables=["financial_operation_results","package_freight_payments","package_freight_heads","package_freight_reversals","package_freight_sources","package_freight_allocations","topup_fee_allocations","topup_fee_funders","topup_fee_order_shares","package_settlement_versions","package_settlement_claims","package_settlement_receipts","package_settlement_receipt_allocations","package_settlement_receipt_reversals","package_freight_refunds","package_freight_refund_sources","package_freight_refund_reversals"];
  let triggers=0;
+ for(const name of ["debit_restitution_capacity","debit_restitution_share_capacity","freight_adoption_uncompensated","freight_restitution_owner","adopted_adjustment_reversal_guard"]){const found=await client.execute({sql:"SELECT 1 FROM sqlite_master WHERE type='trigger' AND name=?",args:[name]});if(!found.rows.length)throw new Error(`Missing restitution guard: ${name}`);triggers++;}
+ if(!(await client.execute("SELECT 1 FROM sqlite_master WHERE type='view' AND name='hubbuy_full_restitution_edges'")).rows.length)throw new Error("Missing restitution genealogy view.");
  for(const table of tables){await client.execute(`SELECT count(*) FROM ${table}`);if(table==="package_freight_heads")continue;
   const prefix=table;
   for(const action of ["update","delete"]){const found=await client.execute({sql:"SELECT 1 FROM sqlite_master WHERE type='trigger' AND name=?",args:[`${prefix}_no_${action}`]});if(!found.rows.length)throw new Error(`Missing freight immutability guard: ${prefix}_no_${action}`);triggers++;}
@@ -15,6 +17,8 @@ export async function verifyFreightDatabase(client:Pick<Client,"execute">){
   ["receipt allocation margins",`SELECT r.id FROM package_settlement_receipts r LEFT JOIN package_settlement_receipt_allocations a ON a.receipt_id=r.id WHERE r.returns_receipt_id IS NULL GROUP BY r.id HAVING r.amount_brl_cents!=r.excess_brl_cents+coalesce(sum(a.amount_brl_cents),0)`],
   ["active claim capacity",`SELECT c.id FROM package_settlement_claims c JOIN package_settlement_receipt_allocations a ON a.claim_id=c.id WHERE NOT EXISTS(SELECT 1 FROM package_settlement_receipt_reversals x WHERE x.receipt_id=a.receipt_id) GROUP BY c.id HAVING sum(a.amount_brl_cents)>c.amount_minor`],
   ["freight heads",`SELECT h.package_id FROM package_freight_heads h JOIN package_freight_payments p ON p.id=h.payment_id WHERE p.package_id!=h.package_id OR EXISTS(SELECT 1 FROM package_freight_reversals r WHERE r.payment_id=p.id)`],
+  ["debit restitution budget",`SELECT d.id FROM hubbuy_balance_entries d JOIN hubbuy_balance_entries r ON r.reversal_of_entry_id=d.id AND r.direction='credit' WHERE d.direction='debit' GROUP BY d.id HAVING sum(r.amount_cny_minor)>d.amount_cny_minor OR sum(r.historical_brl_cents)>d.historical_brl_cents`],
+  ["adopted debit independent reversal",`SELECT a.id FROM hubbuy_balance_adjustments a JOIN hubbuy_balance_adjustments r ON r.reverses_adjustment_id=a.id JOIN hubbuy_balance_consumptions c ON c.debit_entry_id=a.balance_entry_id JOIN package_freight_sources s ON s.consumption_id=c.id`],
  ] as const;
  for(const [name,sql] of invariants){if((await client.execute(sql)).rows.length)throw new Error(`Financial invariant failed: ${name}`);}
  return {tables:tables.length,triggers,invariants:invariants.length};
