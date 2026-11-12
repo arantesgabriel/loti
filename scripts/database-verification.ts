@@ -9,6 +9,15 @@ export async function verifyDatabase(client:Pick<Client,"execute">){
   await client.execute("SELECT COUNT(*) FROM hubbuy_balance_adjustments");
   for (const table of ["auth_limits", "auth_email_deliveries"]) { tables.push(table); await client.execute(`SELECT COUNT(*) FROM "${table}"`); }
   await client.execute("SELECT COUNT(*) FROM purchase_order_corrections");
+  for (const table of ["hubbuy_topups", "hubbuy_topup_funders", "hubbuy_topup_reversals"]) { tables.push(table); await client.execute(`SELECT COUNT(*) FROM "${table}"`); }
+  const invalidTopups = await client.execute(`SELECT t.id FROM hubbuy_topups t JOIN hubbuy_balance_entries e ON e.id=t.credit_entry_id
+    JOIN financial_operations o ON o.id=t.operation_id JOIN hubbuy_accounts a ON a.id=t.account_id
+    WHERE e.account_id!=t.account_id OR e.operation_id!=t.operation_id OR e.source_type!='topup' OR e.source_id!=t.id OR e.direction!='credit'
+    OR e.amount_cny_minor!=t.cny_minor OR e.historical_brl_cents!=t.principal_brl_cents OR o.workspace_id!=a.workspace_id
+    OR t.cny_minor!=(SELECT coalesce(sum(cny_minor),0) FROM hubbuy_topup_funders WHERE topup_id=t.id)
+    OR t.principal_brl_cents!=(SELECT coalesce(sum(principal_brl_cents),0) FROM hubbuy_topup_funders WHERE topup_id=t.id)
+    OR t.fee_brl_cents!=(SELECT coalesce(sum(fee_brl_cents),0) FROM hubbuy_topup_funders WHERE topup_id=t.id)`);
+  if (invalidTopups.rows.length) throw new Error("Topup receipt, ledger and funder margins do not reconcile.");
   const foreignKeyViolations = await client.execute("PRAGMA foreign_key_check");
   if (foreignKeyViolations.rows.length) throw new Error(`Database contains ${foreignKeyViolations.rows.length} foreign-key violations.`);
   const invalidWorkspaces = await client.execute("SELECT id FROM workspaces WHERE NOT ((kind = 'personal' AND owner_user_id IS NOT NULL) OR (kind = 'shared' AND owner_user_id IS NULL))");
@@ -22,6 +31,7 @@ export async function verifyDatabase(client:Pick<Client,"execute">){
   requiredTriggers.push("order_corrections_no_update", "order_corrections_no_delete", "order_corrections_scope_guard");
   requiredTriggers.push("hubbuy_adjustments_no_update", "hubbuy_adjustments_no_delete", "hubbuy_adjustment_scope_guard", "hubbuy_adjustment_reference_guard");
   requiredTriggers.push("workspace_kind_owner_insert_guard", "workspace_identity_immutable", "workspace_member_shared_insert_guard", "workspace_member_shared_update_guard");
+  requiredTriggers.push("topups_no_update", "topups_no_delete", "topup_funders_no_update", "topup_funders_no_delete", "topup_reversals_no_update", "topup_reversals_no_delete", "topup_scope_guard", "topup_funder_scope_guard", "topup_reversal_scope_guard", "topup_reference_guard", "topup_adjustment_reference_guard", "topup_reconciliation_reference_guard");
   for (const table of ["hubbuy_balance_entries", "hubbuy_reconciliation_runs", "hubbuy_reconciliation_events", "purchase_cost_orders", "purchase_packages", "purchase_payment_components", "purchase_cost_refunds"]) {
     requiredTriggers.push(`${table}_live_account_insert`, `${table}_live_account_update`);
   }

@@ -3,7 +3,7 @@ import { MAX_FINANCIAL_MINOR } from "./financial-money";
 
 export type RightOrigin = {
   id: string;
-  kind: "refund_product" | "opening_balance" | "reconciliation" | "restored_balance" | "promotional_bonus" | "manual_credit" | "manual_reversal" | "unknown";
+  kind: "refund_product" | "opening_balance" | "reconciliation" | "restored_balance" | "promotional_bonus" | "manual_credit" | "manual_reversal" | "topup" | "unknown";
   label: string;
   variant: string | null;
   trackingId: string | null;
@@ -53,9 +53,11 @@ export function describeOrigin(entry: OriginEntry | undefined, creditEntryId: st
   const product = entry?.sourceType === "refund_received" ? products.get(entry.sourceId) : undefined;
   if (product) return { id: `refund-product:${product.costItemId}`, kind: "refund_product", label: product.name, variant: product.variant, trackingId: product.trackingId, costItemId: product.costItemId };
   const kind = entry?.sourceType === "opening_balance" ? "opening_balance"
+    : entry?.sourceType === "topup" ? "topup"
     : entry?.sourceType === "manual_adjustment" ? "reconciliation"
     : entry?.sourceType === "reversal" ? "restored_balance" : "unknown";
   const label = kind === "opening_balance" ? "Saldo inicial conciliado"
+    : kind === "topup" ? "Recarga"
     : kind === "reconciliation" ? "Crédito de conciliação"
     : kind === "restored_balance" ? "Saldo restaurado por correção" : "Origem não identificada";
   return { id: `entry:${creditEntryId}`, kind, label, variant: null, trackingId: null, costItemId: null };

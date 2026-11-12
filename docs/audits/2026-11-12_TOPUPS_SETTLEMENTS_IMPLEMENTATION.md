@@ -4,9 +4,9 @@ Data: 12/11/2026. Contrato: `docs/47_TOPUPS_PACKAGE_FUNDING_AND_SETTLEMENTS_PLAN
 
 ## Estado real da entrega
 
-A execução começou pela fase 0. **As seis funcionalidades ainda não estão implementadas de ponta a ponta.** Os módulos novos são cálculos puros, sem chamadas pelas telas, APIs ou serviços de escrita existentes. G0 permanece parcial: falta o baseline persistido descartável e o ensaio completo de compatibilidade. Fases 1–10 estão pendentes.
+A primeira entrega começou pela fase 0 e foi registrada no commit `2ea5585`. **As seis funcionalidades ainda não estão implementadas de ponta a ponta.** Após novo pedido, foi iniciada a persistência e o serviço de F1, descritos ao final. F1 permanece em andamento; F2–F6 ainda precisam de integração operacional, interfaces e validação ponta a ponta.
 
-Nenhum schema, migration, ledger, pagamento, direito individual, compra finalizada, QC, serviço externo ou dado real foi alterado. A ausência de acesso a produção não é um bloqueio desta implementação local. Não há necessidade de nova autorização entre as fases locais.
+Na primeira entrega não houve alteração de schema ou migration. A segunda execução acrescenta uma migration local, ensaiada somente em bancos sintéticos descartáveis. Nenhum serviço externo ou dado real foi alterado. A ausência de acesso a produção não é um bloqueio desta implementação local. Não há necessidade de nova autorização entre as fases locais.
 
 ## Código entregue
 
@@ -75,3 +75,32 @@ Build, E2E, ensaio navegável, novas migrations, upgrade populado, falhas injeta
 Concluir G0 com baseline descartável, depois executar fases 1–10 do plano. Implementar persistência e guards, serviços/transações, APIs, interfaces de prévia/confirmacão, histórico/correções, integração da taxa nos pedidos, versões de manifesto, recibos e capacidades. Depois entregar carga navegável, E2E, QA visual e runbook. Não declarar F1–F6 prontas com base nestes módulos.
 
 Preservar alterações prévias observadas: `docs/INDEX.md`, `next-env.d.ts`, `tsconfig.json`, plano 47 não rastreado, `reset-password.sh` e `tmp/`. Não atribuir esses arquivos à execução atual nem revertê-los.
+
+## Continuação autorizada: commit e início da persistência de F1
+
+Pedido: efetuar o commit da primeira entrega e iniciar F1–F6. Commit realizado: `2ea5585` (`feat: add topup and freight settlement calculation contracts`), somente com os sete arquivos produzidos na primeira entrega. O plano 47 e demais alterações preexistentes foram mantidos fora desse commit. As mudanças descritas nesta seção são posteriores a ele.
+
+Entregas iniciadas:
+
+- Migration `0034_topup_financing_foundation.sql`, snapshot e journal: origem `topup` no ledger, origem reservada para o pagamento tipado de frete, tabelas de recarga/financiadores/anulações, índices e guards de imutabilidade, escopo, capacidade e referência externa. A migration não cria lançamentos monetários.
+- Reconstrução do ledger preserva os 103 gatilhos anteriores. O guard de parcelas foi deliberadamente adaptado depois da restauração: titular no espaço pessoal, membership no compartilhado. Os demais 102 foram comparados literalmente no teste de upgrade.
+- `hubbuyTopupServices()`: prévia sem escrita, recarga com comprovante discriminado ou total percentual, financiadores separados do autor, taxa fora da base histórica, checagem de contexto ativo, revisão/CAS, idempotência, referência duplicada e reversão compensatória de registro incorreto sem consumo.
+- Resposta de commit incerta: consulta a operação persistida somente depois de reautorizar conta/contexto e comparar tipo/hash. Nenhum sucesso é inferido apenas pelo valor do saldo.
+- Rota autenticada `POST /api/hubbuy/accounts/[accountId]/topups`, com envelope estrito, origem confiável e respostas privadas. Operações `preview`, `record`, `reversal.preview`, `reverse`.
+- Leitura de direitos identifica a origem como **Recarga**. O verificador inclui tabelas, guards e margens crédito/comprovante/financiadores.
+
+Verificações executadas nesta continuação:
+
+- Integração F1: sete cenários, incluindo espaço pessoal sem membership, financiador diferente do autor, taxa financiada por outra pessoa, idempotência, isolamento, anulação, consumo dependente, referência cruzada com ajuste antigo e rollback após escrita parcial.
+- Upgrade populado/reaplicação: dados antigos exatos, gatilhos preservados e zero violações FK. O teste também injeta falha após DDL para verificar rollback da migration.
+- Concorrência em processos independentes: mesma chave recupera uma única operação; chaves diferentes com a mesma revisão permitem somente uma gravação.
+- Execução dirigida conjunta de cálculo/origens/rastreabilidade/recarga/migration/concorrência: **35 testes passaram em sete arquivos**.
+- Typecheck e lint passaram após a implementação do serviço e da suíte de concorrência.
+- O ensaio de migration com falha de DDL foi repetido isoladamente: **1 teste passou**, incluindo rollback, upgrade e reaplicação.
+- Migration explícita e `scripts/verify-database.ts` em arquivo SQLite novo descartável: `status: ok`, 54 tabelas verificadas, 74 guards financeiros requeridos, zero violações FK; logística: sete tabelas, 36 guards, oito índices e oito invariantes.
+- Build Next.js passou em `.next-topup-foundation`, com banco em memória, segredo sintético efêmero e credenciais externas desabilitadas. Configurações `tsconfig.json` e `next-env.d.ts` foram preservadas byte a byte antes/depois do comando.
+- Fronteira HTTP: **9 testes passaram**, cobrindo quatro comandos, origem inválida, falta de sessão e envelope indevido; nenhuma chamada de serviço nos casos rejeitados.
+- Regressão executada por arquivo: contas **7/7**, ajustes **5/5**, origens **5/5**, créditos de refund **10/10**, fluxo pessoal de pedidos/armazém/pacotes **1/1**, finalização logística **12/12**. As tentativas conjuntas ficaram sem conclusão ou encerraram sem resumo; não foram consideradas aprovação. As repetições isoladas acima terminaram com código zero e resumo completo.
+- ESLint direcionado final dos serviços/schema/testes/verificador passou. `git diff --check` passou.
+
+Limites atuais: formulário e histórico detalhado ainda pendentes; atribuição de taxa a novos consumos de pedidos/pacotes, capacidade/reversão dessa atribuição e F2–F6 ainda pendentes. O serviço de recarga isolado **não representa F1 concluída**. Não liberar estes comandos em produção antes de concluir e validar a integração de consumo/taxas e os demais gates do plano.
