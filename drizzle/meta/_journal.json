@@ -239,6 +239,41 @@
       "when": 1793979691672,
       "tag": "0033_onboarding_milestones",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "6",
+      "when": 1794492649107,
+      "tag": "0034_topup_financing_foundation",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "6",
+      "when": 1794494800641,
+      "tag": "0035_freight_funding_and_settlements",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1794496539330,
+      "tag": "0036_freight_observed_refunds",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "6",
+      "when": 1794497477471,
+      "tag": "0037_freight_finance_integrity",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "6",
+      "when": 1794515473077,
+      "tag": "0038_freight_review_restitution_guards",
+      "breakpoints": true
     }
   ]
 }

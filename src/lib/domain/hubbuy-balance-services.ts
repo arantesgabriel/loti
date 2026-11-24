@@ -25,6 +25,10 @@ import { readRefundProductOrigins } from "./hubbuy-rights-reading";
 import { presentBalanceTraceability } from "./hubbuy-balance-traceability";
 import { readBalanceTraceContext } from "./hubbuy-balance-traceability-reading";
 import { manualBalanceAdjustmentServices } from "./hubbuy-balance-adjustments";
+import { freightRefunds } from "../db/freight-refund-schema";
+import { freightPayments,freightSources } from "../db/freight-schema";
+import { logisticsPackages } from "../db/schema";
+import { usesFreightFinance } from "./orders-workflow";
 
 const MAX_MINOR = 1_000_000_000_000;
 const minorSchema = z.number().int().min(0).max(MAX_MINOR);
@@ -556,14 +560,16 @@ export function hubbuyBalanceServices(db: AppDatabase, userId: string, expectedW
       const state = await calculateLedgerState(tx, account);
       const products = await readRefundProductOrigins(tx, account, state.entries.filter(entry => entry.sourceType === "refund_received").map(entry => entry.sourceId));
       const adjustments = await tx.select({ entryId: hubbuyBalanceAdjustments.balanceEntryId, kind: hubbuyBalanceAdjustments.kind, reason: financialOperations.reason }).from(hubbuyBalanceAdjustments).innerJoin(financialOperations, eq(financialOperations.id, hubbuyBalanceAdjustments.operationId)).where(eq(hubbuyBalanceAdjustments.accountId, accountId)).all();
+      const freightCredits=await usesFreightFinance(tx)?await tx.select({entryId:freightRefunds.creditEntryId,reason:financialOperations.reason}).from(freightRefunds).innerJoin(freightPayments,eq(freightPayments.id,freightRefunds.paymentId)).innerJoin(logisticsPackages,eq(logisticsPackages.id,freightPayments.packageId)).innerJoin(financialOperations,eq(financialOperations.id,freightRefunds.operationId)).where(and(eq(logisticsPackages.accountId,accountId),eq(logisticsPackages.workspaceId,account.workspaceId))):[];
+      const allOrigins=[...adjustments,...freightCredits.filter((row):row is {entryId:string;reason:string|null}=>row.entryId!==null).map(row=>({...row,kind:"freight_refund"}))];
       const reconciliation = await tx.select().from(hubbuyReconciliationRuns).where(eq(hubbuyReconciliationRuns.accountId, accountId)).get();
       const reconciliationEvents = await tx.select().from(hubbuyReconciliationEvents).where(eq(hubbuyReconciliationEvents.accountId, accountId)).orderBy(asc(hubbuyReconciliationEvents.occurredAt), asc(hubbuyReconciliationEvents.recordedAt)).all();
       return {
         account,
         ledgerBalanceCnyMinor: state.ledgerBalanceCnyMinor,
         reconciled: state.reconciled && state.ledgerBalanceCnyMinor === account.balanceCnyMinor,
-        rights: presentIndividualRights(state.rights, state.availableShares, state.entries, products, adjustments),
-        traceability: presentBalanceTraceability(state, await readBalanceTraceContext(tx, account, products, adjustments)),
+        rights: presentIndividualRights(state.rights, state.availableShares, state.entries, products, allOrigins),
+        traceability: presentBalanceTraceability(state, await readBalanceTraceContext(tx, account, products, allOrigins)),
         reconciliation: reconciliation ? { ...reconciliation, events: reconciliationEvents } : null,
       };
     });
@@ -586,6 +592,8 @@ export function hubbuyBalanceServices(db: AppDatabase, userId: string, expectedW
         .orderBy((descending ? desc : asc)(hubbuyBalanceEntries.sequence)).limit(limit + 1).all();
       const hasMore = selected.length > limit;
       const page = hasMore ? selected.slice(0, limit) : selected;
+      const freightLinks=page.length&&await usesFreightFinance(tx)?await tx.select({entryId:hubbuyBalanceConsumptions.debitEntryId,packageId:logisticsPackages.id,packageName:logisticsPackages.name,paymentId:freightPayments.id,funderId:freightSources.personId,amountCnyMinor:freightSources.nativeMinor,historicalBrlCents:freightSources.principalBrlCents}).from(freightSources).innerJoin(hubbuyBalanceConsumptions,eq(hubbuyBalanceConsumptions.id,freightSources.consumptionId)).innerJoin(freightPayments,eq(freightPayments.id,freightSources.paymentId)).innerJoin(logisticsPackages,and(eq(logisticsPackages.id,freightPayments.packageId),eq(logisticsPackages.accountId,account.id),eq(logisticsPackages.workspaceId,account.workspaceId))).where(inArray(hubbuyBalanceConsumptions.debitEntryId,page.map(row=>row.entry.id))):[];
+      const restoredDebits=await tx.select({id:hubbuyBalanceEntries.reversalOfEntryId}).from(hubbuyBalanceEntries).where(and(eq(hubbuyBalanceEntries.accountId,account.id),eq(hubbuyBalanceEntries.direction,"credit")));
       const adjustments = await tx.select().from(hubbuyBalanceAdjustments).where(eq(hubbuyBalanceAdjustments.accountId, accountId)).all();
       const actors = page.length ? await tx.select({ id: user.id, name: user.name }).from(user).where(inArray(user.id, page.flatMap(row => row.operation ? [row.operation.actorId] : []))).all() : [];
       const uses = await tx.select({ creditEntryId: hubbuyBalanceCreditShares.creditEntryId }).from(hubbuyBalanceConsumptions).innerJoin(hubbuyBalanceCreditShares, eq(hubbuyBalanceCreditShares.id, hubbuyBalanceConsumptions.creditShareId)).innerJoin(hubbuyBalanceEntries, eq(hubbuyBalanceEntries.id, hubbuyBalanceCreditShares.creditEntryId)).where(eq(hubbuyBalanceEntries.accountId, accountId)).all();
@@ -600,9 +608,10 @@ export function hubbuyBalanceServices(db: AppDatabase, userId: string, expectedW
         const adjustment = adjustments.find(row => row.balanceEntryId === entry.id);
         const reversedBy = adjustment ? adjustments.find(row => row.reversesAdjustmentId === adjustment.id) : undefined;
         const context = adjustment && operation ? JSON.parse(operation.contextJson) as { result?: { shares?: { personId: string; amountCnyMinor: number; historicalBrlCents: number }[] } } : null;
-        return { ...entry, occurredAt: operation?.occurredAt ?? null, operationRecordedAt: operation?.recordedAt ?? null, operationType: operation?.operationType ?? null, reason: operation?.reason ?? null, balanceAfterCnyMinor: descending ? balances.get(entry.sequence)! : balance,
+        const freight=freightLinks.filter(row=>row.entryId===entry.id);
+        return { ...entry,freight, occurredAt: operation?.occurredAt ?? null, operationRecordedAt: operation?.recordedAt ?? null, operationType: operation?.operationType ?? null, reason: operation?.reason ?? null, balanceAfterCnyMinor: descending ? balances.get(entry.sequence)! : balance,
           actorName: actors.find(row => row.id === operation?.actorId)?.name ?? null,
-          adjustment: adjustment ? { ...adjustment, reversedById: reversedBy?.id ?? null, canReverse: adjustment.kind !== "reversal" && !reversedBy && account.status === "active" && (entry.direction === "debit" || !uses.some(row => row.creditEntryId === entry.id)), shares: context?.result?.shares ?? [] } : null };
+          adjustment: adjustment ? { ...adjustment, reversedById: reversedBy?.id ?? null, canReverse: adjustment.kind !== "reversal" && !reversedBy && !freight.length&&!restoredDebits.some(row=>row.id===entry.id)&&account.status === "active" && (entry.direction === "debit" || !uses.some(row => row.creditEntryId === entry.id)), shares: context?.result?.shares ?? [] } : null };
       });
       return { accountId, entries, nextAfterSequence: hasMore ? page.at(-1)!.entry.sequence : null };
     });

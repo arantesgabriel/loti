@@ -15,6 +15,7 @@ import type { IndividualRight } from "@/lib/domain/hubbuy-rights-presentation";
 import { HubBuyIndividualRights } from "./hubbuy-individual-rights";
 import type { PersonBalanceHistory } from "@/lib/domain/hubbuy-balance-traceability";
 import { HubBuyBalanceAdjustmentSurface } from "./hubbuy-balance-adjustment-surface";
+import { TopupForm, TopupHistory } from "./hubbuy-topups";
 import { useWorkspace } from "@/components/workspace-provider";
 import type { hubbuyBalanceServices } from "@/lib/domain/hubbuy-balance-services";
 import "./hubbuy-accounts.css";
@@ -29,6 +30,7 @@ const formatBrlCents = formatBrlMinor;
 export function HubBuyAccountsPanel({ workspaceId, actorId, members, initialAccounts, personal = false }: { workspaceId: string; actorId: string; members: { id: string; name: string }[]; initialAccounts: Account[]; personal?: boolean }) {
   const { registerWorkspaceDraft } = useWorkspace();
   const [adjustmentDraft, setAdjustmentDraft] = useState<{ accountId: string; reversal?: { id: string; reason: string | null } } | null>(null);
+  const [topupAccountId,setTopupAccountId]=useState<string|null>(null);
   const [statementDetail, setStatementDetail] = useState<Statement["entries"][number] | null>(null);
   const [accounts, setAccounts] = useState<Account[]>(initialAccounts);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(initialAccounts[0]?.id ?? null);
@@ -65,7 +67,7 @@ export function HubBuyAccountsPanel({ workspaceId, actorId, members, initialAcco
   const actionsTrigger = useRef<HTMLButtonElement>(null);
   const menuAction = useRef<(() => void) | null>(null);
 
-  useEffect(() => registerWorkspaceDraft("hubbuy-account-editor", createOpen || !!reconcilingId || !!zeroActivation || !!archiveDraft || !!deleteDraft || !!adjustmentDraft), [registerWorkspaceDraft, createOpen, reconcilingId, zeroActivation, archiveDraft, deleteDraft, adjustmentDraft]);
+  useEffect(() => registerWorkspaceDraft("hubbuy-account-editor", createOpen || !!reconcilingId || !!zeroActivation || !!archiveDraft || !!deleteDraft || !!adjustmentDraft || !!topupAccountId), [registerWorkspaceDraft, createOpen, reconcilingId, zeroActivation, archiveDraft, deleteDraft, adjustmentDraft,topupAccountId]);
 
   async function refreshAccounts() {
     const result = await costRequest<Account[]>(`/api/hubbuy/accounts?workspaceId=${encodeURIComponent(workspaceId)}`);
@@ -305,6 +307,7 @@ export function HubBuyAccountsPanel({ workspaceId, actorId, members, initialAcco
                 action();
               }}>
                 {adjustmentAllowed && <DropdownMenu.Item onSelect={() => { menuAction.current = () => setAdjustmentDraft({ accountId: account.id }); }}><Plus size={16} aria-hidden="true"/>Registrar crédito/ajuste</DropdownMenu.Item>}
+                {adjustmentAllowed && <DropdownMenu.Item onSelect={()=>{menuAction.current=()=>setTopupAccountId(account.id);}}><Plus size={16} aria-hidden="true"/>Registrar recarga</DropdownMenu.Item>}
                 {account.status === "reconciling" && <>
                   {account.canActivateWithZero && <DropdownMenu.Item onSelect={() => { menuAction.current = () => { setZeroConfirmed(false); setZeroActivation(account); }; }}>Ativar com saldo zero</DropdownMenu.Item>}
                   <DropdownMenu.Item onSelect={() => { menuAction.current = () => { setReconcilingId(account.id); setReconciliationModes(current => ({ ...current, [account.id]: run?.mode ?? "remainder" })); }; }}>Conciliar saldo que já existia</DropdownMenu.Item>
@@ -322,6 +325,7 @@ export function HubBuyAccountsPanel({ workspaceId, actorId, members, initialAcco
               <span className="hubbuy-balance-symbol" aria-hidden="true"><Coins size={32} strokeWidth={1.5}/></span>
             </div>
             <HubBuyIndividualRights key={account.id} traceability={balance?.traceability} members={members} loading={!!balanceLoading[account.id]} failed={!!balanceErrors[account.id]} reconciled={!!balance?.reconciled && account.status !== "reconciling"}/>
+            <TopupHistory key={`topups:${account.id}`} account={balance?.account??account} onRefresh={async()=>{await loadBalance(account.id);await loadStatement(account.id);await refreshAccounts();}}/>
             {balanceErrors[account.id] && <div className="hubbuy-load-error" role="alert"><p>{balanceErrors[account.id]}</p><Button size="sm" variant="outline" disabled={balanceLoading[account.id]} onClick={() => void loadBalance(account.id)}>Tentar novamente</Button></div>}
             {!account.canDelete && account.deletionBlockReason && <div className="hubbuy-account-notice"><Info size={19} aria-hidden="true"/><p>{account.deletionBlockReason}</p></div>}
             {account.status === "reconciling" && reconcilingId === account.id && <div className="cost-account-reconcile">
@@ -357,8 +361,8 @@ export function HubBuyAccountsPanel({ workspaceId, actorId, members, initialAcco
               <table><caption className="sr-only">Extrato de {account.label}. Valores em reais são bases históricas.</caption><thead><tr><th scope="col">Data</th><th scope="col">Tipo</th><th scope="col">Descrição</th><th scope="col">Valor (CNY)</th><th scope="col">Base (R$)</th><th scope="col">Saldo após</th></tr></thead><tbody>
                 {statement?.entries.map(entry => <tr key={entry.id}>
                   <td className="hubbuy-entry-date"><time>{entry.occurredAt ?? entry.operationRecordedAt ? new Date(entry.occurredAt ?? entry.operationRecordedAt!).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }) : "Data não informada"}</time></td>
-                  <td><span className={`hubbuy-entry-type ${entry.direction}`}>{entry.direction === "credit" ? <ArrowUp size={14} aria-hidden="true"/> : <ArrowDown size={14} aria-hidden="true"/>}{entry.adjustment?.kind === "promotional_bonus" ? "Bônus promocional" : entry.adjustment?.kind === "documented_credit" ? "Crédito manual" : entry.adjustment?.kind === "documented_debit" ? "Ajuste de saída" : entry.adjustment?.kind === "reversal" ? "Anulação de ajuste" : entry.direction === "credit" ? "Crédito" : "Uso"}</span></td>
-                  <td>{entry.reason ?? (entry.sourceType === "opening_balance" ? "Abertura de saldo" : entry.sourceType === "refund_received" ? "Reembolso recebido" : entry.sourceType === "reversal" ? "Estorno" : "Movimentação da conta")}{entry.adjustment && <><small>{entry.adjustment.reversedById ? "Anulado · " : ""}{entry.adjustment.externalReference}</small><Button variant="ghost" size="sm" onClick={() => setStatementDetail(entry)}>Detalhes do ajuste</Button></>}</td>
+                  <td><span className={`hubbuy-entry-type ${entry.direction}`}>{entry.direction === "credit" ? <ArrowUp size={14} aria-hidden="true"/> : <ArrowDown size={14} aria-hidden="true"/>}{entry.freight.length ? "Pagamento de frete" : entry.adjustment?.kind === "promotional_bonus" ? "Bônus promocional" : entry.adjustment?.kind === "documented_credit" ? "Crédito manual" : entry.adjustment?.kind === "documented_debit" ? "Ajuste de saída" : entry.adjustment?.kind === "reversal" ? "Anulação de ajuste" : entry.direction === "credit" ? "Crédito" : "Uso"}</span></td>
+                  <td>{entry.freight.length>0&&<><strong>{[...new Set(entry.freight.map(row=>row.packageName))].join(", ")}</strong>{entry.sourceType==="manual_adjustment"&&<small>Débito legado associado ao frete</small>}</>}{entry.reason ?? (entry.sourceType === "opening_balance" ? "Abertura de saldo" : entry.sourceType === "refund_received" ? "Reembolso recebido" : entry.sourceType === "reversal" ? "Estorno" : "Movimentação da conta")}{entry.adjustment && <><small>{entry.adjustment.reversedById ? "Anulado · " : ""}{entry.adjustment.externalReference}</small><Button variant="ghost" size="sm" onClick={() => setStatementDetail(entry)}>Detalhes do ajuste</Button></>}</td>
                   <td className="hubbuy-entry-amount">{entry.direction === "credit" ? "+" : "−"} {formatCnyMinor(entry.amountCnyMinor)}</td>
                   <td>{entry.historicalBrlCents === null ? "Não informada" : formatBrlCents(entry.historicalBrlCents)}</td><td className="hubbuy-entry-amount">{formatCnyMinor(entry.balanceAfterCnyMinor)}</td>
                 </tr>)}
@@ -378,5 +382,6 @@ export function HubBuyAccountsPanel({ workspaceId, actorId, members, initialAcco
     <Confirm open={!!deleteDraft} title={deleteDraft?.discard ? "Anular cadastro incorreto?" : "Excluir cadastro do Loti?"} description={deleteDraft?.discard ? `${deleteDraft.account.label}: os valores de conciliação informados por engano serão estornados no Loti e o cadastro sairá da lista. Os registros originais e o motivo serão preservados na auditoria. Isso não movimenta dinheiro nem encerra sua conta no HubBuy.` : `${deleteDraft?.account.label ?? "A conta"} sairá da lista. A auditoria será preservada. Isso não encerra sua conta no HubBuy.`} label={deleteDraft?.discard ? "Anular e excluir" : "Excluir conta"} danger busy={saving} disabled={!deleteDraft?.reason.trim() || (!!deleteDraft?.discard && !deleteConfirmed)} onOpenChange={open => { if (!open && !saving) { setDeleteDraft(null); setDeleteError(null); setDeleteConfirmed(false); } }} onConfirm={() => void deleteAccount()}><label>Motivo da exclusão<textarea required maxLength={1000} rows={3} disabled={saving} value={deleteDraft?.reason ?? ""} onChange={event => setDeleteDraft(current => current && ({ ...current, reason: event.target.value, idempotencyKey: crypto.randomUUID() }))}/></label>{deleteDraft?.discard && <label className="cost-account-discard-confirmation"><input type="checkbox" disabled={saving} checked={deleteConfirmed} onChange={event => setDeleteConfirmed(event.target.checked)}/>Confirmo que os valores foram informados por engano e não correspondem a saldo ou recebimentos reais.</label>}{deleteError && <p role="alert">{deleteError}</p>}</Confirm>
     <Confirm open={!!zeroActivation} title="Confirmar saldo inicial zero?" description="Use esta recuperação apenas se a conta legada nunca teve saldo, lançamentos ou eventos anteriores. Contas com histórico precisam passar pela conciliação." label="Ativar com saldo ¥0" disabled={!zeroConfirmed} busy={saving} onOpenChange={open => { if (!open) { setZeroActivation(null); setZeroConfirmed(false); } }} onConfirm={() => zeroActivation && void activateAtZero(zeroActivation)}><label className="checkbox-label"><input type="checkbox" checked={zeroConfirmed} onChange={event => setZeroConfirmed(event.target.checked)}/>Confirmo que não havia saldo nem movimentações anteriores.</label></Confirm>
     <Confirm open={!!archiveDraft} title="Arquivar conta HubBuy?" description="Somente contas reconciliadas sem saldo podem ser arquivadas. O histórico permanece no extrato." label="Arquivar conta" danger disabled={!archiveReason.trim()} busy={saving} onOpenChange={open => { if (!open) { setArchiveDraft(null); setArchiveReason(""); } }} onConfirm={() => archiveDraft && void archiveAccount(archiveDraft)}><label>Motivo do arquivamento<textarea required maxLength={1000} rows={3} value={archiveReason} onChange={event => setArchiveReason(event.target.value)} /></label></Confirm>
+    {topupAccountId&&accounts.find(account=>account.id===topupAccountId)&&<TopupForm account={balances[topupAccountId]?.account??accounts.find(account=>account.id===topupAccountId)!} onClose={()=>setTopupAccountId(null)} onRefresh={async()=>{await loadBalance(topupAccountId);await loadStatement(topupAccountId);await refreshAccounts();}}/>}
   </section>;
 }

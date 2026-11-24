@@ -1,6 +1,7 @@
 import { DomainError } from "./errors";
 import { MAX_FINANCIAL_MINOR } from "./financial-money";
 import { describeOrigin, type ManualOrigin, type RefundProductOrigin, type RightOrigin } from "./hubbuy-rights-presentation";
+import {unitPersonMatrix} from "./warehouse-calculations";
 
 export type PaidOriginCost = {
   scope: "item";
@@ -11,10 +12,11 @@ export type PaidOriginCost = {
   previousBalanceCnyMinor: number | null;
   previousBalanceHistoricalBrlCents: number | null;
 };
-export type TraceDestination = { allocationId: string; label: string; beneficiaryId: string; beneficiaryName: string; orderReference: string | null };
+export type TraceDestination = { allocationId: string; label: string; beneficiaryId: string; beneficiaryName: string; orderReference: string | null; packageId?:string; packageName?:string; funderId?:string;funderName?:string;paymentId?:string };
 export type TraceOperation = { entryId: string; recordedAt: string | null; occurredAt: string | null; reason: string | null };
 export type TraceUse = {
   entryId: string; sequence: number; kind: string; amountCnyMinor: number; historicalBrlCents: number;
+  originalKind?:string;
   recordedAt: string | null; occurredAt: string | null; reason: string | null;
   destinations: (TraceDestination & { amountCnyMinor: number; historicalBrlCents: number })[];
   restored: { entryId: string; label: string; personCnyMinor: number }[];
@@ -30,6 +32,7 @@ export type BalanceOriginHistory = Omit<RightOrigin, "availableCnyMinor" | "avai
   purchaseName: string | null;
   paidCost: PaidOriginCost | null;
   creditedCnyMinor: number; purchaseConsumedCnyMinor: number; adjustmentDeltaCnyMinor: number;
+  freightConsumedCnyMinor?:number;
   availableCnyMinor: number; availableHistoricalBrlCents: number; validRefundCnyMinor: number | null;
   state: "available" | "partially_used" | "exhausted" | "adjusted";
   receipts: TraceReceipt[];
@@ -37,11 +40,12 @@ export type BalanceOriginHistory = Omit<RightOrigin, "availableCnyMinor" | "avai
 export type PersonBalanceHistory = { personId: string; availableCnyMinor: number; availableHistoricalBrlCents: number; origins: BalanceOriginHistory[] };
 type Entry = { id: string; sequence: number; direction: string; sourceType: string; sourceId: string; reversalOfEntryId: string | null };
 type Share = { id: string; creditEntryId: string; personId: string; amountCnyMinor: number; historicalBrlCents: number };
-type Consumption = { debitEntryId: string; creditShareId: string; amountCnyMinor: number; historicalBrlCents: number; paymentAllocationId: string | null };
+type Consumption = { id?:string;debitEntryId: string; creditShareId: string; amountCnyMinor: number; historicalBrlCents: number; paymentAllocationId: string | null };
 export type TraceState = { entries: Entry[]; shares: Share[]; consumptions: Consumption[]; rights: { personId: string; availableCnyMinor: number; availableHistoricalBrlCents: number }[] };
 export type TraceContext = {
   products: RefundProductOrigin[]; adjustments: ManualOrigin[]; operations: TraceOperation[];
   destinations: TraceDestination[]; costs: { costItemId: string; personId: string; cost: PaidOriginCost }[];
+  freightDestinations?:(TraceDestination & {consumptionId:string;amountCnyMinor:number;historicalBrlCents:number})[];
 };
 
 function minor(value: bigint) {
@@ -66,6 +70,17 @@ export function presentBalanceTraceability(state: TraceState, context: TraceCont
     byDebit.set(use.debitEntryId, [...(byDebit.get(use.debitEntryId) ?? []), use]);
   }
   for (const entry of state.entries) if (entry.direction === "credit" && entry.reversalOfEntryId && entries.get(entry.reversalOfEntryId)?.direction === "debit") restorations.set(entry.reversalOfEntryId, [...(restorations.get(entry.reversalOfEntryId) ?? []), entry]);
+  const freightUses=new Set((context.freightDestinations??[]).map(row=>row.consumptionId));
+  const restorationCache=new Map<string,Map<Consumption,{entryId:string;label:string;personCnyMinor:number}[]>>();
+  function freightRestitutions(debitId:string,personId:string){
+    const key=JSON.stringify([debitId,personId]),saved=restorationCache.get(key);if(saved)return saved;
+    const original=(byDebit.get(debitId)??[]).filter(use=>shares.get(use.creditShareId)?.personId===personId).sort((a,b)=>(a.id??a.creditShareId).localeCompare(b.id??b.creditShareId));
+    const columns=(restorations.get(debitId)??[]).map(entry=>({personId:entry.id,amountCents:(byCredit.get(entry.id)??[]).filter(share=>share.personId===personId).reduce((sum,share)=>sum+share.amountCnyMinor,0)}));
+    const total=original.reduce((sum,use)=>sum+use.amountCnyMinor,0),restored=columns.reduce((sum,row)=>sum+row.amountCents,0);
+    if(restored>total)throw new DomainError("O frete tem restituição superior ao consumo original.",409,"FREIGHT_TRACE_INTEGRITY");
+    const matrix=unitPersonMatrix(original.map(use=>use.amountCnyMinor),[...columns,{personId:"unrestored",amountCents:total-restored}]);
+    const result=new Map(original.map((use,index)=>[use,matrix[index].filter(row=>row.personId!=="unrestored"&&row.amountCents>0).map(row=>({entryId:row.personId,label:describeOrigin(entries.get(row.personId),row.personId,products,context.adjustments).label,personCnyMinor:row.amountCents}))]));restorationCache.set(key,result);return result;
+  }
   const people = new Map<string, Map<string, BalanceOriginHistory>>();
   for (const share of state.shares) {
     const entry = entries.get(share.creditEntryId);
@@ -74,11 +89,13 @@ export function presentBalanceTraceability(state: TraceState, context: TraceCont
     const groups = people.get(share.personId) ?? new Map<string, BalanceOriginHistory>();
     const group = groups.get(descriptor.id) ?? { ...descriptor, purchaseName: descriptor.costItemId ? products.get(entry.sourceId)?.purchaseName ?? null : null, paidCost: descriptor.costItemId ? costs.get(`${descriptor.costItemId}:${share.personId}`) ?? null : null, creditedCnyMinor: 0, purchaseConsumedCnyMinor: 0, adjustmentDeltaCnyMinor: 0, availableCnyMinor: 0, availableHistoricalBrlCents: 0, validRefundCnyMinor: descriptor.kind === "refund_product" ? 0 : null, state: "available" as const, receipts: [] };
     const useGroups = new Map<string, TraceUse>();
-    let used = 0n, adjusted = 0n, usedBrl = 0n, receiptReversed = 0n;
+    let used = 0n, freightUsed=0n,adjusted = 0n, usedBrl = 0n, receiptReversed = 0n;
     for (const use of byShare.get(share.id) ?? []) {
       const debit = entries.get(use.debitEntryId);
       if (!debit || debit.direction !== "debit") throw new DomainError("Destino do consumo indisponível.", 409);
-      if (debit.sourceType === "purchase_payment") used += BigInt(use.amountCnyMinor); else adjusted += BigInt(use.amountCnyMinor);
+      const freightTargets=use.id?(context.freightDestinations??[]).filter(row=>row.consumptionId===use.id):[];
+      const isFreight=debit.sourceType==="package_freight_payment"||freightTargets.length>0;
+      if (debit.sourceType === "purchase_payment") used += BigInt(use.amountCnyMinor); else if(isFreight)freightUsed+=BigInt(use.amountCnyMinor);else adjusted += BigInt(use.amountCnyMinor);
       if (debit.reversalOfEntryId === entry.id) receiptReversed += BigInt(use.amountCnyMinor);
       usedBrl += BigInt(use.historicalBrlCents);
       const operation = operations.get(debit.id);
@@ -88,6 +105,12 @@ export function presentBalanceTraceability(state: TraceState, context: TraceCont
       }) };
       row.amountCnyMinor = add(row.amountCnyMinor, use.amountCnyMinor);
       row.historicalBrlCents = add(row.historicalBrlCents, use.historicalBrlCents);
+      if(isFreight){row.kind="package_freight_payment";row.originalKind=debit.sourceType;
+        if(!useGroups.has(debit.id))row.restored=[];
+        for(const restored of freightRestitutions(debit.id,share.personId).get(use)??[]){const prior=row.restored.find(item=>item.entryId===restored.entryId);if(prior)prior.personCnyMinor=add(prior.personCnyMinor,restored.personCnyMinor);else row.restored.push({...restored});}
+        if(freightTargets.reduce((n,target)=>n+BigInt(target.amountCnyMinor),0n)!==BigInt(use.amountCnyMinor)||freightTargets.reduce((n,target)=>n+BigInt(target.historicalBrlCents),0n)!==BigInt(use.historicalBrlCents))throw new DomainError("As parcelas do frete não fecham com o consumo original.",409,"FREIGHT_TRACE_INTEGRITY");
+        for(const target of freightTargets){const prior=row.destinations.find(item=>item.allocationId===target.allocationId);if(prior){prior.amountCnyMinor=add(prior.amountCnyMinor,target.amountCnyMinor);prior.historicalBrlCents=add(prior.historicalBrlCents,target.historicalBrlCents);}else row.destinations.push({...target});}
+      }
       const target = use.paymentAllocationId ? destinations.get(use.paymentAllocationId) : null;
       if (target) {
         const existing = row.destinations.find(row => row.allocationId === target.allocationId);
@@ -100,17 +123,20 @@ export function presentBalanceTraceability(state: TraceState, context: TraceCont
     const restoredFrom = entry.reversalOfEntryId ? (byDebit.get(entry.reversalOfEntryId) ?? []).flatMap(use => {
       const original = shares.get(use.creditShareId);
       if (!original || original.personId !== share.personId) return [];
-      return [{ entryId: original.creditEntryId, sourceLabel: describeOrigin(entries.get(original.creditEntryId), original.creditEntryId, products, context.adjustments).label, amountCnyMinor: use.amountCnyMinor }];
+      const freight=(byDebit.get(entry.reversalOfEntryId!)??[]).some(row=>row.id&&freightUses.has(row.id));
+      const amount=freight?freightRestitutions(entry.reversalOfEntryId!,share.personId).get(use)?.find(row=>row.entryId===entry.id)?.personCnyMinor??0:use.amountCnyMinor;
+      return amount?[{ entryId: original.creditEntryId, sourceLabel: describeOrigin(entries.get(original.creditEntryId), original.creditEntryId, products, context.adjustments).label, amountCnyMinor: amount }]:[];
     }) : [];
     group.receipts.push({ entryId: entry.id, shareId: share.id, sequence: entry.sequence, sourceReference: descriptor.kind === "refund_product" ? entry.sourceId : entry.id, creditedCnyMinor: share.amountCnyMinor, historicalBrlCents: share.historicalBrlCents, receiptReversedCnyMinor: minor(receiptReversed), recordedAt: operation?.recordedAt ?? null, occurredAt: operation?.occurredAt ?? null, reason: operation?.reason ?? null, uses: [...useGroups.values()].sort((a, b) => a.sequence - b.sequence), restoredFrom });
     group.creditedCnyMinor = add(group.creditedCnyMinor, share.amountCnyMinor);
     group.purchaseConsumedCnyMinor = add(group.purchaseConsumedCnyMinor, minor(used));
+    group.freightConsumedCnyMinor=add(group.freightConsumedCnyMinor??0,minor(freightUsed));
     const adjustmentAmount = add(-group.adjustmentDeltaCnyMinor, minor(adjusted));
     group.adjustmentDeltaCnyMinor = adjustmentAmount ? -adjustmentAmount : 0;
-    group.availableCnyMinor = add(group.availableCnyMinor, minor(BigInt(share.amountCnyMinor) - used - adjusted));
+    group.availableCnyMinor = add(group.availableCnyMinor, minor(BigInt(share.amountCnyMinor) - used - freightUsed - adjusted));
     group.availableHistoricalBrlCents = add(group.availableHistoricalBrlCents, minor(BigInt(share.historicalBrlCents) - usedBrl));
     if (group.validRefundCnyMinor !== null) group.validRefundCnyMinor = add(group.validRefundCnyMinor, minor(BigInt(share.amountCnyMinor) - receiptReversed));
-    group.state = group.adjustmentDeltaCnyMinor ? "adjusted" : !group.availableCnyMinor ? "exhausted" : group.purchaseConsumedCnyMinor ? "partially_used" : "available";
+    group.state = group.adjustmentDeltaCnyMinor ? "adjusted" : !group.availableCnyMinor ? "exhausted" : group.purchaseConsumedCnyMinor || group.freightConsumedCnyMinor ? "partially_used" : "available";
     groups.set(descriptor.id, group); people.set(share.personId, groups);
   }
   const result = state.rights.map(right => {

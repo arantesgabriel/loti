@@ -3,3 +3,6 @@ import type { AppDatabase } from "../db/connection";
 export async function usesOrdersWorkflow(db: Pick<AppDatabase,"select">) {
   return !!await db.select({name:sql<string>`name`}).from(sql`sqlite_master`).where(sql`type='table' AND name='order_warehouse_positions'`).get();
 }
+export async function usesFreightFinance(db: Pick<AppDatabase,"select">) {
+  return !!await db.select({name:sql<string>`name`}).from(sql`sqlite_master`).where(sql`type='table' AND name='topup_fee_allocations'`).get();
+}

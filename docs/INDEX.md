@@ -47,6 +47,7 @@ Authentication email extension: [`31_AUTH_EMAIL_SECURITY_PLAN.md`](31_AUTH_EMAIL
 | `41_PERSONAL_PURCHASES_AND_HISTORY_HANDOFF.md` | Frente 3 implementation handoff for personal purchases and History, changed files, validation and explicit dependencies for Frente 4 |
 | `42_PERSONAL_ORDERS_WAREHOUSE_PACKAGES_HANDOFF.md` | Frente 4 handoff for owner-only personal Pedidos, Armazém, Pacotes, costs and HubBuy accounts |
 | `43_PUBLIC_SIGNUP_AND_ACTIVATION_HANDOFF.md` | Frente 5 handoff for public personal-account signup, mandatory email activation and invitation-only group entry |
+| `47_TOPUPS_PACKAGE_FUNDING_AND_SETTLEMENTS_PLAN.md` | Complete phased plan for funded top-ups with fees, package freight balance payments, unit allocation, individual obligations, explicit conversion and manual settlements |
 | `audits/2026-10-17_HUBBUY_BALANCE_AND_MIXED_PAYMENTS.md` | Technical and functional investigation supporting the HubBuy balance and mixed-payment proposal |
 | `design/REFERENCES.md` | Figma and palette inspiration URLs |
 | `design/PACKAGES_AND_COSTS_REFERENCES.md` | Approved A/B/C/D visual references, images and acceptance for Pacotes e custos |

@@ -1,0 +1,14 @@
+import {expect,it} from "vitest";
+import {recoverTopupPrincipal} from "@/lib/domain/topup-recovery";
+type State=Parameters<typeof recoverTopupPrincipal>[0];
+it("withdraws an exact root from fragmented restorations without leaving BRL in an exhausted CNY lot",()=>{
+ const entries=[{id:"root",sequence:0,direction:"credit",sourceType:"topup",amountCnyMinor:5,historicalBrlCents:3,reversalOfEntryId:null},{id:"other",sequence:1,direction:"credit",sourceType:"topup",amountCnyMinor:2,historicalBrlCents:7,reversalOfEntryId:null},{id:"paid",sequence:2,direction:"debit",sourceType:"package_freight_payment",amountCnyMinor:7,historicalBrlCents:10,reversalOfEntryId:null},{id:"restored-a",sequence:3,direction:"credit",sourceType:"reversal",amountCnyMinor:5,historicalBrlCents:9,reversalOfEntryId:"paid"},{id:"restored-b",sequence:4,direction:"credit",sourceType:"reversal",amountCnyMinor:2,historicalBrlCents:1,reversalOfEntryId:"paid"}];
+ const shares=entries.filter(row=>row.direction==="credit").map(row=>({id:`share-${row.id}`,creditEntryId:row.id,personId:"bob",amountCnyMinor:row.amountCnyMinor,historicalBrlCents:row.historicalBrlCents}));
+ const consumptions=[{id:"used-root",debitEntryId:"paid",creditShareId:"share-root",amountCnyMinor:5,historicalBrlCents:3},{id:"used-other",debitEntryId:"paid",creditShareId:"share-other",amountCnyMinor:2,historicalBrlCents:7}];
+ const availableShares=shares.map(row=>({...row,availableCnyMinor:row.creditEntryId.startsWith("restored")?row.amountCnyMinor:0,availableHistoricalBrlCents:row.creditEntryId.startsWith("restored")?row.historicalBrlCents:0}));
+ const state={entries,shares,consumptions,availableShares} as unknown as State;
+ const recovered=recoverTopupPrincipal(state,"root",new Set());expect(recovered.reduce((n,row)=>n+row.amountCnyMinor,0)).toBe(5);expect(recovered.reduce((n,row)=>n+row.historicalBrlCents,0)).toBe(3);
+ for(const lot of availableShares){const used=recovered.find(row=>row.creditShareId===lot.id);if(!used)continue;expect(used.amountCnyMinor).toBeLessThanOrEqual(lot.availableCnyMinor);expect(used.historicalBrlCents).toBeLessThanOrEqual(lot.availableHistoricalBrlCents);if(used.amountCnyMinor===lot.availableCnyMinor)expect(used.historicalBrlCents).toBe(lot.availableHistoricalBrlCents);lot.availableCnyMinor-=used.amountCnyMinor;lot.availableHistoricalBrlCents-=used.historicalBrlCents;}
+ entries.push({id:"root-undo",sequence:5,direction:"debit",sourceType:"reversal",amountCnyMinor:5,historicalBrlCents:3,reversalOfEntryId:"root"});consumptions.push(...recovered.map((row,index)=>({...row,id:`root-undo-${index}`,debitEntryId:"root-undo"})));
+ const other=recoverTopupPrincipal(state,"other",new Set(["root-undo"]));expect(other.reduce((n,row)=>n+row.amountCnyMinor,0)).toBe(2);expect(other.reduce((n,row)=>n+row.historicalBrlCents,0)).toBe(7);
+});

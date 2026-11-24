@@ -53,6 +53,27 @@ export function AdditionalOrdersPanel({ detail, locked, busy, mutate, createPack
   const [advances, setAdvances] = useState<AdvanceDraft[]>([]);
   const [discardOrder, setDiscardOrder] = useState<Order | null>(null);
   const [packageId, setPackageId] = useState("");
+  const [feeReview,setFeeReview]=useState<{orderId:string;input:Record<string,unknown>;fee:number}|null>(null);
+  const [checkingFee,setCheckingFee]=useState(false);
+  const pendingKey=`loti.additional-payment:${detail.tracking.workspaceId}:${detail.tracking.id}`;
+  const [pendingPayment,setPendingPayment]=useState<{orderId:string;input:Record<string,unknown>}|null>(()=>{try{return JSON.parse(sessionStorage.getItem(pendingKey)??"null");}catch{return null;}});
+  async function submitPayment(orderId:string,input:Record<string,unknown>){
+    const pending={orderId,input};
+    try{sessionStorage.setItem(pendingKey,JSON.stringify(pending));}catch{throw new Error("Libere o armazenamento da sessão para recuperar uma resposta perdida antes de confirmar.");}
+    setPendingPayment(pending);setCheckingFee(true);
+    try{
+      const response=await costRequest(`/api/packages/${detail.tracking.id}`,{operation:"order.additional.pay_mixed",orderId,input},detail.tracking.workspaceId);
+      if(!response.ok){
+        if(response.status>=400&&response.status<500){try{sessionStorage.removeItem(pendingKey);}catch{}setPendingPayment(null);setFeeReview(null);}
+        throw new Error(response.status===0||response.status>=500?"A resposta ficou incerta. Confira a tentativa pendente antes de iniciar outra.":response.error??"Confira uma nova prévia.");
+      }
+      try{sessionStorage.removeItem(pendingKey);}catch{}setPendingPayment(null);setFeeReview(null);
+      // The existing mutation callback refreshes every affected reader. Its
+      // identical command replays the confirmed operation without a second debit.
+      await mutate("order.additional.pay_mixed",pending);
+      setActiveOrderId(orderId);setAutoSelectLatestDraft(false);toast.success("Pagamento e taxa de recarga registrados.");
+    }finally{setCheckingFee(false);}
+  }
 
   const accountKey = activeAccounts.map(account => account.id).join("|");
   const selectedAccountId = activeAccounts.some(account => account.id === accountId) ? accountId : activeAccounts[0]?.id ?? "";
@@ -191,25 +212,34 @@ export function AdditionalOrdersPanel({ detail, locked, busy, mutate, createPack
   }
 
   function updateAdvance(index: number, patch: Partial<AdvanceDraft>) {
+    setFeeReview(null);
     setAdvances(current => current.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } : row));
   }
 
   async function payOrder(order: Order, event: React.FormEvent) {
     event.preventDefault();
     try {
+      if(feeReview?.orderId===order.id){
+        await submitPayment(order.id,feeReview.input);return;
+      }
       const estimate = preview(order);
       if (estimate.error) throw new Error(estimate.error);
       const external = estimate.externalCnyMinor > 0 ? {
         paymentMethod, principalBrlCents: readMinor(externalBrl, "BRL", "o principal externo em BRL"),
         conversionCnyMinor: estimate.externalCnyMinor, conversionBrlCents: readMinor(externalBrl, "BRL", "o BRL da conversão"),
       } : null;
-      const ok = await mutate("order.additional.pay_mixed", { orderId: order.id, input: {
+      const input = {
         expectedRevision: detail.tracking.revision, idempotencyKey: crypto.randomUUID(), useOwnBalance,
         balanceFunding: estimate.requests.map(row => ({ costItemId: row.costItemId, costComponent: row.component, beneficiaryId: row.beneficiaryId, lenderId: row.lenderId, cnyMinor: row.cnyMinor })),
         external,
-      } });
-      if (ok) { setActiveOrderId(order.id); setAutoSelectLatestDraft(false); toast.success("Pagamento registrado. Agora associe as unidades ao pacote."); }
+      };
+      setCheckingFee(true);
+      const serverPreview=await costRequest<{topupFeeBrlCents:number}>(`/api/packages/${detail.tracking.id}`,{operation:"order.additional.preview_payment",orderId:order.id,input},detail.tracking.workspaceId);
+      if(!serverPreview.ok||!serverPreview.data)throw new Error(serverPreview.error??"Não foi possível conferir a taxa da recarga.");
+      if(serverPreview.data.topupFeeBrlCents>0){setFeeReview({orderId:order.id,input:{...input,confirmedTopupFeeBrlCents:serverPreview.data.topupFeeBrlCents},fee:serverPreview.data.topupFeeBrlCents});return;}
+      await submitPayment(order.id,input);
     } catch (error) { toast.error(error instanceof Error ? error.message : "Confira a composição do pagamento."); }
+    finally {setCheckingFee(false);}
   }
 
   async function confirmDiscard() {
@@ -301,8 +331,9 @@ export function AdditionalOrdersPanel({ detail, locked, busy, mutate, createPack
       </form>}
     {!activeOrder && draftOrders.length > 0 && <details className="cost-order-existing-drafts"><summary>Retomar rascunho pendente ({draftOrders.length})</summary><div>{draftOrders.map(order => <button key={order.id} type="button" disabled={busy} onClick={() => { setActiveOrderId(order.id); setAutoSelectLatestDraft(false); setEditingDraftId(null); }}><span><strong>{order.items[0]?.item?.name ?? "Produto adicional"}</strong><small>{order.account?.label ?? "Conta HubBuy"} · falta confirmar pagamento</small></span><ArrowRight size={16}/></button>)}</div></details>}
       </>}
-      {activeOrder?.state === "draft" && !isEditingDraft && activeOrder.accountId && <div className="cost-additional-order-flow">
-        <form className="cost-additional-order-payment" onSubmit={event => void payOrder(activeOrder, event)}>
+      {pendingPayment&&<section className="cost-additional-order-flow"><h3>Tentativa de pagamento pendente</h3><p>Confira a mesma tentativa para recuperar o resultado e evitar uma segunda baixa.</p><Button disabled={busy||checkingFee} onClick={()=>void submitPayment(pendingPayment.orderId,pendingPayment.input).catch(error=>toast.error(error.message))}>Conferir tentativa pendente</Button></section>}
+      {!pendingPayment&&activeOrder?.state === "draft" && !isEditingDraft && activeOrder.accountId && <div className="cost-additional-order-flow">
+        <form className="cost-additional-order-payment" onChange={()=>setFeeReview(null)} onSubmit={event => void payOrder(activeOrder, event)}>
           <article className="cost-order-product-summary" aria-label="Resumo do produto">
             <div className="cost-order-summary-items">{activeOrder.items.map(row => <div className="cost-order-summary-item" key={row.cost.id}>
               <ProductCategoryMarker visualKey={row.item?.visualKey ?? "generic"}/>
@@ -324,11 +355,12 @@ export function AdditionalOrdersPanel({ detail, locked, busy, mutate, createPack
             <label>Quem financia<select value={advance.lenderId} onChange={event => updateAdvance(index, { lenderId: event.target.value })}><option value="">Escolher financiador</option>{detail.members.filter(member => member.id !== advance.beneficiaryId).map(member => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
             <label>Componente<select value={advance.component} onChange={event => updateAdvance(index, { component: event.target.value as "product" | "china" })}><option value="product">Produto</option><option value="china">Frete China</option></select></label>
             <label>Valor CNY<input inputMode="decimal" value={advance.amount} onChange={event => updateAdvance(index, { amount: event.target.value })} placeholder="0,00"/></label>
-            <Button type="button" variant="ghost" size="sm" onClick={() => setAdvances(current => current.filter((_, rowIndex) => rowIndex !== index))}>Remover adiantamento</Button>
-          </div>)}<Button type="button" variant="outline" className="cost-order-add-advance" onClick={() => setAdvances(current => [...current, { component: "product", beneficiaryId: "", lenderId: "", amount: "" }])}>Adicionar adiantamento</Button></div>
+            <Button type="button" variant="ghost" size="sm" onClick={() => {setFeeReview(null);setAdvances(current => current.filter((_, rowIndex) => rowIndex !== index));}}>Remover adiantamento</Button>
+          </div>)}<Button type="button" variant="outline" className="cost-order-add-advance" onClick={() => {setFeeReview(null);setAdvances(current => [...current, { component: "product", beneficiaryId: "", lenderId: "", amount: "" }]);}}>Adicionar adiantamento</Button></div>
           {(estimate?.externalCnyMinor ?? 0) > 0 && <div className="cost-order-external-fields"><label>Método do complemento<select value={paymentMethod} onChange={event => setPaymentMethod(event.target.value as "pix" | "card")}><option value="pix">PIX · {detail.settings.pixBps / 100}%</option><option value="card">Cartão · {detail.settings.cardBps / 100}%</option></select></label><label>Principal externo em BRL<input inputMode="decimal" required value={externalBrl} onChange={event => setExternalBrl(event.target.value)} placeholder="0,00"/></label></div>}
           {estimate?.error && <small className="error" role="alert">{estimate.error}</small>}
-          <div className="cost-order-footer"><Button type="submit" disabled={busy || !!estimate?.error || (estimate?.externalCnyMinor ?? 0) > 0 && !externalBrl.trim()}>{busy ? "Salvando…" : "Confirmar compra"}</Button><Button type="button" variant="outline" disabled={busy} onClick={() => setDiscardOrder(activeOrder)}>Descartar rascunho</Button></div>
+          {feeReview?.orderId===activeOrder.id&&<p role="status">Taxa de recarga atribuída a este pedido: <strong>{formatBrlMinor(feeReview.fee)}</strong>. A base histórica dos lotes e o dinheiro novo permanecem separados.</p>}
+          <div className="cost-order-footer"><Button type="submit" disabled={busy || checkingFee || !!estimate?.error || (estimate?.externalCnyMinor ?? 0) > 0 && !externalBrl.trim()}>{busy||checkingFee ? "Conferindo…" : feeReview?.orderId===activeOrder.id ? "Confirmar compra com taxa da recarga" : "Confirmar compra"}</Button><Button type="button" variant="outline" disabled={busy} onClick={() => setDiscardOrder(activeOrder)}>Descartar rascunho</Button></div>
         </form>
       </div>}
       {activeOrder?.state === "recorded" && <div className="cost-additional-order-flow">

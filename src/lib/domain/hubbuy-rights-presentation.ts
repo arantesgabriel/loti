@@ -3,7 +3,7 @@ import { MAX_FINANCIAL_MINOR } from "./financial-money";
 
 export type RightOrigin = {
   id: string;
-  kind: "refund_product" | "opening_balance" | "reconciliation" | "restored_balance" | "promotional_bonus" | "manual_credit" | "manual_reversal" | "unknown";
+  kind: "refund_product" | "freight_refund" | "opening_balance" | "reconciliation" | "restored_balance" | "promotional_bonus" | "manual_credit" | "manual_reversal" | "topup" | "unknown";
   label: string;
   variant: string | null;
   trackingId: string | null;
@@ -49,13 +49,16 @@ function checkedMinor(value: bigint): number {
 export type ManualOrigin = { entryId: string; kind: string; reason: string | null };
 export function describeOrigin(entry: OriginEntry | undefined, creditEntryId: string, products: Map<string, RefundProductOrigin>, adjustments: ManualOrigin[]): Omit<RightOrigin, "availableCnyMinor" | "availableHistoricalBrlCents"> {
   const manual = adjustments.find(row => row.entryId === creditEntryId);
+  if(manual?.kind==="freight_refund")return {id:`entry:${creditEntryId}`,kind:"freight_refund",label:`Devolução de frete recebida${manual.reason?` · ${manual.reason}`:""}`,variant:null,trackingId:null,costItemId:null};
   if (manual) return { id: `entry:${creditEntryId}`, kind: manual.kind === "promotional_bonus" ? "promotional_bonus" : manual.kind === "reversal" ? "manual_reversal" : "manual_credit", label: `${manual.kind === "promotional_bonus" ? "Bônus promocional" : manual.kind === "reversal" ? "Saldo restaurado por anulação" : "Crédito manual"}${manual.reason ? ` · ${manual.reason}` : ""}`, variant: null, trackingId: null, costItemId: null };
   const product = entry?.sourceType === "refund_received" ? products.get(entry.sourceId) : undefined;
   if (product) return { id: `refund-product:${product.costItemId}`, kind: "refund_product", label: product.name, variant: product.variant, trackingId: product.trackingId, costItemId: product.costItemId };
   const kind = entry?.sourceType === "opening_balance" ? "opening_balance"
+    : entry?.sourceType === "topup" ? "topup"
     : entry?.sourceType === "manual_adjustment" ? "reconciliation"
     : entry?.sourceType === "reversal" ? "restored_balance" : "unknown";
   const label = kind === "opening_balance" ? "Saldo inicial conciliado"
+    : kind === "topup" ? "Recarga"
     : kind === "reconciliation" ? "Crédito de conciliação"
     : kind === "restored_balance" ? "Saldo restaurado por correção" : "Origem não identificada";
   return { id: `entry:${creditEntryId}`, kind, label, variant: null, trackingId: null, costItemId: null };

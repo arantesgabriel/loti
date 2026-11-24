@@ -6,7 +6,8 @@ import { DomainError } from "./errors";
 import { calculateCostTracking } from "./package-cost-calculations";
 import { projectCostFinancialDisplay } from "./package-cost-display";
 import { CostTransaction } from "./purchase-cost-initialization";
-import { usesOrdersWorkflow } from "./orders-workflow";
+import { usesOrdersWorkflow, usesFreightFinance } from "./orders-workflow";
+import { topupFeeAllocations, topupFeeOrderShares } from "../db/freight-schema";
 
 type CostReadDatabase = Pick<AppDatabase, "select">;
 type CostDatabase = CostReadDatabase | CostTransaction;
@@ -97,12 +98,15 @@ export async function readCostTracking(db: CostDatabase, userId: string, trackin
   const calculatedCostItems = itemCosts.filter(cost => cost.purchaseItemId !== null || cost.additionalOrderItemId !== null && recordedAdditionalOrderIds.has(cost.orderId));
   const calculatedCostItemIds = new Set(calculatedCostItems.map(cost => cost.id));
   const allocationsByCostItem = new Map<string, typeof allocationRows>();
+  const feeAssignments = await usesFreightFinance(db) && orderIds.length ? await db.select().from(topupFeeAllocations).where(inArray(topupFeeAllocations.orderId,orderIds)) : [];
+  const liveFees = feeAssignments.filter(row=>!row.reversesId && !feeAssignments.some(reverse=>reverse.reversesId===row.id));
+  const topupFeeShares = liveFees.length ? await db.select().from(topupFeeOrderShares).where(inArray(topupFeeOrderShares.feeAllocationId,liveFees.map(row=>row.id))) : [];
   for (const row of allocationRows) {
     const allocation = row.purchase_payment_allocations;
     allocationsByCostItem.set(allocation.costItemId, [...(allocationsByCostItem.get(allocation.costItemId) ?? []), row]);
   }
   const allocationTotal = (costItemId: string, component: "product" | "china", field: "principalBrlCents" | "historicalBrlCents" | "feeBrlCents") =>
-    (allocationsByCostItem.get(costItemId) ?? []).filter(row => row.purchase_payment_allocations.costComponent === component).reduce((sum, row) => sum + row.purchase_payment_allocations[field], 0);
+    (allocationsByCostItem.get(costItemId) ?? []).filter(row => row.purchase_payment_allocations.costComponent === component).reduce((sum, row) => sum + row.purchase_payment_allocations[field], 0) + (field==="feeBrlCents" && component==="product" ? topupFeeShares.filter(row=>row.costItemId===costItemId).reduce((sum,row)=>sum+row.amountBrlCents,0):0);
   const costItemByPaymentAllocation = new Map(allocationRows.map(row => [row.purchase_payment_allocations.id, row.purchase_payment_allocations.costItemId]));
   const financingEntriesByConsumption = new Map<string, typeof financingEntries>();
   for (const entry of financingEntries) financingEntriesByConsumption.set(entry.consumptionId, [...(financingEntriesByConsumption.get(entry.consumptionId) ?? []), entry]);
@@ -203,13 +207,15 @@ export async function readCostTracking(db: CostDatabase, userId: string, trackin
     const nativeTotal = orderCosts.reduce((sum, cost) => sum + BigInt(cost.nativeProductCnyMinor ?? 0) + BigInt(cost.nativeChinaCnyMinor ?? 0), 0n);
     const principalBrlCents = paymentComponents.filter(component => component.sourceType !== "balance").reduce((sum, component) => sum + component.principalBrlCents, 0);
     const historicalBrlCents = paymentComponents.filter(component => component.sourceType === "balance").reduce((sum, component) => sum + component.principalBrlCents, 0);
-    const feeBrlCents = paymentComponents.reduce((sum, component) => sum + component.feeBrlCents, 0);
+    const externalFeeBrlCents = paymentComponents.reduce((sum, component) => sum + component.feeBrlCents, 0);
+    const topupFeeBrlCents = liveFees.filter(row=>row.orderId===order.id).reduce((sum,row)=>sum+row.amountBrlCents,0);
+    const feeBrlCents = externalFeeBrlCents + topupFeeBrlCents;
     return {
       ...order,
       account: order.accountId ? accountsById.get(order.accountId) ?? null : null,
       charge: charges.find(charge => charge.orderId === order.id) ?? null,
       nativeCnyMinor: nativeTotal <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(nativeTotal) : null,
-      principalBrlCents, historicalBrlCents, feeBrlCents, totalCostBrlCents: principalBrlCents + historicalBrlCents + feeBrlCents, newMoneyBrlCents: principalBrlCents + feeBrlCents,
+      principalBrlCents, historicalBrlCents, feeBrlCents, topupFeeBrlCents, totalCostBrlCents: principalBrlCents + historicalBrlCents + feeBrlCents, newMoneyBrlCents: principalBrlCents + externalFeeBrlCents,
       items: orderCosts.map(cost => {
         const item = cost.additionalOrderItemId ? additionalItemById.get(cost.additionalOrderItemId) ?? null : cost.purchaseItemId ? purchaseItemsById.get(cost.purchaseItemId) ?? null : null;
         const participants = participantsByCostItem.get(cost.id) ?? [];
@@ -450,13 +456,16 @@ export async function readWarehouseCostKeys(db: CostReadDatabase, workspaceId: s
     const superseded = new Set(corrections.map(row => row.id));
     const recorded = new Set(orders.filter(row => row.kind === "additional" && row.state === "recorded" && !superseded.has(row.id)).map(row => row.id));
     const byAllocation = groupCostRows(allocations.map(row => row.purchase_payment_allocations), row => row.costItemId);
+    const feeRows = await usesFreightFinance(db) && orders.length ? await db.select().from(topupFeeAllocations).where(inArray(topupFeeAllocations.orderId,orders.map(row=>row.id))) : [];
+    const liveFeeRows=feeRows.filter(row=>!row.reversesId && !feeRows.some(reverse=>reverse.reversesId===row.id));
+    const feeShares=liveFeeRows.length?await db.select().from(topupFeeOrderShares).where(inArray(topupFeeOrderShares.feeAllocationId,liveFeeRows.map(row=>row.id))):[];
     const shared = {
       purchaseItemsById: new Map(originals.map(row => [row.id, row])),
       additionalItemRows,
       participantsByCostItem: groupCostRows(participants, row => row.costItemId),
       refundParticipantsById: groupCostRows(refundParticipants, row => row.refundId),
       allocationTotal: (id: string, component: "product" | "china", field: "principalBrlCents" | "feeBrlCents") =>
-        (byAllocation.get(id) ?? []).filter(row => row.costComponent === component).reduce((sum, row) => sum + row[field], 0),
+        (byAllocation.get(id) ?? []).filter(row => row.costComponent === component).reduce((sum, row) => sum + row[field], 0)+(field==="feeBrlCents" && component==="product"?feeShares.filter(row=>row.costItemId===id).reduce((sum,row)=>sum+row.amountBrlCents,0):0),
     };
     for (const [trackingId, rows] of itemsByTracking) {
       const original = orderByTracking.get(trackingId)?.find(row => row.kind === "original");

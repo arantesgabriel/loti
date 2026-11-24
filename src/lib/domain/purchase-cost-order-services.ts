@@ -15,6 +15,9 @@ import { calculateExternalFeeBrl, MAX_FINANCIAL_MINOR } from "./financial-money"
 import { serializeDomainTransaction } from "./transaction-lock";
 import { resolveProductCategory } from "./categories";
 import { calculateHubBuyBalanceState } from "./hubbuy-balance-services";
+import { usesFreightFinance } from "./orders-workflow";
+import { assignTopupFees, previewTopupFees } from "./topup-fee-services";
+import { topupFeeOrderShares } from "../db/freight-schema";
 
 const maxMinor = MAX_FINANCIAL_MINOR;
 const revision = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
@@ -49,6 +52,8 @@ const paymentSchema = z.object({
   feeBps: z.number().int().min(0).max(10_000).optional(),
 }).strict();
 const mixedPaymentSchema = z.object({
+  confirmedTopupFeeBrlCents: z.number().int().min(0).max(maxMinor).optional(),
+  topupFees: z.array(z.object({topupId:z.string().min(1),amountBrlCents:z.number().int().min(0).max(maxMinor)}).strict()).max(100).optional(),
   expectedRevision: revision, idempotencyKey: z.string().trim().min(1).max(200), useOwnBalance: z.boolean().default(true),
   external: z.object({ paymentMethod: z.enum(["pix", "card"]), principalBrlCents: z.number().int().min(1).max(maxMinor), conversionCnyMinor: z.number().int().min(1).max(maxMinor), conversionBrlCents: z.number().int().min(1).max(maxMinor), feeBps: z.number().int().min(0).max(10_000).optional() }).strict().nullable().optional(),
   balanceFunding: z.array(z.object({ costItemId: z.string().min(1), costComponent: z.enum(["product", "china"]), beneficiaryId: z.string().min(1), lenderId: z.string().min(1), cnyMinor: z.number().int().min(1).max(maxMinor) }).strict()).max(10_000).default([]),
@@ -163,7 +168,7 @@ export function purchaseCostOrderServices(db: AppDatabase, actorId: string, expe
       const prior = await tx.select().from(financialOperations).where(and(eq(financialOperations.workspaceId, tracking.workspaceId), eq(financialOperations.idempotencyKey, value.idempotencyKey))).get();
       if (prior) {
         if (prior.operationType !== "additional_order_draft_updated" || prior.payloadHash !== payloadHash) throw new DomainError("Esta chave já foi usada com outros dados.", 409, "IDEMPOTENCY_CONFLICT");
-        return { operationId: prior.id, replayed: true };
+        return { operationId: prior.id, replayed: true, topupFeeBrlCents: Number(JSON.parse(prior.contextJson).topupFeeBrlCents ?? 0) };
       }
       if (tracking.status !== "open" || tracking.revision !== value.expectedRevision) throw new DomainError("Os custos foram alterados ou encerrados. Atualize a tela.", 409);
       const order = await tx.select().from(purchaseCostOrders).where(and(eq(purchaseCostOrders.id, orderId), eq(purchaseCostOrders.trackingId, trackingId))).get();
@@ -219,7 +224,7 @@ export function purchaseCostOrderServices(db: AppDatabase, actorId: string, expe
       const prior = await tx.select().from(financialOperations).where(and(eq(financialOperations.workspaceId, tracking.workspaceId), eq(financialOperations.idempotencyKey, value.idempotencyKey))).get();
       if (prior) {
         if (prior.operationType !== "order_payment_recorded" || prior.payloadHash !== payloadHash) throw new DomainError("Esta chave já foi usada com outros dados.", 409, "IDEMPOTENCY_CONFLICT");
-        return { operationId: prior.id, replayed: true };
+        return { operationId: prior.id, replayed: true, topupFeeBrlCents: Number(JSON.parse(prior.contextJson).topupFeeBrlCents ?? 0) };
       }
       if (tracking.status !== "open" || tracking.revision !== value.expectedRevision) throw new DomainError("Os custos foram alterados ou encerrados. Atualize a tela.", 409);
       const order = await tx.select().from(purchaseCostOrders).where(and(eq(purchaseCostOrders.id, orderId), eq(purchaseCostOrders.trackingId, trackingId))).get();
@@ -279,7 +284,7 @@ export function purchaseCostOrderServices(db: AppDatabase, actorId: string, expe
     }));
   }
 
-  async function recordMixedPaymentInTransaction(tx: CostTransaction, trackingId: string, orderId: string, input: unknown) {
+  async function recordMixedPaymentInTransaction(tx: CostTransaction, trackingId: string, orderId: string, input: unknown, previewOnly = false) {
     const value = mixedPaymentSchema.parse(input);
     const balanceFunding = [...value.balanceFunding].sort((a, b) => a.costItemId.localeCompare(b.costItemId) || a.costComponent.localeCompare(b.costComponent) || a.beneficiaryId.localeCompare(b.beneficiaryId) || a.lenderId.localeCompare(b.lenderId));
     const normalized = { ...value, balanceFunding };
@@ -290,7 +295,7 @@ export function purchaseCostOrderServices(db: AppDatabase, actorId: string, expe
       const prior = await tx.select().from(financialOperations).where(and(eq(financialOperations.workspaceId, tracking.workspaceId), eq(financialOperations.idempotencyKey, value.idempotencyKey))).get();
       if (prior) {
         if (prior.operationType !== "order_payment_recorded" || prior.payloadHash !== payloadHash) throw new DomainError("Esta chave já foi usada com outros dados.", 409, "IDEMPOTENCY_CONFLICT");
-        return { operationId: prior.id, replayed: true };
+        return { operationId: prior.id, replayed: true, topupFeeBrlCents: Number(JSON.parse(prior.contextJson).topupFeeBrlCents ?? 0) };
       }
       if (tracking.status !== "open" || tracking.revision !== value.expectedRevision) throw new DomainError("Os custos foram alterados ou encerrados. Atualize a tela.", 409);
       const order = await tx.select().from(purchaseCostOrders).where(and(eq(purchaseCostOrders.id, orderId), eq(purchaseCostOrders.trackingId, trackingId))).get();
@@ -306,7 +311,8 @@ export function purchaseCostOrderServices(db: AppDatabase, actorId: string, expe
       const orderCnyBig = costs.reduce((sum, cost) => sum + BigInt(cost.nativeProductCnyMinor ?? 0) + BigInt(cost.nativeChinaCnyMinor ?? 0), 0n);
       if (orderCnyBig <= 0n || orderCnyBig > BigInt(maxMinor)) throw new DomainError("O pedido precisa ter um principal CNY positivo dentro do limite permitido.", 409);
       const orderCny = Number(orderCnyBig);
-      const memberRows = await tx.select({ id: workspaceMembers.userId }).from(workspaceMembers).where(eq(workspaceMembers.workspaceId, tracking.workspaceId)).all();
+      const access = await authorization(tx,actorId).requireWorkspaceAccess(tracking.workspaceId);
+      const memberRows = access.kind === "personal" ? [{id:access.ownerUserId!}] : await tx.select({ id: workspaceMembers.userId }).from(workspaceMembers).where(eq(workspaceMembers.workspaceId, tracking.workspaceId)).all();
       const memberIds = new Set(memberRows.map(member => member.id));
       const participantRows = await tx.select().from(purchaseCostParticipants).where(inArray(purchaseCostParticipants.costItemId, costs.map(cost => cost.id))).orderBy(asc(purchaseCostParticipants.costItemId), asc(purchaseCostParticipants.allocationOrder)).all();
       const participantsByCost = new Map<string, typeof participantRows>();
@@ -416,10 +422,14 @@ export function purchaseCostOrderServices(db: AppDatabase, actorId: string, expe
 
       const operationId = crypto.randomUUID(), now = new Date();
       const balanceHistoricalBrl = balanceAssignments.reduce((sum, source) => sum + BigInt(source.historicalBrlCents), 0n);
+      const topupFees = await usesFreightFinance(tx) ? await previewTopupFees(tx, account.id, balanceAssignments.flatMap(row=>row.consumptions.map(use=>({creditShareId:use.creditId,amountCnyMinor:use.cnyMinor}))),value.topupFees) : [];
+      const topupFeeBrlCents = topupFees.reduce((sum,row)=>sum+row.amountBrlCents,0);
+      if(previewOnly)return {operationId:"",replayed:false,cnyMinor:orderCny,balanceCnyMinor:Number(balanceTotal),historicalBrlCents:Number(balanceHistoricalBrl),externalCnyMinor:externalCny,principalBrlCents:external?.principalBrlCents??0,feeBrlCents:externalFee,topupFeeBrlCents};
+      if(topupFeeBrlCents>0 && value.confirmedTopupFeeBrlCents!==topupFeeBrlCents)throw new DomainError("Confira e confirme a taxa de recarga atribuída a este pedido.",409,"TOPUP_FEE_REVIEW_REQUIRED");
       await tx.insert(financialOperations).values({
         id: operationId, workspaceId: tracking.workspaceId, operationType: "order_payment_recorded", idempotencyKey: value.idempotencyKey,
         payloadHash, actorId, occurredAt: order.occurredAt, recordedAt: now, reason: null, reversalOfId: null,
-        contextJson: JSON.stringify({ accountId: account.id, orderId, trackingId, balanceCnyMinor: Number(balanceTotal), externalCnyMinor: externalCny, externalPrincipalBrlCents: external?.principalBrlCents ?? 0, externalFeeBrlCents: externalFee, financing: balanceAssignments.filter(row => row.lenderId !== row.target.personId).map(row => ({ lenderId: row.lenderId, beneficiaryId: row.target.personId, cnyMinor: row.cnyMinor })) }),
+        contextJson: JSON.stringify({ accountId: account.id, orderId, trackingId, topupFeeBrlCents, balanceCnyMinor: Number(balanceTotal), externalCnyMinor: externalCny, externalPrincipalBrlCents: external?.principalBrlCents ?? 0, externalFeeBrlCents: externalFee, financing: balanceAssignments.filter(row => row.lenderId !== row.target.personId).map(row => ({ lenderId: row.lenderId, beneficiaryId: row.target.personId, cnyMinor: row.cnyMinor })) }),
       }).run();
       let debitEntryId: string | null = null;
       if (balanceTotal > 0n) {
@@ -457,6 +467,12 @@ export function purchaseCostOrderServices(db: AppDatabase, actorId: string, expe
         };
       });
       for (let index = 0; index < paymentAllocations.length; index += 100) await tx.insert(purchasePaymentAllocations).values(paymentAllocations.slice(index, index + 100)).run();
+      const assignedFees = await assignTopupFees(tx,operationId,topupFees,{orderId});
+      for(const fee of assignedFees){
+        const rows=allocateExactMinor(fee.amountBrlCents,targets.map(target=>({id:target.id,order:target.order,weight:target.cnyMinor})));
+        const values=targets.flatMap((target,index)=>rows[index]?[{id:crypto.randomUUID(),feeAllocationId:fee.id,costItemId:target.costItemId,personId:target.personId,amountBrlCents:rows[index]}]:[]);
+        if(values.length)await tx.insert(topupFeeOrderShares).values(values);
+      }
       if (balanceTotal > 0n) {
         const consumptionRows: { id: string; debitEntryId: string; creditShareId: string; allocationOrder: number; amountCnyMinor: number; historicalBrlCents: number; paymentAllocationId: string; createdAt: Date }[] = [];
         const financingRows: { id: string; operationId: string; consumptionId: string; entryType: "advance"; lenderId: string; beneficiaryId: string; amountCnyMinor: number; historicalBrlCents: number; settledAmountCents: null; settledCurrency: null; occurredAt: Date | null; recordedAt: Date }[] = [];
@@ -478,7 +494,7 @@ export function purchaseCostOrderServices(db: AppDatabase, actorId: string, expe
       await tx.update(purchaseCostCharges).set({ paymentModel: "components_v1", paymentMethod: external?.paymentMethod ?? null, feeBps: external ? feeBps : null, paymentStatus: "paid", paidBy: actorId, paidAt: now, updatedAt: now }).where(eq(purchaseCostCharges.id, charge.id)).run();
       await tx.update(purchaseCostOrders).set({ state: "recorded", revision: order.revision + 1, operationId, recordedAt: now, updatedBy: actorId, updatedAt: now }).where(and(eq(purchaseCostOrders.id, orderId), eq(purchaseCostOrders.revision, order.revision), eq(purchaseCostOrders.state, "draft"))).run();
       await updateTracking(tx, trackingId, value.expectedRevision, actorId);
-      return { operationId, replayed: false, cnyMinor: orderCny, balanceCnyMinor: Number(balanceTotal), historicalBrlCents: Number(balanceHistoricalBrl), externalCnyMinor: externalCny, principalBrlCents: external?.principalBrlCents ?? 0, feeBrlCents: externalFee };
+      return { operationId, replayed: false, cnyMinor: orderCny, balanceCnyMinor: Number(balanceTotal), historicalBrlCents: Number(balanceHistoricalBrl), externalCnyMinor: externalCny, principalBrlCents: external?.principalBrlCents ?? 0, feeBrlCents: externalFee, topupFeeBrlCents };
   }
 
   async function recordMixedPayment(trackingId: string, orderId: string, input: unknown) {
@@ -513,5 +529,5 @@ export function purchaseCostOrderServices(db: AppDatabase, actorId: string, expe
     }));
   }
 
-  return { createDraft, updateDraft, recordExternalPayment, recordMixedPayment, recordMixedPaymentInTransaction, voidDraft };
+  return { createDraft, updateDraft, recordExternalPayment, recordMixedPayment, recordMixedPaymentInTransaction, previewMixedPayment:(trackingId:string,orderId:string,input:unknown)=>serializeDomainTransaction(()=>db.transaction(tx=>recordMixedPaymentInTransaction(tx,trackingId,orderId,input,true))), voidDraft };
 }
