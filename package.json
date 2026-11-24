@@ -7,6 +7,10 @@
   },
   "scripts": {
     "dev": "next dev --webpack",
+    "dev:seed:freight-review": "node --conditions=react-server --import tsx scripts/seed-freight-review.ts",
+    "dev:verify:freight-review": "node --conditions=react-server --import tsx scripts/verify-freight-review.ts",
+    "dev:freight-review": "node --import tsx scripts/dev-freight-review.ts",
+    "test:freight-review": "playwright test --config playwright.freight-review.config.ts",
     "dev:seed:orders-transition": "node --conditions=react-server --import tsx scripts/seed-orders-transition.ts",
     "dev:compare:orders-transition": "node --conditions=react-server --import tsx scripts/compare-orders-transition.ts",
     "dev:upgrade:orders-transition": "node --conditions=react-server --import tsx scripts/upgrade-orders-transition.ts",

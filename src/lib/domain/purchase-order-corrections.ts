@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import { logisticsPackages, logisticsReservations, orderWarehousePositions, logisticsEvents } from "../db/schema";
-import { usesOrdersWorkflow } from "./orders-workflow";
+import { usesOrdersWorkflow, usesFreightFinance } from "./orders-workflow";
+import { topupFeeAllocations } from "../db/freight-schema";
+import { releaseTopupFees } from "./topup-fee-services";
 import { z } from "zod";
 import type { AppDatabase } from "../db/connection";
 import { financialOperations, hubbuyAccounts, hubbuyBalanceConsumptions, hubbuyBalanceCreditShares, hubbuyBalanceEntries, hubbuyExternalItems, memberBalanceFinancingEntries, purchaseAdditionalOrderItems, purchaseCostCharges, purchaseCostOrders, purchaseCostPackageEvents, purchaseCostParticipants, purchaseCostRefunds, purchaseCostTrackings, purchaseItemCosts, purchaseOrderCorrections, purchasePackageItems, purchasePackages, purchasePaymentAllocations, purchasePaymentComponents, qcAdditionalPresentations } from "../db/schema";
@@ -95,6 +97,8 @@ export function purchaseOrderCorrectionServices(db: AppDatabase, actorId: string
         // computed. A separate compensation operation owns the ledger entries.
         const compensationId = crypto.randomUUID();
         await tx.insert(financialOperations).values({ id: compensationId, workspaceId: tracking.workspaceId, operationType: "additional_order_payment_reversed", idempotencyKey: `correction-reversal:${operationId}`, payloadHash, actorId, occurredAt: null, recordedAt: now, reason: value.reason, reversalOfId: order.operationId, contextJson: JSON.stringify({ accountId: account.id, orderId, trackingId, replacementOrderId }) }).run();
+        const previousFees = await usesFreightFinance(tx) ? await tx.select().from(topupFeeAllocations).where(eq(topupFeeAllocations.orderId,orderId)) : [];
+        if(previousFees.length)await releaseTopupFees(tx,compensationId,{orderId});
         // Return each original owner's exact CNY and historical basis as a new
         // credit. Original debits/consumptions/rights are never deleted or edited.
         const debitIds = [...new Set(consumptions.map(row => row.debitEntryId))];
@@ -140,7 +144,10 @@ export function purchaseOrderCorrectionServices(db: AppDatabase, actorId: string
           await tx.update(qcAdditionalPresentations).set({ additionalOrderItemId: newItemId }).where(eq(qcAdditionalPresentations.additionalOrderItemId, item.id)).run();
         }
         await tx.insert(purchaseCostCharges).values({ id: crypto.randomUUID(), trackingId, orderId: replacementOrderId, packageId: null, chargeType: "products", paymentModel: "components_v1", valueState: null, amountCents: null, paymentMethod: null, feeBps: null, paymentStatus: "pending", paidBy: null, paidAt: null, createdAt: now, updatedAt: now }).run();
-        const payment = await purchaseCostOrderServices(db, actorId).recordMixedPaymentInTransaction(tx, trackingId, replacementOrderId, { expectedRevision: value.expectedRevision, idempotencyKey: `correction-payment:${operationId}`, useOwnBalance: value.useOwnBalance, balanceFunding: value.balanceFunding.map(row => ({ ...row, costItemId: costMap.get(row.costItemId) ?? row.costItemId })), external: value.external });
+        const replacementInput = { expectedRevision: value.expectedRevision, idempotencyKey: `correction-payment:${operationId}`, useOwnBalance: value.useOwnBalance, balanceFunding: value.balanceFunding.map(row => ({ ...row, costItemId: costMap.get(row.costItemId) ?? row.costItemId })), external: value.external, topupFees: previousFees.filter(row=>!row.reversesId && !previousFees.some(reverse=>reverse.reversesId===row.id)).map(row=>({topupId:row.topupId,amountBrlCents:row.amountBrlCents})) };
+        const replacementService=purchaseCostOrderServices(db,actorId);
+        const paymentPreview=await replacementService.recordMixedPaymentInTransaction(tx,trackingId,replacementOrderId,replacementInput,true);
+        const payment = await replacementService.recordMixedPaymentInTransaction(tx, trackingId, replacementOrderId, {...replacementInput,confirmedTopupFeeBrlCents:paymentPreview.topupFeeBrlCents});
         if (payment.replayed) throw new DomainError("Operação de correção inconsistente.", 409);
         for (const assignment of assignments) {
           await tx.delete(purchasePackageItems).where(and(eq(purchasePackageItems.packageId, assignment.packageId), eq(purchasePackageItems.costItemId, assignment.costItemId))).run();
@@ -168,7 +175,8 @@ export function purchaseOrderCorrectionServices(db: AppDatabase, actorId: string
         }
         const finalState = await calculateHubBuyBalanceState(tx, account.id);
         if (!finalState.reconciled || finalState.ledgerBalanceCnyMinor !== finalState.account.balanceCnyMinor) throw new DomainError("A correção não conciliou o saldo.", 409);
-        const result: Result = { replacementOrderId, operationId, replayed: false, balanceBeforeCnyMinor: account.balanceCnyMinor, balanceAfterCnyMinor: finalState.account.balanceCnyMinor, historicalBrlCents: payment.historicalBrlCents!, principalBrlCents: payment.principalBrlCents!, feeBrlCents: payment.feeBrlCents!, totalCostBrlCents: payment.historicalBrlCents! + payment.principalBrlCents! + payment.feeBrlCents! };
+        const totalFeeBrlCents=payment.feeBrlCents!+payment.topupFeeBrlCents;
+        const result: Result = { replacementOrderId, operationId, replayed: false, balanceBeforeCnyMinor: account.balanceCnyMinor, balanceAfterCnyMinor: finalState.account.balanceCnyMinor, historicalBrlCents: payment.historicalBrlCents!, principalBrlCents: payment.principalBrlCents!, feeBrlCents: totalFeeBrlCents, totalCostBrlCents: payment.historicalBrlCents! + payment.principalBrlCents! + totalFeeBrlCents };
         await tx.insert(financialOperations).values({ id: operationId, workspaceId: tracking.workspaceId, operationType: "additional_order_corrected", idempotencyKey: value.idempotencyKey, payloadHash, actorId, occurredAt: null, recordedAt: now, reason: value.reason, reversalOfId: order.operationId, contextJson: JSON.stringify({ ...result, accountId: account.id, trackingId, previousOrderId: order.id }) }).run();
         await tx.insert(purchaseOrderCorrections).values({ id: crypto.randomUUID(), trackingId, previousOrderId: orderId, replacementOrderId, operationId }).run();
         if (preview) throw new PreviewRollback(result);

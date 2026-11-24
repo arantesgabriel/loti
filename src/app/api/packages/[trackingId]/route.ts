@@ -20,6 +20,7 @@ const bodySchema = z.discriminatedUnion("operation", [
   z.object({ operation: z.literal("order.additional.preview_correction"), orderId: z.string().min(1), input: z.unknown() }).strict(),
   z.object({ operation: z.literal("order.additional.record_payment"), orderId: z.string().min(1), input: z.unknown() }).strict(),
   z.object({ operation: z.literal("order.additional.pay_mixed"), orderId: z.string().min(1), input: z.unknown() }).strict(),
+  z.object({ operation: z.literal("order.additional.preview_payment"), orderId: z.string().min(1), input: z.unknown() }).strict(),
   z.object({ operation: z.literal("order.additional.void"), orderId: z.string().min(1), input: z.unknown() }).strict(),
   z.object({ operation: z.literal("order.additional.settle"), input: z.unknown() }).strict(),
   z.object({ operation: z.literal("package.create"), input: z.unknown() }).strict(),
@@ -59,6 +60,7 @@ export async function POST(request: Request, context: RouteContext) {
       case "order.additional.preview_correction": return NextResponse.json({ data: await service.correctAdditionalOrder(trackingId, body.orderId, body.input, true) }, { headers: packageCostPrivateHeaders });
       case "order.additional.record_payment": await service.recordAdditionalOrderPayment(trackingId, body.orderId, body.input); break;
       case "order.additional.pay_mixed": await service.recordAdditionalOrderMixedPayment(trackingId, body.orderId, body.input); break;
+      case "order.additional.preview_payment": return NextResponse.json({data:await service.previewAdditionalOrderMixedPayment(trackingId,body.orderId,body.input)},{headers:packageCostPrivateHeaders});
       case "order.additional.void": await service.voidAdditionalOrderDraft(trackingId, body.orderId, body.input); break;
       case "order.additional.settle": await service.settleAdditionalOrderAdvance(trackingId, body.input); break;
       case "package.create": await service.createPackage(trackingId, body.input); break;

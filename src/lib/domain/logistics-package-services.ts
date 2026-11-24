@@ -4,6 +4,7 @@ import { and,eq,inArray,isNull } from "drizzle-orm";
 import { z } from "zod";
 import type { AppDatabase } from "../db/connection";
 import * as s from "../db/schema";
+import { freightHeads } from "../db/freight-schema";
 import { authorization } from "./authorization";
 import { DomainError } from "./errors";
 import { logisticsTransaction } from "./logistics-transaction";
@@ -44,7 +45,8 @@ export function logisticsPackageServices(db:AppDatabase,userId:string) {
     let valuation:Awaited<ReturnType<typeof manifest>>|null=null,listValuation:Awaited<ReturnType<typeof manifest>>|null=null,valuationError:string|null=null;
     try {
       const latest=[...current.manifests].sort((a,b)=>b.revision-a.revision)[0];
-      valuation=pkg.contentClosedAt && latest ? manifestSchema.parse(latest.snapshot) : await manifest(db,pkg,current.reservations);
+      const detailedFunding=await db.select().from(freightHeads).where(eq(freightHeads.packageId,packageId)).get();
+      valuation=pkg.contentClosedAt && latest && !detailedFunding ? manifestSchema.parse(latest.snapshot) : await manifest(db,pkg,current.reservations);
       listValuation=valuation;
     }catch(error){
       if(error instanceof DomainError){
@@ -62,9 +64,10 @@ export function logisticsPackageServices(db:AppDatabase,userId:string) {
     const legacyCharges = pkg.legacyPackageId ? await tx.select().from(s.purchaseCostCharges).where(eq(s.purchaseCostCharges.packageId,pkg.legacyPackageId)).all() : [];
     const bridges=await tx.select().from(s.logisticsLegacyCharges).where(eq(s.logisticsLegacyCharges.packageId,pkg.id)).all();
     const ownership=packageChargeOwnership(pkg,events);
+    const freightFunding=await tx.select().from(freightHeads).where(eq(freightHeads.packageId,pkg.id)).get();
     const legacyProjections=bridges.map(b=>{const projection=projectLegacyPackageCharge(b.snapshot);return {legacyChargeId:b.legacyChargeId,...projection,active:!ownership[projection.chargeType==="brazil_freight"?"freight":"customs"]};});
     const legacyFreight=legacyCharges.find(c=>c.chargeType==="brazil_freight");
-    return {pkg,reservations,unitCount,manifests,events,legacyCharges,legacyProjections,ownership,inPackage:!!pkg.contentClosedAt && !!(ownership.freight?pkg.freightPaidAt:legacyFreight?.paymentStatus==="paid"?legacyFreight.paidAt:null)};
+    return {pkg,reservations,unitCount,manifests,events,legacyCharges,legacyProjections,ownership,usesFreightFunding:!!freightFunding,inPackage:!!pkg.contentClosedAt && !!(ownership.freight?pkg.freightPaidAt:legacyFreight?.paymentStatus==="paid"?legacyFreight.paidAt:null)};
   }
   async function execute(packageId:string,key:string,input:unknown,expectedWorkspaceId?:string) {
     z.string().min(1).max(200).parse(key);
@@ -115,6 +118,7 @@ export function logisticsPackageServices(db:AppDatabase,userId:string) {
         if (pkg.stage !== "preparing" || !pkg.contentClosedAt) throw new DomainError("Só é possível reabrir antes do despacho.",409);
         patch.contentClosedAt=null;
       } else if (command.operation === "pay_charge" || command.operation === "record_charge" || command.operation==="correct_charge") {
+        if (command.charge === "freight" && await tx.select().from(freightHeads).where(eq(freightHeads.packageId,packageId)).get()) throw new DomainError("Este frete usa financiamento detalhado. Abra Conferir pagamento do frete para registrar ou corrigir suas fontes.",409,"FREIGHT_PROTOCOL_REQUIRED");
         if (!current.reservations.length) throw new DomainError("Inclua unidades antes de pagar o encargo.",409);
         const already = command.charge === "freight" ? pkg.freightPaidAt : pkg.customsPaidAt;
         const legacy = current.legacyCharges.find(c=>c.chargeType===(command.charge==="freight"?"brazil_freight":"customs"));

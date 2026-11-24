@@ -76,7 +76,8 @@ it("reads cost keys across trackings with fewer queries and preserves both page 
     const batchStart = performance.now();
     const keys = await readWarehouseCostKeys(counting, "workspace", ids);
     const batchedMs = performance.now() - batchStart;
-    expect(selects).toBe(13);
+    // Two bounded reads add topup-fee attribution without per-order queries.
+    expect(selects).toBe(15);
     expect(selects).toBeLessThan(baseline);
     const cents = (row: typeof rows[number]) => row.financial!.total.finalCents ?? row.financial!.total.knownCents;
     expect(new Map(keys.map(key => [key.id, key.cents]))).toEqual(new Map(rows.map(row => [row.costItemId, cents(row)])));

@@ -1,10 +1,14 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray,sql } from "drizzle-orm";
+import {alias} from "drizzle-orm/sqlite-core";
 import { financialOperations, hubbuyBalanceEntries, purchaseAdditionalOrderItems, purchaseCostCharges, purchaseCostOrders, purchaseCostRefundParticipants, purchaseCostRefunds, purchaseCostTrackings, purchaseItemCosts, purchaseItems, purchasePaymentAllocations, purchasePaymentComponents, purchases, user } from "../db/schema";
 import type { CostTransaction } from "./purchase-cost-initialization";
 import type { RefundProductOrigin, ManualOrigin } from "./hubbuy-rights-presentation";
 import type { PaidOriginCost, TraceContext } from "./hubbuy-balance-traceability";
 import { MAX_FINANCIAL_MINOR } from "./financial-money";
 import { DomainError } from "./errors";
+import * as f from "../db/freight-schema";
+import {logisticsPackages} from "../db/schema";
+import {usesFreightFinance} from "./orders-workflow";
 
 const iso = (date: Date | null) => date?.toISOString() ?? null;
 function addCost(...values: number[]) {
@@ -16,6 +20,19 @@ function addCost(...values: number[]) {
 
 /** Only authorized relationships are used to label financial sources and destinations. */
 export async function readBalanceTraceContext(tx: CostTransaction, account: { id: string; workspaceId: string }, products: RefundProductOrigin[], adjustments: ManualOrigin[]): Promise<TraceContext> {
+  const freightDestinations:NonNullable<TraceContext["freightDestinations"]>=[];
+  if(await usesFreightFinance(tx)){
+    const funder=alias(user,"freight_funder");
+    const cells=await tx.select({consumptionId:f.freightSources.consumptionId,paymentId:f.freightPayments.id,packageId:logisticsPackages.id,packageName:logisticsPackages.name,funderId:f.freightSources.personId,funderName:funder.name,beneficiaryId:f.freightAllocations.personId,beneficiaryName:user.name,component:f.freightAllocations.component,amount:sql<number>`sum(${f.freightAllocations.amountMinor})`.mapWith(Number)}).from(f.freightSources)
+      .innerJoin(f.freightPayments,eq(f.freightPayments.id,f.freightSources.paymentId))
+      .innerJoin(logisticsPackages,and(eq(logisticsPackages.id,f.freightPayments.packageId),eq(logisticsPackages.accountId,account.id),eq(logisticsPackages.workspaceId,account.workspaceId)))
+      .innerJoin(f.freightAllocations,and(eq(f.freightAllocations.sourceId,f.freightSources.id),eq(f.freightAllocations.paymentId,f.freightPayments.id),eq(f.freightAllocations.contentHash,f.freightPayments.contentHash)))
+      .innerJoin(user,eq(user.id,f.freightAllocations.personId)).innerJoin(funder,eq(funder.id,f.freightSources.personId))
+      .where(and(eq(f.freightSources.kind,"balance"),inArray(f.freightAllocations.component,["native","historical"]))).groupBy(f.freightSources.consumptionId,f.freightAllocations.personId,f.freightAllocations.component);
+    const grouped=new Map<string,typeof freightDestinations[number]>();
+    for(const cell of cells){if(!cell.consumptionId||cell.component==="fee")continue;const key=JSON.stringify([cell.consumptionId,cell.beneficiaryId]);const row=grouped.get(key)??{consumptionId:cell.consumptionId,allocationId:`freight:${cell.paymentId}:${cell.beneficiaryId}`,label:`Frete do pacote ${cell.packageName}`,orderReference:null,packageId:cell.packageId,packageName:cell.packageName,paymentId:cell.paymentId,funderId:cell.funderId,funderName:cell.funderName,beneficiaryId:cell.beneficiaryId,beneficiaryName:cell.beneficiaryName,amountCnyMinor:0,historicalBrlCents:0};if(cell.component==="native")row.amountCnyMinor=addCost(row.amountCnyMinor,cell.amount);else row.historicalBrlCents=addCost(row.historicalBrlCents,cell.amount);grouped.set(key,row);}
+    freightDestinations.push(...grouped.values());
+  }
   const operations = await tx.select({ entryId: hubbuyBalanceEntries.id, recordedAt: financialOperations.recordedAt, occurredAt: financialOperations.occurredAt, reason: financialOperations.reason })
     .from(hubbuyBalanceEntries).innerJoin(financialOperations, and(eq(financialOperations.id, hubbuyBalanceEntries.operationId), eq(financialOperations.workspaceId, account.workspaceId)))
     .where(eq(hubbuyBalanceEntries.accountId, account.id)).all();
@@ -73,7 +90,7 @@ export async function readBalanceTraceContext(tx: CostTransaction, account: { id
     }
     costs.push(...totals.values());
   }
-  return { products, adjustments, costs, operations: operations.map(row => ({ ...row, recordedAt: iso(row.recordedAt), occurredAt: iso(row.occurredAt) })), destinations: destinations.flatMap(row => {
+  return { products, adjustments, costs, freightDestinations,operations: operations.map(row => ({ ...row, recordedAt: iso(row.recordedAt), occurredAt: iso(row.occurredAt) })), destinations: destinations.flatMap(row => {
     const label = row.originalName ?? row.additionalName;
     return label ? [{ allocationId: row.allocationId, beneficiaryId: row.beneficiaryId, beneficiaryName: row.beneficiaryName, label, orderReference: row.orderReference ?? row.orderId }] : [];
   }) };

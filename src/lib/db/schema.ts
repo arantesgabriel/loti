@@ -664,7 +664,7 @@ export const hubbuyBalanceEntries = sqliteTable("hubbuy_balance_entries", {
   id: text("id").primaryKey(), accountId: text("account_id").notNull().references(() => hubbuyAccounts.id),
   operationId: text("operation_id").notNull().references(() => financialOperations.id), sequence: integer("sequence").notNull(),
   direction: text("direction", { enum: ["credit", "debit"] }).notNull(), amountCnyMinor: integer("amount_cny_minor").notNull(),
-  historicalBrlCents: integer("historical_brl_cents"), sourceType: text("source_type", { enum: ["refund_received", "manual_adjustment", "opening_balance", "purchase_payment", "refund_offset", "reversal"] }).notNull(), sourceId: text("source_id").notNull(),
+  historicalBrlCents: integer("historical_brl_cents"), sourceType: text("source_type", { enum: ["refund_received", "manual_adjustment", "opening_balance", "purchase_payment", "refund_offset", "reversal", "topup", "package_freight_payment"] }).notNull(), sourceId: text("source_id").notNull(),
   reversalOfEntryId: text("reversal_of_entry_id").references((): AnySQLiteColumn => hubbuyBalanceEntries.id), createdAt: timestamp("created_at"),
 }, t => [
   uniqueIndex("hubbuy_balance_sequence_idx").on(t.accountId, t.sequence),
@@ -674,7 +674,7 @@ export const hubbuyBalanceEntries = sqliteTable("hubbuy_balance_entries", {
   check("hubbuy_balance_entry_direction", sql`${t.direction} IN ('credit','debit')`),
   check("hubbuy_balance_entry_amount", sql`typeof(${t.amountCnyMinor}) = 'integer' AND ${t.amountCnyMinor} BETWEEN 1 AND 1000000000000`),
   check("hubbuy_balance_entry_basis", sql`${t.historicalBrlCents} IS NULL OR (typeof(${t.historicalBrlCents}) = 'integer' AND ${t.historicalBrlCents} BETWEEN 0 AND 1000000000000)`),
-  check("hubbuy_balance_entry_source", sql`${t.sourceType} IN ('refund_received','manual_adjustment','opening_balance','purchase_payment','refund_offset','reversal') AND length(trim(${t.sourceId})) BETWEEN 1 AND 200`),
+  check("hubbuy_balance_entry_source", sql`${t.sourceType} IN ('refund_received','manual_adjustment','opening_balance','purchase_payment','refund_offset','reversal','topup','package_freight_payment') AND length(trim(${t.sourceId})) BETWEEN 1 AND 200`),
 ]);
 
 export const hubbuyBalanceAdjustments = sqliteTable("hubbuy_balance_adjustments", {
